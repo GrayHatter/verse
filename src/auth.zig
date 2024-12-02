@@ -17,11 +17,11 @@ pub const Error = error{
 };
 
 pub fn valid(a: Auth) bool {
-    return a.provider.valid();
+    return a.provider.valid() catch false;
 }
 
 pub fn requireValid(a: Auth) !void {
-    if (a.user == null or !a.provider.valid()) return error.Unauthenticated;
+    if (a.current_user == null or !a.valid()) return error.Unauthenticated;
 }
 
 pub fn Provider(T: type) type {
@@ -58,8 +58,16 @@ pub fn Provider(T: type) type {
 pub const AnyAuth = struct {
     ctx: *const anyopaque,
     lookup_user: ?LookupUserFn = null,
+    valid_: ?ValidFn = null,
 
     pub const LookupUserFn = *const fn (*const anyopaque, []const u8) Error!User;
+    pub const ValidFn = *const fn (*const anyopaque) Error!bool;
+
+    pub fn valid(self: AnyAuth) Error!bool {
+        if (self.valid_) |v| {
+            return try v(self.ctx);
+        } else return error.NotProvided;
+    }
 
     pub fn lookupUser(self: AnyAuth, user_id: []const u8) Error!User {
         if (self.lookup_user) |lookup_fn| {
@@ -70,15 +78,13 @@ pub const AnyAuth = struct {
 
 pub const InvalidProvider = struct {
     pub fn empty() AnyAuth {
-        const P = Provider(This);
-        const t = This{};
-        return P.init(t).any();
+        const P = Provider(@This());
+        return P.init(@This(){}).any();
     }
-    pub const This = struct {
-        fn lookupUser(_: @This(), _: []const u8) Error!User {
-            return error.NotProvided;
-        }
-    };
+
+    fn lookupUser(_: @This(), _: []const u8) Error!User {
+        return error.NotProvided;
+    }
 };
 
 const TestingAuth = struct {
