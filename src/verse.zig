@@ -41,7 +41,9 @@ pub fn init(a: Allocator, req: *const Request, res: Response, reqdata: RequestDa
         .response = res,
         .reqdata = reqdata,
         .uri = splitScalar(u8, req.uri[1..], '/'),
-        .auth = Auth{},
+        .auth = Auth{
+            .provider = Auth.InvalidProvider.empty(),
+        },
     };
 }
 
