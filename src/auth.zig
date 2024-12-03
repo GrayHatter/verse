@@ -1,8 +1,7 @@
-pub const AuthZ = @import("authorization.zig");
-pub const AuthN = @import("authentication.zig");
-
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+pub const AuthZ = @import("authorization.zig");
+pub const AuthN = @import("authentication.zig");
 
 pub const Auth = @This();
 pub const User = @import("auth/user.zig");
@@ -20,7 +19,7 @@ pub fn valid(a: Auth) bool {
     return a.provider.valid() catch false;
 }
 
-pub fn requireValid(a: Auth) !void {
+pub fn requireValid(a: Auth) Error!void {
     if (a.current_user == null or !a.valid()) return error.Unauthenticated;
 }
 
