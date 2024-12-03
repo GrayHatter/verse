@@ -25,12 +25,12 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    const comptime_templates = Compiler.buildTemplates(b, "src/fallback_html/") catch null;
-    // Zig build time doesn't expose it's state in a way I know how to check...
-    // so we yolo it like python :D
-    if (comptime_templates) |ct| {
-        lib_unit_tests.root_module.addImport("comptime_templates", ct);
-    }
+    if (std.fs.cwd().access("src/fallback_html/index.html", .{})) {
+        const comptime_templates = Compiler.buildTemplates(b, "src/fallback_html/") catch unreachable;
+        // Zig build time doesn't expose it's state in a way I know how to check...
+        // so we yolo it like python :D
+        lib_unit_tests.root_module.addImport("comptime_templates", comptime_templates);
+    } else |_| {}
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
