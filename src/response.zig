@@ -4,6 +4,7 @@ const AnyWriter = std.io.AnyWriter;
 
 const Request = @import("request.zig");
 const Headers = @import("headers.zig");
+const Cookies = @import("cookies.zig");
 
 const Response = @This();
 
@@ -36,7 +37,6 @@ const Error = error{
 
 pub const Writer = std.io.Writer(*Response, Error, write);
 
-//request: *Request,
 headers: ?Headers = null,
 tranfer_mode: TransferMode = .static,
 // This is just bad code, but I need to give the sane implementation more thought
@@ -46,11 +46,11 @@ downstream: union(Downstream) {
     zwsgi: std.net.Stream.Writer,
     http: std.io.AnyWriter,
 },
+cookie_jar: Cookies.Jar,
 status: ?std.http.Status = null,
 
 pub fn init(a: Allocator, req: *const Request) !Response {
     var res = Response{
-        //.alloc = a,
         .headers = Headers.init(a),
         .http_response = switch (req.raw) {
             .zwsgi => null,
@@ -66,6 +66,7 @@ pub fn init(a: Allocator, req: *const Request) !Response {
             .zwsgi => |z| .{ .zwsgi = z.*.acpt.stream.writer() },
             .http => .{ .http = undefined },
         },
+        .cookie_jar = try Cookies.Jar.init(a),
     };
     if (res.http_response) |*h| res.downstream.http = h.writer();
     res.headersInit() catch @panic("unable to create Response obj");
@@ -102,14 +103,14 @@ pub fn start(res: *Response) !void {
 
 fn sendHTTPHeader(res: *Response) !void {
     if (res.status == null) res.status = .ok;
-    _ = switch (res.status.?) {
-        .ok => try res.write("HTTP/1.1 200 OK\r\n"),
-        .found => try res.write("HTTP/1.1 302 Found\r\n"),
-        .forbidden => try res.write("HTTP/1.1 403 Forbidden\r\n"),
-        .not_found => try res.write("HTTP/1.1 404 Not Found\r\n"),
-        .internal_server_error => try res.write("HTTP/1.1 500 Internal Server Error\r\n"),
+    switch (res.status.?) {
+        .ok => try res.writeAll("HTTP/1.1 200 OK\r\n"),
+        .found => try res.writeAll("HTTP/1.1 302 Found\r\n"),
+        .forbidden => try res.writeAll("HTTP/1.1 403 Forbidden\r\n"),
+        .not_found => try res.writeAll("HTTP/1.1 404 Not Found\r\n"),
+        .internal_server_error => try res.writeAll("HTTP/1.1 500 Internal Server Error\r\n"),
         else => return Error.UnknownStatus,
-    };
+    }
 }
 
 pub fn sendHeaders(res: *Response) !void {
@@ -213,7 +214,4 @@ pub fn finish(res: *Response) !void {
         //.zwsgi => |*w| _ = try w.write("0\r\n\r\n"),
         else => {},
     }
-    //return res.flush() catch |e| {
-    //    std.debug.print("Error on flush :< {}\n", .{e});
-    //};
 }
