@@ -15,6 +15,7 @@ pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkErro
 /// The default page generator, this is the function that will be called, and
 /// expected to write the page data back to the client.
 pub const BuildFn = *const fn (*Verse) Error!void;
+
 /// Similar to RouteFn and RouterFn above, Verse requires all page build steps
 /// to finish cleanly. While a default is provided. It's strongly recommended
 /// that a custom builder function be provided when custom error handling is
@@ -26,6 +27,7 @@ pub const BuilderFn = *const fn (*Verse, BuildFn) void;
 /// exercise left to the caller, as eventually a sever default server error page
 /// will need to be returned.
 pub const RouteFn = *const fn (*Verse) Error!BuildFn;
+
 /// The provided RouteFn will be wrapped with a default error provider that will
 /// return a default BuildFn.
 pub const RouterFn = *const fn (*Verse, RouteFn) BuildFn;
@@ -36,7 +38,8 @@ builderfn: BuilderFn = defaultBuilder,
 routefn: RouteFn,
 routerfn: RouterFn = defaultRouter,
 
-/// Methods is a struct so bitwise or will work as expected
+/// Separate from the http interface as this is 'internal' to the routing
+/// subsystem, where a single endpoint may respond to multiple http methods.
 pub const Methods = packed struct {
     GET: bool = false,
     HEAD: bool = false,
@@ -61,16 +64,38 @@ pub const Methods = packed struct {
     }
 };
 
+/// The Verse router will scan through an array of Match'es looking for a given
+/// name. Verse doesn't assert that the given name will match a director or
+/// endpoint/page specifically. e.g. `/uri/page` and `/uri/page/` will both
+/// match to the first identical name, regardless if the matched type is a build
+/// function, or a route function.
+///
+/// A name containing any non alphanumeric char is undefined.
 pub const Match = struct {
+    /// The name for this resource. Names with length of 0 is valid for
+    /// directories.
     name: []const u8,
+    /// The resource at a given URI position.
     match: union(enum) {
+        /// An endpoint function that's expected to return the requested page
+        /// data.
         build: BuildFn,
+        /// A router function that will either
+        /// 1) consume the next URI token, and itself call the next routing
+        /// function/handler, or
+        /// 2) return the build function pointer that will be called directly to
+        /// generate the page.
         route: RouteFn,
+        /// A Match array for a sub directory, that can be handled by the same
+        /// routing function. Provided for convenience.
         simple: []const Match,
     },
+    /// The http request methods this endpoint is willing to support or answer
+    /// for.
     methods: Methods = .{ .GET = true },
 };
 
+/// Default route building helper.
 pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
     return comptime Match{
         .name = name,
@@ -97,30 +122,40 @@ pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
     };
 }
 
-pub fn any(comptime name: []const u8, comptime match: BuildFn) Match {
+/// only builds for GET and POST, this behavior is likely to change to the named
+/// behavior and answer to ALL methods, once they are fully supported.
+pub fn ANY(comptime name: []const u8, comptime match: BuildFn) Match {
     var mr = ROUTE(name, match);
     mr.methods = .{ .GET = true, .POST = true };
     return mr;
 }
 
+/// Match build helper for GET requests.
 pub fn GET(comptime name: []const u8, comptime match: BuildFn) Match {
     var mr = ROUTE(name, match);
     mr.methods = .{ .GET = true };
     return mr;
 }
 
+/// Match build helper for POST requests.
 pub fn POST(comptime name: []const u8, comptime match: BuildFn) Match {
     var mr = ROUTE(name, match);
     mr.methods = .{ .POST = true };
     return mr;
 }
 
+/// Static file helper that will auto route to the provided directory.
+/// Verse normally expects to sit behind an rproxy, that can route requests for
+/// static resources without calling Verse. But Verse does have some support for
+/// returning simple static resources.
 pub fn STATIC(comptime name: []const u8) Match {
     var mr = ROUTE(name, StaticFile.fileOnDisk);
     mr.methods = .{ .GET = true };
     return mr;
 }
 
+/// Convenience build function that will return a default page, normally during
+/// an error.
 pub fn defaultResponse(comptime code: std.http.Status) BuildFn {
     return switch (code) {
         .not_found => notFound,
@@ -146,6 +181,10 @@ fn default(vrs: *Verse) Error!void {
     return vrs.sendRawSlice(index);
 }
 
+/// Default routing function. This is likely the routing function you want to
+/// provide to verse with the Match array for your site. It can also be used
+/// internally within custom routing functions, that provide additional page,
+/// data or routing support/validation, before continuing to build the route.
 pub fn router(vrs: *Verse, comptime routes: []const Match) Error!BuildFn {
     const search = vrs.uri.peek() orelse {
         // Calling router without a next URI is unsupported.
@@ -179,6 +218,12 @@ pub fn router(vrs: *Verse, comptime routes: []const Match) Error!BuildFn {
     return error.Unrouteable;
 }
 
+/// The Verse Server is unlikely to be able to handle the various error states
+/// an endpoint might generate. Pages are permitted to return an error, and the
+/// page builder is required to handle all errors, and make a final decision.
+/// Ideally it should also be able to return a response to the user, but that
+/// implementation detail is left to the caller. This default builder is provide
+/// which can handle an abbreviated number of the errors.
 pub fn defaultBuilder(vrs: *Verse, build: BuildFn) void {
     build(vrs) catch |err| {
         switch (err) {
@@ -199,7 +244,9 @@ pub fn defaultBuilder(vrs: *Verse, build: BuildFn) void {
             },
             error.NotImplemented,
             error.Unknown,
-            => unreachable,
+            => unreachable, // This is an implementation error by the page. So
+            // we crash. If you've reached this, something is
+            // wrong with your site.
             error.InvalidURI,
             => log.err("Unexpected error '{}'\n", .{err}),
             error.Abusive,
