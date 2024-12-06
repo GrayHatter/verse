@@ -276,7 +276,11 @@ const root = [_]Match{
 
 fn defaultRouter(vrs: *Verse, routefn: RouteFn) BuildFn {
     if (vrs.uri.peek()) |_| {
-        return routefn(vrs) catch router(vrs, &root) catch default;
+        return routefn(vrs)
+        // The given router function failed, fall back to internal default
+        catch router(vrs, &root)
+        // Even the internal router failed to resolve
+        catch notFound;
     }
     return internalServerError;
 }
@@ -288,7 +292,7 @@ const root_with_static = root ++ [_]Match{
 fn defaultRouterHtml(vrs: *Verse, routefn: RouteFn) Error!void {
     if (vrs.uri.peek()) |first| {
         if (first.len > 0)
-            return routefn(vrs) catch router(vrs, &root_with_static) catch default;
+            return routefn(vrs) catch router(vrs, &root_with_static) catch notFound;
     }
     return internalServerError;
 }
