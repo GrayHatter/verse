@@ -1,14 +1,5 @@
-pub const std = @import("std");
-const Allocator = std.mem.Allocator;
-const Stream = std.net.Stream;
-const AnyWriter = std.io.AnyWriter;
-const bufPrint = std.fmt.bufPrint;
-const splitScalar = std.mem.splitScalar;
-
-const log = std.log.scoped(.Verse);
-
+pub const Verse = @This();
 pub const Server = @import("server.zig");
-
 pub const Request = @import("request.zig");
 pub const Response = @import("response.zig");
 pub const RequestData = @import("request_data.zig");
@@ -21,22 +12,6 @@ pub const Cookies = @import("cookies.zig");
 
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;
-
-const SendError = error{
-    WrongPhase,
-    HeadersFinished,
-    ResponseClosed,
-    UnknownStatus,
-} || NetworkError;
-
-pub const Verse = @This();
-
-const ONESHOT_SIZE = 14720;
-const Downstream = enum {
-    buffer,
-    zwsgi,
-    http,
-};
 
 alloc: Allocator,
 request: *const Request,
@@ -52,6 +27,20 @@ uri: UriIter,
 // TODO fix this unstable API
 auth: Auth,
 route_ctx: ?*const anyopaque = null,
+
+const SendError = error{
+    WrongPhase,
+    HeadersFinished,
+    ResponseClosed,
+    UnknownStatus,
+} || NetworkError;
+
+const ONESHOT_SIZE = 14720;
+const Downstream = enum {
+    buffer,
+    zwsgi,
+    http,
+};
 
 const VarPair = struct {
     []const u8,
@@ -270,3 +259,11 @@ fn finish(vrs: *Verse) NetworkError!void {
 test "Verse" {
     std.testing.refAllDecls(@This());
 }
+
+pub const std = @import("std");
+const Allocator = std.mem.Allocator;
+const Stream = std.net.Stream;
+const AnyWriter = std.io.AnyWriter;
+const bufPrint = std.fmt.bufPrint;
+const splitScalar = std.mem.splitScalar;
+const log = std.log.scoped(.Verse);
