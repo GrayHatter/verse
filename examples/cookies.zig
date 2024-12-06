@@ -41,7 +41,7 @@ fn index(verse: *Verse) Router.Error!void {
         ginger_snap,
     }));
 
-    try verse.response.cookie_jar.add(Cookie{
+    try verse.cookie_jar.add(Cookie{
         .name = "best-flavor",
         .value = random_cookie,
     });

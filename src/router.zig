@@ -165,14 +165,14 @@ pub fn defaultResponse(comptime code: std.http.Status) BuildFn {
 }
 
 fn notFound(vrs: *Verse) Error!void {
-    vrs.response.status = .not_found;
+    vrs.status = .not_found;
     const E4XX = @embedFile("fallback_html/4XX.html");
     try vrs.quickStart();
     return vrs.sendRawSlice(E4XX);
 }
 
 fn internalServerError(vrs: *Verse) Error!void {
-    vrs.response.status = .internal_server_error;
+    vrs.status = .internal_server_error;
     const E5XX = @embedFile("fallback_html/5XX.html");
     try vrs.quickStart();
     return vrs.sendRawSlice(E5XX);

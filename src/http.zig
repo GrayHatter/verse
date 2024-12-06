@@ -6,7 +6,6 @@ const Server = std.http.Server;
 const Verse = @import("verse.zig");
 const Router = @import("router.zig");
 const Request = @import("request.zig");
-const Response = @import("response.zig");
 const RequestData = @import("request_data.zig");
 
 const MAX_HEADER_SIZE = 1 <<| 13;
@@ -95,6 +94,5 @@ fn buildVerse(a: Allocator, req: *Request) !Verse {
         .query = query_data,
     };
 
-    const response = try Response.init(a, req);
-    return Verse.init(a, req, response, reqdata);
+    return Verse.init(a, req, reqdata);
 }

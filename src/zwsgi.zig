@@ -8,7 +8,6 @@ const SA = std.posix.SA;
 
 const Verse = @import("verse.zig");
 const Request = @import("request.zig");
-const Response = @import("response.zig");
 const Router = @import("router.zig");
 const RequestData = @import("request_data.zig");
 
@@ -255,6 +254,17 @@ fn buildVerse(a: Allocator, req: *Request) !Verse {
         .query = query,
     };
 
-    const response = try Response.init(a, req);
-    return Verse.init(a, req, response, reqdata);
+    return Verse.init(a, req, reqdata);
+}
+
+test init {
+    const a = std.testing.allocator;
+
+    const R = struct {
+        fn route(verse: *Verse) Router.Error!Router.BuildFn {
+            return Verse.Router.router(verse, &.{});
+        }
+    };
+
+    _ = init(a, .{}, .{ .routefn = R.route });
 }

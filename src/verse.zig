@@ -1,12 +1,12 @@
 pub const Verse = @This();
 pub const Server = @import("server.zig");
 pub const Request = @import("request.zig");
-pub const Response = @import("response.zig");
 pub const RequestData = @import("request_data.zig");
 pub const Template = @import("template.zig");
 pub const Router = @import("router.zig");
 pub const UriIter = Router.UriIter;
 
+pub const Headers = @import("headers.zig");
 pub const Auth = @import("auth.zig");
 pub const Cookies = @import("cookies.zig");
 
@@ -15,18 +15,23 @@ const NetworkError = @import("errors.zig").NetworkError;
 
 alloc: Allocator,
 request: *const Request,
-response: Response,
 reqdata: RequestData,
 downstream: union(Downstream) {
     buffer: std.io.BufferedWriter(ONESHOT_SIZE, Stream.Writer),
-    zwsgi: Stream.Writer,
-    http: std.io.AnyWriter,
+    zwsgi: Stream,
+    http: Stream,
 },
 uri: UriIter,
 
 // TODO fix this unstable API
 auth: Auth,
 route_ctx: ?*const anyopaque = null,
+
+// Raw move from response.zig
+
+headers: Headers,
+cookie_jar: Cookies.Jar,
+status: ?std.http.Status = null,
 
 const SendError = error{
     WrongPhase,
@@ -36,6 +41,8 @@ const SendError = error{
 } || NetworkError;
 
 const ONESHOT_SIZE = 14720;
+const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
+
 const Downstream = enum {
     buffer,
     zwsgi,
@@ -47,22 +54,30 @@ const VarPair = struct {
     []const u8,
 };
 
-pub fn init(a: Allocator, req: *const Request, res: Response, reqdata: RequestData) !Verse {
+pub fn init(a: Allocator, req: *const Request, reqdata: RequestData) !Verse {
     std.debug.assert(req.uri[0] == '/');
-    return .{
+    var self = Verse{
         .alloc = a,
         .request = req,
-        .response = res,
         .reqdata = reqdata,
         .downstream = switch (req.raw) {
-            .zwsgi => |z| .{ .zwsgi = z.*.acpt.stream.writer() },
-            .http => .{ .http = undefined },
+            .zwsgi => |z| .{ .zwsgi = z.*.acpt.stream },
+            .http => .{ .http = req.raw.http.server.connection.stream },
         },
         .uri = splitScalar(u8, req.uri[1..], '/'),
         .auth = Auth{
             .provider = Auth.InvalidProvider.empty(),
         },
+        .headers = Headers.init(a),
+        .cookie_jar = try Cookies.Jar.init(a),
     };
+    try self.headersAdd("Server", "zwsgi/0.0.0");
+    try self.headersAdd("Content-Type", "text/html; charset=utf-8"); // Firefox is trash
+    return self;
+}
+
+pub fn headersAdd(vrs: *Verse, comptime name: []const u8, value: []const u8) !void {
+    try vrs.headers.add(name, value);
 }
 
 fn writeChunk(vrs: Verse, data: []const u8) !void {
@@ -78,6 +93,13 @@ fn writeAll(vrs: Verse, data: []const u8) !void {
     var index: usize = 0;
     while (index < data.len) {
         index += try write(vrs, data[index..]);
+    }
+}
+
+fn writevAll(vrs: Verse, vect: []iovec_c) !void {
+    switch (vrs.downstream) {
+        .zwsgi, .http => |stream| try stream.writevAll(vect),
+        else => unreachable,
     }
 }
 
@@ -98,48 +120,70 @@ fn flush(vrs: Verse) !void {
     }
 }
 
-fn sendHTTPHeader(vrs: *Verse) !void {
-    if (vrs.response.status == null) vrs.response.status = .ok;
-    switch (vrs.response.status.?) {
-        .ok => try vrs.writeAll("HTTP/1.1 200 OK\r\n"),
-        .found => try vrs.writeAll("HTTP/1.1 302 Found\r\n"),
-        .forbidden => try vrs.writeAll("HTTP/1.1 403 Forbidden\r\n"),
-        .not_found => try vrs.writeAll("HTTP/1.1 404 Not Found\r\n"),
-        .internal_server_error => try vrs.writeAll("HTTP/1.1 500 Internal Server Error\r\n"),
+fn HTTPHeader(vrs: *Verse) ![:0]const u8 {
+    if (vrs.status == null) vrs.status = .ok;
+    return switch (vrs.status.?) {
+        .ok => "HTTP/1.1 200 OK\r\n",
+        .found => "HTTP/1.1 302 Found\r\n",
+        .forbidden => "HTTP/1.1 403 Forbidden\r\n",
+        .not_found => "HTTP/1.1 404 Not Found\r\n",
+        .internal_server_error => "HTTP/1.1 500 Internal Server Error\r\n",
         else => return SendError.UnknownStatus,
-    }
+    };
 }
 
 pub fn sendHeaders(vrs: *Verse) !void {
     switch (vrs.downstream) {
-        .http => try vrs.response.stdhttp.response.?.flush(),
-        .zwsgi, .buffer => {
-            try vrs.sendHTTPHeader();
-            var itr = vrs.response.headers.headers.iterator();
+        .http, .zwsgi => |stream| {
+            var vect: [HEADER_VEC_COUNT]iovec_c = undefined;
+            var count: usize = 0;
+
+            const h_resp = try vrs.HTTPHeader();
+            vect[count] = .{ .base = h_resp.ptr, .len = h_resp.len };
+            count += 1;
+
+            var itr = vrs.headers.iterator();
             while (itr.next()) |header| {
-                var buf: [512]u8 = undefined;
-                const b = try std.fmt.bufPrint(&buf, "{s}: {s}\r\n", .{
-                    header.key_ptr.*,
-                    header.value_ptr.*.value,
-                });
-                _ = try vrs.write(b);
+                vect[count] = .{ .base = header.name.ptr, .len = header.name.len };
+                count += 1;
+                vect[count] = .{ .base = ": ".ptr, .len = ": ".len };
+                count += 1;
+                vect[count] = .{ .base = header.value.ptr, .len = header.value.len };
+                count += 1;
+                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
+                count += 1;
             }
-            _ = try vrs.write("Transfer-Encoding: chunked\r\n");
+
+            for (vrs.cookie_jar.cookies.items) |cookie| {
+                vect[count] = .{ .base = "Set-Cookie: ".ptr, .len = "Set-Cookie: ".len };
+                count += 1;
+                // TODO remove this alloc
+                const cookie_str = allocPrint(vrs.alloc, "{}", .{cookie}) catch unreachable;
+                vect[count] = .{
+                    .base = cookie_str.ptr,
+                    .len = cookie_str.len,
+                };
+                count += 1;
+                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
+                count += 1;
+            }
+
+            try stream.writevAll(vect[0..count]);
         },
+        .buffer => unreachable,
     }
 }
 
 pub fn redirect(vrs: *Verse, loc: []const u8, see_other: bool) !void {
-    try vrs.writeAll("HTTP/1.1 ");
-    if (see_other) {
-        try vrs.writeAll("303 See Other\r\n");
-    } else {
-        try vrs.writeAll("302 Found\r\n");
-    }
-
-    try vrs.writeAll("Location: ");
-    try vrs.writeAll(loc);
-    try vrs.writeAll("\r\n\r\n");
+    const code = if (see_other) "303 See Other\r\n" else "302 Found\r\n";
+    var vect = [5]iovec_c{
+        .{ .base = "HTTP/1.1 ".ptr, .len = 9 },
+        .{ .base = code.ptr, .len = code.len },
+        .{ .base = "Location: ".ptr, .len = 10 },
+        .{ .base = loc.ptr, .len = loc.len },
+        .{ .base = "\r\n\r\n".ptr, .len = 4 },
+    };
+    try vrs.writevAll(vect[0..]);
 }
 
 /// sendPage is the default way to respond in verse using the Template system.
@@ -152,11 +196,15 @@ pub fn sendPage(vrs: *Verse, page: anytype) NetworkError!void {
         page.data.body_header.?.nav.?.nav_auth = loggedin;
     }
 
-    const writer = vrs.response.writer();
-    page.format("{}", .{}, writer) catch |err| switch (err) {
-        else => log.err("Page Build Error {}", .{err}),
-    };
-    return vrs.finish();
+    switch (vrs.downstream) {
+        .http, .zwsgi => |stream| {
+            const w = stream.writer();
+            page.format("{}", .{}, w) catch |err| switch (err) {
+                else => log.err("Page Build Error {}", .{err}),
+            };
+        },
+        else => unreachable,
+    }
 }
 
 /// sendRawSlice will allow you to send data directly to the client. It will not
@@ -168,8 +216,6 @@ pub fn sendRawSlice(vrs: *Verse, slice: []const u8) NetworkError!void {
         error.BrokenPipe => |e| return e,
         else => unreachable,
     };
-
-    return vrs.finish();
 }
 
 /// Helper function to return a default error page for a given http status code.
@@ -191,68 +237,24 @@ pub fn sendJSON(vrs: *Verse, json: anytype) !void {
         error.BrokenPipe => |e| return e,
         else => unreachable,
     };
-    return vrs.finish();
 }
 
 /// This function may be removed in the future
 pub fn quickStart(vrs: *Verse) NetworkError!void {
-    if (vrs.response.status == null) vrs.response.status = .ok;
-
+    if (vrs.status == null) vrs.status = .ok;
     switch (vrs.downstream) {
-        .http => {
-            vrs.response.stdhttp.response = vrs.response.stdhttp.request.?.*.respondStreaming(.{
-                .send_buffer = vrs.alloc.alloc(u8, 0xffffff) catch unreachable,
-                .respond_options = .{
-                    .transfer_encoding = .chunked,
-                    .keep_alive = false,
-                    .extra_headers = @ptrCast(vrs.response.cookie_jar.toHeaderSlice(vrs.alloc) catch unreachable),
-                },
-            });
-
-            // I don't know why/where the writer goes invalid, but I'll probably
-            // fix it later?
-            if (vrs.response.stdhttp.response) |*h| vrs.downstream.http = h.writer();
-
-            vrs.sendHeaders() catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-        },
-        else => {
+        .http, .zwsgi => |_| {
             vrs.sendHeaders() catch |err| switch (err) {
                 error.BrokenPipe => |e| return e,
                 else => unreachable,
             };
 
-            for (vrs.response.cookie_jar.cookies.items) |cookie| {
-                var buffer: [1024]u8 = undefined;
-                const cookie_str = bufPrint(&buffer, "{header}\r\n", .{cookie}) catch unreachable;
-                _ = vrs.write(cookie_str) catch |err| switch (err) {
-                    error.BrokenPipe => |e| return e,
-                    else => unreachable,
-                };
-            }
-
-            _ = vrs.write("\r\n") catch |err| switch (err) {
+            vrs.writeAll("\r\n") catch |err| switch (err) {
                 error.BrokenPipe => |e| return e,
                 else => unreachable,
             };
         },
-    }
-}
-
-/// Finish sending response.
-fn finish(vrs: *Verse) NetworkError!void {
-    switch (vrs.downstream) {
-        .http => {
-            if (vrs.response.stdhttp.response) |*h| {
-                h.endChunked(.{}) catch |err| switch (err) {
-                    error.BrokenPipe => |e| return e,
-                    else => unreachable,
-                };
-            }
-        },
-        else => {},
+        else => unreachable,
     }
 }
 
@@ -265,5 +267,8 @@ const Allocator = std.mem.Allocator;
 const Stream = std.net.Stream;
 const AnyWriter = std.io.AnyWriter;
 const bufPrint = std.fmt.bufPrint;
+const allocPrint = std.fmt.allocPrint;
 const splitScalar = std.mem.splitScalar;
 const log = std.log.scoped(.Verse);
+const iovec = std.posix.iovec;
+const iovec_c = std.posix.iovec_const;
