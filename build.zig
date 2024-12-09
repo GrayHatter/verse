@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const module = b.addModule("verse", .{
-        .root_source_file = b.path("src/verse.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
     tc_build_step.dependOn(&tc_build_run.step);
 
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/verse.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
