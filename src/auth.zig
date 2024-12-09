@@ -1,10 +1,6 @@
 pub const Auth = @This();
 
 pub const Provider = @import("auth/provider.zig");
-
-pub const AuthZ = @import("authorization.zig");
-pub const AuthN = @import("authentication.zig");
-
 pub const User = @import("auth/user.zig");
 
 pub const Error = error{

@@ -1,6 +1,6 @@
 const std = @import("std");
-const Verse = @import("verse");
-const Router = Verse.Router;
+const verse = @import("verse");
+const Router = verse.Router;
 const BuildFn = Router.BuildFn;
 
 const routes = [_]Router.Match{
@@ -12,7 +12,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var server = try Verse.Server.init(alloc, .{
+    var server = try verse.Server.init(alloc, .{
         .mode = .{ .http = .{ .port = 8082 } },
         .router = .{ .routefn = route },
     });
@@ -23,14 +23,14 @@ pub fn main() !void {
     };
 }
 
-fn route(verse: *Verse) !BuildFn {
-    return Verse.Router.router(verse, &routes);
+fn route(vrs: *verse.Verse) !BuildFn {
+    return Router.router(vrs, &routes);
 }
 
 // This page template is compiled/prepared at comptime.
-const ExamplePage = Verse.Template.PageData("templates/example.html");
+const ExamplePage = verse.PageData("templates/example.html");
 
-fn index(verse: *Verse) Router.Error!void {
+fn index(vrs: *verse.Verse) Router.Error!void {
     var page = ExamplePage.init(.{
         // Simple Variables
         .simple_variable = "This is a simple variable",
@@ -76,5 +76,5 @@ fn index(verse: *Verse) Router.Error!void {
         .empty_vars = .{},
     });
 
-    try verse.sendPage(&page);
+    try vrs.sendPage(&page);
 }

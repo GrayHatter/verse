@@ -27,11 +27,11 @@ pub fn Endpoints(endpoints: anytype) type {
         }
 
         pub fn serve(_: *Self, a: Allocator, options: Options) !void {
-            var server = try Verse.Server.init(a, .{
+            var server_ = try server.Server.init(a, .{
                 .mode = options.mode,
                 .router = .{ .routefn = route },
             });
-            try server.serve();
+            try server_.serve();
         }
 
         pub fn route(v: *Verse) !Router.BuildFn {
@@ -53,12 +53,12 @@ fn routeCount(EP: type) usize {
     return count;
 }
 
-fn buildRoutes(EP: anytype) [routeCount(EP)]Router.Match {
-    var match: [routeCount(EP)]Router.Match = undefined;
+fn buildRoutes(EP: anytype) [routeCount(EP)]router.Match {
+    var match: [routeCount(EP)]router.Match = undefined;
     var idx: usize = 0;
     for (@typeInfo(EP).Struct.decls) |decl| {
         if (std.mem.eql(u8, "index", decl.name)) {
-            match[idx] = Router.ANY("", EP.index);
+            match[idx] = router.ANY("", EP.index);
             idx += 1;
         }
     }
@@ -68,6 +68,8 @@ fn buildRoutes(EP: anytype) [routeCount(EP)]Router.Match {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const router = @import("router.zig");
+const server = @import("server.zig");
 const Verse = @import("verse.zig");
 const Auth = @import("auth.zig");
 const Server = @import("server.zig");

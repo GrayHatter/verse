@@ -1,6 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+pub const DOM = @import("html/dom.zig");
+
 pub usingnamespace @import("html/extra.zig");
 
 pub const Attribute = struct {

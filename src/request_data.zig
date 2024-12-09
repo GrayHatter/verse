@@ -604,8 +604,6 @@ test json {
     alloc.free(items);
 }
 
-pub const ContentType = @import("content-type.zig");
-
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const AnyReader = std.io.AnyReader;
@@ -614,6 +612,7 @@ const Type = @import("builtin").Type;
 const parseInt = std.fmt.parseInt;
 const parseFloat = std.fmt.parseFloat;
 const stringToEnum = std.meta.stringToEnum;
+const ContentType = @import("content-type.zig");
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
 const splitSequence = std.mem.splitSequence;

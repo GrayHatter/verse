@@ -1,9 +1,9 @@
 /// .root is a special cased name to resolve at "/"
 pub const verse_name = .root;
 
-pub fn index(vrs: *Verse) !void {
+pub fn index(vrs: *verse.Verse) !void {
     try vrs.quickStart();
     try vrs.sendRawSlice("hello world");
 }
 
-const Verse = @import("verse");
+const verse = @import("verse");

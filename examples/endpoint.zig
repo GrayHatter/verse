@@ -1,4 +1,4 @@
-const Endpoints = Endpoint.Endpoints(.{
+const Endpoints = verse.Endpoints(.{
     @import("endpoint/example.zig"),
 });
 
@@ -12,11 +12,10 @@ pub fn main() !void {
     };
 }
 
-fn index(verse: *Verse) Verse.Router.Error!void {
-    try verse.quickStart();
-    try verse.sendRawSlice("hello world");
+fn index(vrs: *verse.Verse) verse.Router.Error!void {
+    try vrs.quickStart();
+    try vrs.sendRawSlice("hello world");
 }
 
 const std = @import("std");
-const Verse = @import("verse");
-const Endpoint = Verse.Endpoint;
+const verse = @import("verse");

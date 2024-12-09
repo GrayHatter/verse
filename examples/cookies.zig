@@ -1,10 +1,10 @@
 const std = @import("std");
-const Verse = @import("verse");
-const Router = Verse.Router;
+const verse = @import("verse");
+const Router = verse.Router;
 const BuildFn = Router.BuildFn;
 const print = std.fmt.bufPrint;
 
-const Cookie = Verse.Cookies.Cookie;
+const Cookie = verse.Cookie;
 var Random = std.Random.DefaultPrng.init(1337);
 var random = Random.random();
 
@@ -17,7 +17,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var server = try Verse.Server.init(alloc, .{
+    var server = try verse.Server.init(alloc, .{
         .mode = .{ .http = .{ .port = 8081 } },
         .router = .{ .routefn = route },
     });
@@ -28,13 +28,13 @@ pub fn main() !void {
     };
 }
 
-fn route(verse: *Verse) !BuildFn {
-    return Verse.Router.router(verse, &routes);
+fn route(vrs: *verse.Verse) !BuildFn {
+    return Router.router(vrs, &routes);
 }
 
-fn index(verse: *Verse) Router.Error!void {
+fn index(vrs: *verse.Verse) Router.Error!void {
     var buffer: [2048]u8 = undefined;
-    const found = try print(&buffer, "{} cookies found by the server\n", .{verse.request.cookie_jar.cookies.items.len});
+    const found = try print(&buffer, "{} cookies found by the server\n", .{vrs.request.cookie_jar.cookies.items.len});
 
     const random_cookie = @tagName(random.enumValue(enum {
         chocolate_chip,
@@ -44,10 +44,10 @@ fn index(verse: *Verse) Router.Error!void {
         ginger_snap,
     }));
 
-    try verse.cookie_jar.add(Cookie{
+    try vrs.cookie_jar.add(Cookie{
         .name = "best-flavor",
         .value = random_cookie,
     });
-    try verse.quickStart();
-    try verse.sendRawSlice(found);
+    try vrs.quickStart();
+    try vrs.sendRawSlice(found);
 }

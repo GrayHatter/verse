@@ -2,7 +2,7 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 
-const HTML = @import("html.zig");
+const HTML = @import("../html.zig");
 
 const DOM = @This();
 

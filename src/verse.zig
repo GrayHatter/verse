@@ -1,16 +1,16 @@
 pub const Verse = @This();
-pub const Server = @import("server.zig");
-pub const Request = @import("request.zig");
-pub const RequestData = @import("request_data.zig");
-pub const Template = @import("template.zig");
-pub const Router = @import("router.zig");
-pub const UriIter = Router.UriIter;
-pub const Endpoint = @import("endpoint.zig");
 
-pub const Headers = @import("headers.zig");
-pub const Auth = @import("auth.zig");
-pub const Cookies = @import("cookies.zig");
-pub const ContentType = @import("content-type.zig");
+const Server = @import("server.zig");
+const Request = @import("request.zig");
+const RequestData = @import("request_data.zig");
+const Template = @import("template.zig");
+const Router = @import("router.zig");
+const UriIter = Router.UriIter;
+
+const Headers = @import("headers.zig");
+const Auth = @import("auth.zig");
+const Cookies = @import("cookies.zig");
+const ContentType = @import("content-type.zig");
 
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;

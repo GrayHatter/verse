@@ -1,6 +1,6 @@
 const std = @import("std");
-const Verse = @import("verse");
-const Router = Verse.Router;
+const verse = @import("verse");
+const Router = verse.Router;
 const BuildFn = Router.BuildFn;
 
 const routes = [_]Router.Match{
@@ -12,7 +12,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var server = try Verse.Server.init(alloc, .{
+    var server = try verse.Server.init(alloc, .{
         .mode = .{ .http = .{ .port = 8080 } },
         .router = .{ .routefn = route },
     });
@@ -23,11 +23,11 @@ pub fn main() !void {
     };
 }
 
-fn route(verse: *Verse) !BuildFn {
-    return Verse.Router.router(verse, &routes);
+fn route(vrs: *verse.Verse) !BuildFn {
+    return Router.router(vrs, &routes);
 }
 
-fn index(verse: *Verse) Router.Error!void {
-    try verse.quickStart();
-    try verse.sendRawSlice("hello world");
+fn index(vrs: *verse.Verse) Router.Error!void {
+    try vrs.quickStart();
+    try vrs.sendRawSlice("hello world");
 }
