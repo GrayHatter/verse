@@ -12,9 +12,6 @@ pub const Structs = @import("comptime_structs");
 
 pub const Directive = @import("template/directive.zig");
 
-pub const DOM = @import("dom.zig");
-pub const HTML = @import("html.zig");
-
 pub const Pages = @import("template/page.zig");
 pub const Page = Pages.Page;
 pub const PageRuntime = Pages.PageRuntime;

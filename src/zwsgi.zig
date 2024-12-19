@@ -262,7 +262,7 @@ test init {
 
     const R = struct {
         fn route(verse: *Verse) Router.Error!Router.BuildFn {
-            return Verse.Router.router(verse, &.{});
+            return Router.router(verse, &.{});
         }
     };
 

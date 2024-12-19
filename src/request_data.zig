@@ -2,7 +2,6 @@ post: ?PostData,
 query: QueryData,
 
 const Data = @This();
-pub const ContentType = @import("content-type.zig");
 
 pub fn validate(data: Data, comptime T: type) !T {
     return RequestData(T).init(data);
@@ -445,6 +444,7 @@ test "application/x-www-form-urlencoded" {}
 
 const std = @import("std");
 const Type = @import("builtin").Type;
+const ContentType = @import("content-type.zig");
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
