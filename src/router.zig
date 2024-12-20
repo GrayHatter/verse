@@ -313,3 +313,7 @@ fn defaultRouterHtml(vrs: *Verse, routefn: RouteFn) Error!void {
     }
     return internalServerError;
 }
+
+pub fn testingRouter(v: *Verse) Error!BuildFn {
+    return router(v, &root);
+}

@@ -9,7 +9,6 @@ const SA = std.posix.SA;
 const Verse = @import("verse.zig");
 const Request = @import("request.zig");
 const Router = @import("router.zig");
-const RequestData = @import("request_data.zig");
 
 pub const zWSGI = @This();
 
@@ -87,9 +86,10 @@ pub fn serve(z: *zWSGI) !void {
         defer arena.deinit();
         const a = arena.allocator();
 
-        var zreq = try readHeader(a, &acpt);
-        var request = try Request.initZWSGI(a, &zreq);
-        var verse = try buildVerse(a, &request);
+        var zreq = try zWSGIRequest.init(a, &acpt);
+        const request_data = try requestData(a, &zreq);
+        const request = try Request.initZWSGI(a, &zreq, request_data);
+        var verse = try Verse.init(a, &request);
 
         defer {
             const vars = verse.request.raw.zwsgi.vars;
@@ -128,10 +128,51 @@ fn signalListen(signal: u6) !void {
 }
 
 pub const zWSGIRequest = struct {
-    acpt: *net.Server.Connection,
+    conn: *net.Server.Connection,
     header: uProtoHeader = uProtoHeader{},
     vars: []uWSGIVar = &[0]uWSGIVar{},
-    body: ?[]u8 = null,
+
+    pub fn init(a: Allocator, c: *net.Server.Connection) !zWSGIRequest {
+        const uwsgi_header = try uProtoHeader.init(c);
+
+        const buf: []u8 = try a.alloc(u8, uwsgi_header.size);
+        const read = try c.stream.read(buf);
+        if (read != uwsgi_header.size) {
+            std.log.err("unexpected read size {} {}", .{ read, uwsgi_header.size });
+        }
+
+        const vars = try readVars(a, buf);
+        for (vars) |v| {
+            log.debug("{}", .{v});
+        }
+
+        return .{
+            .conn = c,
+            .header = uwsgi_header,
+            .vars = vars,
+        };
+    }
+    fn readVars(a: Allocator, b: []const u8) ![]uWSGIVar {
+        var list = std.ArrayList(uWSGIVar).init(a);
+        var buf = b;
+        while (buf.len > 0) {
+            const keysize = readU16(buf[0..2]);
+            buf = buf[2..];
+            const key = try a.dupe(u8, buf[0..keysize]);
+            buf = buf[keysize..];
+
+            const valsize = readU16(buf[0..2]);
+            buf = buf[2..];
+            const val = try a.dupe(u8, if (valsize == 0) "" else buf[0..valsize]);
+            buf = buf[valsize..];
+
+            try list.append(uWSGIVar{
+                .key = key,
+                .val = val,
+            });
+        }
+        return try list.toOwnedSlice();
+    }
 };
 
 fn readU16(b: *const [2]u8) u16 {
@@ -145,32 +186,19 @@ test "readu16" {
     try std.testing.expectEqual(size, readU16(&buffer));
 }
 
-fn readVars(a: Allocator, b: []const u8) ![]uWSGIVar {
-    var list = std.ArrayList(uWSGIVar).init(a);
-    var buf = b;
-    while (buf.len > 0) {
-        const keysize = readU16(buf[0..2]);
-        buf = buf[2..];
-        const key = try a.dupe(u8, buf[0..keysize]);
-        buf = buf[keysize..];
-
-        const valsize = readU16(buf[0..2]);
-        buf = buf[2..];
-        const val = try a.dupe(u8, if (valsize == 0) "" else buf[0..valsize]);
-        buf = buf[valsize..];
-
-        try list.append(uWSGIVar{
-            .key = key,
-            .val = val,
-        });
-    }
-    return try list.toOwnedSlice();
-}
-
 const uProtoHeader = packed struct {
     mod1: u8 = 0,
     size: u16 = 0,
     mod2: u8 = 0,
+
+    pub fn init(c: *net.Server.Connection) !uProtoHeader {
+        var self: uProtoHeader = .{};
+        var ptr: [*]u8 = @ptrCast(&self);
+        if (try c.stream.read(ptr[0..4]) != 4) {
+            return error.InvalidRead;
+        }
+        return self;
+    }
 };
 
 const uWSGIVar = struct {
@@ -200,40 +228,16 @@ fn findOr(list: []uWSGIVar, search: []const u8) []const u8 {
     return find(list, search) orelse "[missing]";
 }
 
-fn readHeader(a: Allocator, conn: *net.Server.Connection) !zWSGIRequest {
-    var uwsgi_header = uProtoHeader{};
-    var ptr: [*]u8 = @ptrCast(&uwsgi_header);
-    _ = try conn.stream.read(@alignCast(ptr[0..4]));
+fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
+    var post_data: ?Request.Data.PostData = null;
 
-    const buf: []u8 = try a.alloc(u8, uwsgi_header.size);
-    const read = try conn.stream.read(buf);
-    if (read != uwsgi_header.size) {
-        std.log.err("unexpected read size {} {}", .{ read, uwsgi_header.size });
-    }
-
-    const vars = try readVars(a, buf);
-    for (vars) |v| {
-        log.debug("{}", .{v});
-    }
-
-    return .{
-        .acpt = conn,
-        .header = uwsgi_header,
-        .vars = vars,
-    };
-}
-
-fn buildVerse(a: Allocator, req: *Request) !Verse {
-    var post_data: ?RequestData.PostData = null;
-    var reqdata: RequestData = undefined;
-
-    if (find(req.raw.zwsgi.vars, "HTTP_CONTENT_LENGTH")) |h_len| {
-        const h_type = findOr(req.raw.zwsgi.vars, "HTTP_CONTENT_TYPE");
+    if (find(zreq.vars, "HTTP_CONTENT_LENGTH")) |h_len| {
+        const h_type = findOr(zreq.vars, "HTTP_CONTENT_TYPE");
 
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {
-            var reader = req.raw.zwsgi.acpt.stream.reader().any();
-            post_data = try RequestData.readBody(a, &reader, post_size, h_type);
+            var reader = zreq.conn.stream.reader().any();
+            post_data = try Request.Data.readBody(a, &reader, post_size, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },
@@ -245,16 +249,14 @@ fn buildVerse(a: Allocator, req: *Request) !Verse {
         }
     }
 
-    var query: RequestData.QueryData = undefined;
-    if (find(req.raw.zwsgi.vars, "QUERY_STRING")) |qs| {
-        query = try RequestData.readQuery(a, qs);
+    var query: Request.Data.QueryData = undefined;
+    if (find(zreq.vars, "QUERY_STRING")) |qs| {
+        query = try Request.Data.readQuery(a, qs);
     }
-    reqdata = RequestData{
+    return .{
         .post = post_data,
         .query = query,
     };
-
-    return Verse.init(a, req, reqdata);
 }
 
 test init {

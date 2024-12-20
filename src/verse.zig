@@ -16,7 +16,6 @@ const NetworkError = @import("errors.zig").NetworkError;
 
 alloc: Allocator,
 request: *const Request,
-reqdata: RequestData,
 downstream: union(Downstream) {
     buffer: std.io.BufferedWriter(ONESHOT_SIZE, Stream.Writer),
     zwsgi: Stream,
@@ -80,14 +79,13 @@ pub const RouteData = struct {
     }
 };
 
-pub fn init(a: Allocator, req: *const Request, reqdata: RequestData) !Verse {
+pub fn init(a: Allocator, req: *const Request) !Verse {
     std.debug.assert(req.uri[0] == '/');
     return .{
         .alloc = a,
         .request = req,
-        .reqdata = reqdata,
         .downstream = switch (req.raw) {
-            .zwsgi => |z| .{ .zwsgi = z.*.acpt.stream },
+            .zwsgi => |z| .{ .zwsgi = z.*.conn.stream },
             .http => .{ .http = req.raw.http.server.connection.stream },
         },
         .uri = splitScalar(u8, req.uri[1..], '/'),

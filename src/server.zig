@@ -50,3 +50,7 @@ pub fn serve(srv: *Server) !void {
         else => {},
     }
 }
+
+test Server {
+    std.testing.refAllDecls(@This());
+}
