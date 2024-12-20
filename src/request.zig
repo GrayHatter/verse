@@ -87,6 +87,12 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request) !Request {
         .method = switch (http.head.method) {
             .GET => .GET,
             .POST => .POST,
+            .HEAD => .HEAD,
+            .PUT => .PUT,
+            .DELETE => .DELETE,
+            .CONNECT => .CONNECT,
+            .OPTIONS => .OPTIONS,
+            .TRACE => .TRACE,
             else => @panic("not implemented"),
         },
         .cookie_jar = undefined,
