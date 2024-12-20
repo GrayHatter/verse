@@ -1,8 +1,8 @@
+//! Client Request Data
+const Data = @This();
+
 post: ?PostData,
 query: QueryData,
-
-const Data = @This();
-pub const ContentType = @import("content-type.zig");
 
 pub fn validate(data: Data, comptime T: type) !T {
     return RequestData(T).init(data);
@@ -442,6 +442,8 @@ test "multipart/form-data" {}
 test "multipart/multipart" {}
 
 test "application/x-www-form-urlencoded" {}
+
+pub const ContentType = @import("content-type.zig");
 
 const std = @import("std");
 const Type = @import("builtin").Type;
