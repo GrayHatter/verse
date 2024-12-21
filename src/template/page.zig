@@ -601,7 +601,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     return 0;
                 },
             }
-            return 1;
+            return if (vec[0].len > 0) 1 else 0;
         }
 
         fn ioVecArray(T: type, data: T, comptime ofs: []const Offset, vec: []IOVec, a: Allocator) !usize {
@@ -615,7 +615,6 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         // I should find a better way to write this hack
                         if (ofs.len == 2) {
                             if (ofs[1].kind == .slice and ofs[1].kind.slice.len > 0) {
-                                std.debug.print("would be -{any}.{} '{s}'\n", .{ ofs[1].kind.slice, ofs[1].kind.slice.len, ofs[1].kind.slice });
                                 vec[idx] = .{ .base = ofs[1].kind.slice.ptr, .len = ofs[1].kind.slice.len };
                                 idx += 1;
                             }
@@ -733,7 +732,7 @@ test Page {
 
     try std.testing.expect(vec.len < page.iovecCountAll());
     // The following two numbers weren't validated in anyway.
-    try std.testing.expectEqual(51, vec.len);
+    try std.testing.expectEqual(49, vec.len);
     try std.testing.expectEqual(56, page.iovecCountAll());
 }
 

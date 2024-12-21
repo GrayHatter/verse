@@ -15,6 +15,8 @@ pub const Error = error{
     NotProvided,
 };
 
+/// Fails closed: the provider used may return an error which will be caught and
+/// returned as false.
 pub fn valid(a: Auth) bool {
     return a.provider.valid() catch false;
 }
@@ -76,6 +78,8 @@ pub const AnyAuth = struct {
         } else return error.NotProvided;
     }
 };
+
+pub const MTLSAuth = struct {};
 
 pub const InvalidProvider = struct {
     pub fn empty() AnyAuth {
