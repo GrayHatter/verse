@@ -50,6 +50,7 @@ pub const Application = enum {
     @"x-www-form-urlencoded",
     @"x-git-upload-pack-request",
     @"octet-stream",
+    json,
 
     pub fn string(comptime app: Application) [:0]const u8 {
         return switch (app) {

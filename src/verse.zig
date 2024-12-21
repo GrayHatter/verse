@@ -308,6 +308,11 @@ pub fn sendJSON(vrs: *Verse, json: anytype, comptime code: std.http.Status) !voi
     }
 
     vrs.status = code;
+    vrs.content_type = .{
+        .base = .{ .application = .json },
+        .parameter = .@"utf-8",
+    };
+
     try vrs.quickStart();
     const data = std.json.stringifyAlloc(vrs.alloc, json, .{
         .emit_null_optional_fields = false,

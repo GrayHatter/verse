@@ -303,6 +303,9 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype
         .@"octet-stream" => {
             unreachable; // Not implemented
         },
+        .json => {
+            unreachable; // TODO: implement parsing json
+        },
     }
 }
 
