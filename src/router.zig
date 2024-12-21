@@ -1,16 +1,6 @@
-const std = @import("std");
-const log = std.log.scoped(.Verse);
-const Allocator = std.mem.Allocator;
-const eql = std.mem.eql;
-pub const UriIter = std.mem.SplitIterator(u8, .scalar);
-
-const Verse = @import("verse.zig");
-
-const Request = @import("request.zig");
-const StaticFile = @import("static-file.zig");
-
-pub const Errors = @import("errors.zig");
-pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkError;
+routefn: RouteFn,
+builderfn: BuilderFn = defaultBuilder,
+routerfn: RouterFn = defaultRouter,
 
 /// The default page generator, this is the function that will be called, and
 /// expected to write the page data back to the client.
@@ -34,35 +24,7 @@ pub const RouterFn = *const fn (*Verse, RouteFn) BuildFn;
 
 pub const Router = @This();
 
-builderfn: BuilderFn = defaultBuilder,
-routefn: RouteFn,
-routerfn: RouterFn = defaultRouter,
-
-/// Separate from the http interface as this is 'internal' to the routing
-/// subsystem, where a single endpoint may respond to multiple http methods.
-pub const Methods = packed struct {
-    GET: bool = false,
-    HEAD: bool = false,
-    POST: bool = false,
-    PUT: bool = false,
-    DELETE: bool = false,
-    CONNECT: bool = false,
-    OPTIONS: bool = false,
-    TRACE: bool = false,
-
-    pub fn matchMethod(self: Methods, req: Request.Methods) bool {
-        return switch (req) {
-            .GET => self.GET,
-            .HEAD => self.HEAD,
-            .POST => self.POST,
-            .PUT => self.PUT,
-            .DELETE => self.DELETE,
-            .CONNECT => self.CONNECT,
-            .OPTIONS => self.OPTIONS,
-            .TRACE => self.TRACE,
-        };
-    }
-};
+pub const UriIter = std.mem.SplitIterator(u8, .scalar);
 
 /// The Verse router will scan through an array of Match structs looking for a
 /// given name. Verse doesn't assert that the given name will match a director
@@ -75,80 +37,156 @@ pub const Match = struct {
     /// The name for this resource. Names with length of 0 is valid for
     /// directories.
     name: []const u8,
-    /// The resource at a given URI position.
-    match: union(enum) {
-        /// An endpoint function that's expected to return the requested page
-        /// data.
-        build: BuildFn,
-        /// A router function that will either
-        /// 1) consume the next URI token, and itself call the next routing
-        /// function/handler, or
-        /// 2) return the build function pointer that will be called directly to
-        /// generate the page.
-        route: RouteFn,
-        /// A Match array for a sub directory, that can be handled by the same
-        /// routing function. Provided for convenience.
-        simple: []const Match,
-    },
-    /// The http request methods this endpoint is willing to support or answer
-    /// for.
-    methods: Methods = .{ .GET = true },
+    /// Map http method to target endpoint.
+    methods: Methods,
+
+    /// Separate from the http interface as this is 'internal' to the routing
+    /// subsystem, where a single endpoint may respond to multiple http methods.
+    pub const Methods = struct {
+        CONNECT: ?Target = null,
+        DELETE: ?Target = null,
+        GET: ?Target = null,
+        HEAD: ?Target = null,
+        OPTIONS: ?Target = null,
+        POST: ?Target = null,
+        PUT: ?Target = null,
+        TRACE: ?Target = null,
+    };
+
+    pub fn target(comptime self: Match, comptime req: Request.Methods) ?Target {
+        return switch (req) {
+            .CONNECT => self.methods.CONNECT,
+            .DELETE => self.methods.DELETE,
+            .GET => self.methods.GET,
+            .HEAD => self.methods.HEAD,
+            .OPTIONS => self.methods.OPTIONS,
+            .POST => self.methods.POST,
+            .PUT => self.methods.PUT,
+            .TRACE => self.methods.TRACE,
+        };
+    }
 };
+
+pub const Target = union(enum) {
+    /// An endpoint function that's expected to return the requested page
+    /// data.
+    build: BuildFn,
+    /// A router function that will either
+    /// 1) consume the next URI token, and itself call the next routing
+    /// function/handler, or
+    /// 2) return the build function pointer that will be called directly to
+    /// generate the page.
+    route: RouteFn,
+    /// A Match array for a sub directory, that can be handled by the same
+    /// routing function. Provided for convenience.
+    simple: []const Match,
+};
+
+/// Translation function to convert a tuple of Match objects into
+pub fn ROUTER() void {}
 
 /// Default route building helper.
 pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
-    return comptime Match{
-        .name = name,
-        .match = switch (@typeInfo(@TypeOf(match))) {
-            .Pointer => |ptr| switch (@typeInfo(ptr.child)) {
-                .Fn => |fnc| switch (fnc.return_type orelse null) {
-                    Error!void => .{ .build = match },
-                    Error!BuildFn => .{ .route = match },
-                    else => @compileError("unknown function return type"),
-                },
-                else => .{ .simple = match },
+    const target = buildTarget(match);
+    return switch (target) {
+        .build => |b| ALL(name, b),
+        .route, .simple => .{ // TODO only populate if sub target handles method
+            .name = name,
+            .methods = .{
+                .CONNECT = target,
+                .DELETE = target,
+                .GET = target,
+                .HEAD = target,
+                .OPTIONS = target,
+                .POST = target,
+                .PUT = target,
+                .TRACE = target,
             },
-            .Fn => |fnc| switch (fnc.return_type orelse null) {
-                Error!void => .{ .build = match },
-                Error!BuildFn => .{ .route = match },
-                else => @compileError("unknown function return type"),
-            },
-            else => |el| @compileError("match type not supported, for provided type [" ++
-                @typeName(@TypeOf(el)) ++
-                "]"),
         },
-
-        .methods = .{ .GET = true, .POST = true },
     };
 }
 
-/// only builds for GET and POST, this behavior is likely to change to the named
-/// behavior and answer to ALL methods, once they are fully supported.
+fn buildTarget(comptime match: anytype) Target {
+    return switch (@typeInfo(@TypeOf(match))) {
+        .Pointer => |ptr| switch (@typeInfo(ptr.child)) {
+            .Fn => |fnc| switch (fnc.return_type orelse null) {
+                Error!void => .{ .build = match },
+                Error!BuildFn => .{ .route = match },
+                else => @compileError("unknown function return type" ++ @typeName(ptr.child)),
+            },
+            else => .{ .simple = match },
+        },
+        .Fn => |fnc| switch (fnc.return_type orelse null) {
+            Error!void => .{ .build = match },
+            Error!BuildFn => .{ .route = match },
+            else => @compileError("unknown function return type"),
+        },
+        else => |el| @compileError("match type not supported, for provided type [" ++
+            @typeName(@TypeOf(el)) ++
+            "]"),
+    };
+}
+
+/// Defaults to build only for GET, POST, and HEAD, and OPTIONS. Use ALL if your
+/// endpoint actually supports every known method.
 pub fn ANY(comptime name: []const u8, comptime match: BuildFn) Match {
-    var mr = ROUTE(name, match);
-    mr.methods = .{ .GET = true, .POST = true };
-    return mr;
+    const target = buildTarget(match);
+    return .{
+        .name = name,
+        .methods = .{
+            .GET = target,
+            .POST = target,
+            .HEAD = target,
+            .OPTIONS = target,
+        },
+    };
+}
+
+pub fn ALL(comptime name: []const u8, comptime match: BuildFn) Match {
+    const target = buildTarget(match);
+    return .{
+        .name = name,
+        .methods = .{
+            .CONNECT = target,
+            .DELETE = target,
+            .GET = target,
+            .HEAD = target,
+            .OPTIONS = target,
+            .POST = target,
+            .PUT = target,
+            .TRACE = target,
+        },
+    };
 }
 
 /// Match build helper for GET requests.
 pub fn GET(comptime name: []const u8, comptime match: BuildFn) Match {
-    var mr = ROUTE(name, match);
-    mr.methods = .{ .GET = true };
-    return mr;
+    return .{
+        .name = name,
+        .methods = .{
+            .GET = buildTarget(match),
+        },
+    };
 }
 
 /// Match build helper for POST requests.
 pub fn POST(comptime name: []const u8, comptime match: BuildFn) Match {
-    var mr = ROUTE(name, match);
-    mr.methods = .{ .POST = true };
-    return mr;
+    return .{
+        .name = name,
+        .methods = .{
+            .POST = buildTarget(match),
+        },
+    };
 }
 
 /// Match build helper for DELETE requests.
 pub fn DELETE(comptime name: []const u8, comptime match: BuildFn) Match {
-    var mr = ROUTE(name, match);
-    mr.methods = .{ .DELETE = true };
-    return mr;
+    return .{
+        .name = name,
+        .methods = .{
+            .DELETE = buildTarget(match),
+        },
+    };
 }
 
 /// Static file helper that will auto route to the provided directory.
@@ -156,9 +194,12 @@ pub fn DELETE(comptime name: []const u8, comptime match: BuildFn) Match {
 /// static resources without calling Verse. But Verse does have some support for
 /// returning simple static resources.
 pub fn STATIC(comptime name: []const u8) Match {
-    var mr = ROUTE(name, StaticFile.fileOnDisk);
-    mr.methods = .{ .GET = true };
-    return mr;
+    return .{
+        .name = name,
+        .methods = .{
+            .GET = buildTarget(StaticFile.fileOnDisk),
+        },
+    };
 }
 
 /// Convenience build function that will return a default page, normally during
@@ -204,43 +245,39 @@ fn default(vrs: *Verse) Error!void {
 /// data or routing support/validation, before continuing to build the route.
 pub fn router(vrs: *Verse, comptime routes: []const Match) Error!BuildFn {
     const search = vrs.uri.peek() orelse {
-        // Calling router without a next URI is unsupported.
+        if (routes.len > 0 and routes[0].name.len == 0) {
+            switch (vrs.request.method) {
+                inline else => |m| if (routes[0].target(m)) |t| return switch (t) {
+                    .build => |b| return b,
+                    .route, .simple => return error.Unrouteable,
+                },
+            }
+        }
+
         log.warn("No endpoint found: URI is empty.", .{});
         return error.Unrouteable;
     };
     inline for (routes) |ep| {
         if (eql(u8, search, ep.name)) {
-            switch (ep.match) {
-                .build => |call| {
-                    if (ep.methods.matchMethod(vrs.request.method)) {
-                        return call;
-                    } else {
-                        // search if there is another route by the same name that accepts the requested method
-                        var found = false;
-                        inline for (routes) |f| {
-                            if (eql(u8, search, f.name) and f.methods.matchMethod(vrs.request.method)) {
-                                found = true;
-                            }
-                        }
-
-                        if (!found) {
-                            return methodNotAllowed;
+            switch (vrs.request.method) {
+                inline else => |m| {
+                    if (comptime ep.target(m)) |target| {
+                        switch (target) {
+                            .build => |call| {
+                                return call;
+                            },
+                            .route => |route| {
+                                return route(vrs) catch |err| switch (err) {
+                                    error.Unrouteable => return notFound,
+                                    else => unreachable,
+                                };
+                            },
+                            inline .simple => |simple| {
+                                _ = vrs.uri.next();
+                                return router(vrs, simple);
+                            },
                         }
                     }
-                },
-                .route => |route| {
-                    return route(vrs) catch |err| switch (err) {
-                        error.Unrouteable => return notFound,
-                        else => unreachable,
-                    };
-                },
-                .simple => |simple| {
-                    _ = vrs.uri.next();
-                    if (vrs.uri.peek() == null and
-                        eql(u8, simple[0].name, "") and
-                        simple[0].match == .build)
-                        return simple[0].match.build;
-                    return router(vrs, simple);
                 },
             }
         }
@@ -327,3 +364,14 @@ fn defaultRouterHtml(vrs: *Verse, routefn: RouteFn) Error!void {
 pub fn testingRouter(v: *Verse) Error!BuildFn {
     return router(v, &root);
 }
+
+const std = @import("std");
+const log = std.log.scoped(.Verse);
+const Allocator = std.mem.Allocator;
+const eql = std.mem.eql;
+
+const Verse = @import("verse.zig");
+const Request = @import("request.zig");
+const StaticFile = @import("static-file.zig");
+pub const Errors = @import("errors.zig");
+pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkError;
