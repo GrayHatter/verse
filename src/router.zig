@@ -16,14 +16,16 @@ pub const BuilderFn = *const fn (*Verse, BuildFn) void;
 /// backtracking through the routing system might be useful. This in an
 /// exercise left to the caller, as eventually a sever default server error page
 /// will need to be returned.
-pub const RouteFn = *const fn (*Verse) Error!BuildFn;
+pub const RouteFn = *const fn (*Verse) RoutingError!BuildFn;
 
 /// The provided RouteFn will be wrapped with a default error provider that will
 /// return a default BuildFn.
 pub const RouterFn = *const fn (*Verse, RouteFn) BuildFn;
 
+/// TODO document
 pub const Router = @This();
 
+/// TODO document
 pub const UriIter = std.mem.SplitIterator(u8, .scalar);
 
 /// The Verse router will scan through an array of Match structs looking for a
@@ -239,11 +241,17 @@ fn default(vrs: *Verse) Error!void {
     return vrs.sendRawSlice(index);
 }
 
+pub const RoutingError = error{
+    Unrouteable,
+    MethodNotAllowed,
+    NotFound,
+};
+
 /// Default routing function. This is likely the routing function you want to
 /// provide to verse with the Match array for your site. It can also be used
 /// internally within custom routing functions, that provide additional page,
 /// data or routing support/validation, before continuing to build the route.
-pub fn router(vrs: *Verse, comptime routes: []const Match) Error!BuildFn {
+pub fn router(vrs: *Verse, comptime routes: []const Match) RoutingError!BuildFn {
     const search = vrs.uri.peek() orelse {
         if (routes.len > 0 and routes[0].name.len == 0) {
             switch (vrs.request.method) {
@@ -277,7 +285,7 @@ pub fn router(vrs: *Verse, comptime routes: []const Match) Error!BuildFn {
                                 return router(vrs, simple);
                             },
                         }
-                    }
+                    } else return error.MethodNotAllowed;
                 },
             }
         }
@@ -339,14 +347,11 @@ const root = [_]Match{
 };
 
 fn defaultRouter(vrs: *Verse, routefn: RouteFn) BuildFn {
-    if (vrs.uri.peek()) |_| {
-        return routefn(vrs)
-        // The given router function failed, fall back to internal default
-        catch router(vrs, &root)
-        // Even the internal router failed to resolve
-        catch notFound;
-    }
-    return internalServerError;
+    return routefn(vrs) catch |err| switch (err) {
+        error.MethodNotAllowed => methodNotAllowed,
+        error.NotFound => notFound,
+        error.Unrouteable => internalServerError,
+    };
 }
 
 const root_with_static = root ++ [_]Match{
@@ -361,7 +366,7 @@ fn defaultRouterHtml(vrs: *Verse, routefn: RouteFn) Error!void {
     return internalServerError;
 }
 
-pub fn testingRouter(v: *Verse) Error!BuildFn {
+pub fn testingRouter(v: *Verse) RoutingError!BuildFn {
     return router(v, &root);
 }
 

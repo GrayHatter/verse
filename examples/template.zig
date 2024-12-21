@@ -24,7 +24,7 @@ pub fn main() !void {
     };
 }
 
-fn route(verse: *Verse) Router.Error!BuildFn {
+fn route(verse: *Verse) !BuildFn {
     return Verse.Router.router(verse, &routes);
 }
 

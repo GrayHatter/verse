@@ -263,7 +263,7 @@ test init {
     const a = std.testing.allocator;
 
     const R = struct {
-        fn route(verse: *Verse) Router.Error!Router.BuildFn {
+        fn route(verse: *Verse) Router.RoutingError!Router.BuildFn {
             return Verse.Router.router(verse, &.{});
         }
     };
