@@ -76,6 +76,7 @@ pub fn validator(data: anytype) Validator(@TypeOf(data)) {
 
 pub const DataKind = enum {
     @"form-data",
+    json,
 };
 
 pub const DataItem = struct {
@@ -85,7 +86,7 @@ pub const DataItem = struct {
 
     kind: DataKind = .@"form-data",
     name: []const u8,
-    value: []const u8,
+    value: ?[]const u8,
 };
 
 pub const PostData = struct {
@@ -271,6 +272,18 @@ fn normalizeUrlEncoded(in: []const u8, out: []u8) ![]u8 {
     return out[0..len];
 }
 
+fn jsonValueToString(a: std.mem.Allocator, value: json.Value) !?[]u8 {
+    return switch (value) {
+        .null => null,
+        .bool => |b| try std.fmt.allocPrint(a, "{any}", .{b}),
+        .integer => |i| try std.fmt.allocPrint(a, "{d}", .{i}),
+        .float => |f| try std.fmt.allocPrint(a, "{d}", .{f}),
+        .string => |s| try a.dupe(u8, s),
+        .number_string => |s| try a.dupe(u8, s),
+        else => @panic("not implemented"),
+    };
+}
+
 fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype: []const u8) ![]DataItem {
     switch (ap) {
         .@"x-www-form-urlencoded" => {
@@ -304,7 +317,53 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype
             unreachable; // Not implemented
         },
         .json => {
-            unreachable; // TODO: implement parsing json
+            var parsed = try json.parseFromSlice(json.Value, a, data, .{});
+            const root = parsed.value.object;
+
+            var list = try ArrayListUnmanaged(DataItem).initCapacity(a, root.count());
+            for (root.keys(), root.values()) |k, v| {
+                if (v == .array) {
+                    const array = v.array;
+
+                    try list.ensureTotalCapacityPrecise(a, list.capacity + array.items.len);
+                    for (array.items) |item| {
+                        const element = try jsonValueToString(a, item);
+
+                        const array_item = .{
+                            .kind = .json,
+                            .data = "", // TODO: determine what should go here
+                            .name = try a.dupe(u8, k),
+                            .value = element,
+                        };
+                        list.appendAssumeCapacity(array_item);
+                    }
+
+                    continue;
+                }
+
+                const val = switch (v) {
+                    .null,
+                    .bool,
+                    .integer,
+                    .float,
+                    .string,
+                    .number_string,
+                    => try jsonValueToString(a, v),
+                    else => @panic("not implemented"), // TODO: determine how we want to handle objects
+                };
+
+                const item = .{
+                    .kind = .json,
+                    .data = "", // TODO: determine what should go here
+                    .name = try a.dupe(u8, k),
+                    .value = val,
+                };
+                list.appendAssumeCapacity(item);
+            }
+
+            parsed.deinit();
+
+            return try list.toOwnedSlice(a);
         },
     }
 }
@@ -446,11 +505,58 @@ test "multipart/multipart" {}
 
 test "application/x-www-form-urlencoded" {}
 
+test json {
+    const json_string =
+        \\{
+        \\    "string": "value",
+        \\    "number": 10,
+        \\    "float": 7.9,
+        \\    "large_number": 47283472348080234,
+        \\    "null": null,
+        \\    "array": ["one", "two"]
+        \\}
+    ;
+
+    const alloc = std.testing.allocator;
+    const items = try parseApplication(alloc, .json, @constCast(json_string), "application/json");
+
+    try std.testing.expectEqualStrings(items[0].name, "string");
+    try std.testing.expectEqualStrings(items[0].value.?, "value");
+
+    try std.testing.expectEqualStrings(items[1].name, "number");
+    try std.testing.expectEqualStrings(items[1].value.?, "10");
+
+    try std.testing.expectEqualStrings(items[2].name, "float");
+    try std.testing.expectEqualStrings(items[2].value.?, "7.9");
+
+    try std.testing.expectEqualStrings(items[3].name, "large_number");
+    try std.testing.expectEqualStrings(items[3].value.?, "47283472348080234");
+
+    try std.testing.expectEqualStrings(items[4].name, "null");
+    try std.testing.expectEqual(items[4].value, null);
+
+    try std.testing.expectEqualStrings(items[5].name, "array");
+    try std.testing.expectEqualStrings(items[5].value.?, "one");
+    try std.testing.expectEqualStrings(items[6].name, "array");
+    try std.testing.expectEqualStrings(items[6].value.?, "two");
+
+    for (items) |i| {
+        alloc.free(i.name);
+        if (i.value) |v| {
+            alloc.free(v);
+        }
+    }
+
+    alloc.free(items);
+}
+
 pub const ContentType = @import("content-type.zig");
 
 const std = @import("std");
+const ArrayListUnmanaged = std.ArrayListUnmanaged;
 const Type = @import("builtin").Type;
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
 const splitSequence = std.mem.splitSequence;
+const json = std.json;
