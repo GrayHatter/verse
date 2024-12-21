@@ -215,7 +215,17 @@ pub fn router(vrs: *Verse, comptime routes: []const Match) Error!BuildFn {
                     if (ep.methods.matchMethod(vrs.request.method)) {
                         return call;
                     } else {
-                        return methodNotAllowed;
+                        // search if there is another route by the same name that accepts the requested method
+                        var found = false;
+                        inline for (routes) |f| {
+                            if (eql(u8, search, f.name) and f.methods.matchMethod(vrs.request.method)) {
+                                found = true;
+                            }
+                        }
+
+                        if (!found) {
+                            return methodNotAllowed;
+                        }
                     }
                 },
                 .route => |route| {
