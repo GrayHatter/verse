@@ -196,7 +196,38 @@ pub fn RequestData(comptime T: type) type {
                         null,
                     else => if (valid.optional(name)) |o| o.value else null,
                 },
-                .Pointer => (try valid.require(name)).value,
+                .Int => {
+                    const item = try valid.require(name);
+                    if (item.value) |value| {
+                        return try std.fmt.parseInt(FieldType, value, 10);
+                    }
+
+                    return error.UnexpectedNull;
+                },
+                .Float => {
+                    const item = try valid.require(name);
+                    if (item.value) |value| {
+                        return try std.fmt.parseFloat(FieldType, value);
+                    }
+
+                    return error.UnexpectedNull;
+                },
+                .Enum => {
+                    const item = try valid.require(name);
+                    if (item.value) |value| {
+                        return std.meta.stringToEnum(FieldType, value) orelse error.InvalidEnumMember;
+                    }
+
+                    return error.UnexpectedNull;
+                },
+                .Pointer => {
+                    const item = try valid.require(name);
+                    if (item.value) |value| {
+                        return value;
+                    }
+
+                    return error.UnexpectedNull;
+                },
                 else => comptime unreachable,
             };
         }
