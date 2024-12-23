@@ -196,6 +196,22 @@ pub fn RequestData(comptime T: type) type {
                         null,
                     else => if (valid.optional(name)) |o| o.value else null,
                 },
+                .Bool => {
+                    const item = try valid.require(name);
+                    if (item.value) |value| {
+                        if (eql(u8, value, "true")) {
+                            return true;
+                        }
+
+                        if (eql(u8, value, "false")) {
+                            return false;
+                        }
+
+                        return error.InvalidBool;
+                    }
+
+                    return error.UnexpectedNull;
+                },
                 .Int => {
                     const item = try valid.require(name);
                     if (item.value) |value| {
