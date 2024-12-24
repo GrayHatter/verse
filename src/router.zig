@@ -113,14 +113,14 @@ fn buildTarget(comptime match: anytype) Target {
         .Pointer => |ptr| switch (@typeInfo(ptr.child)) {
             .Fn => |fnc| switch (fnc.return_type orelse null) {
                 Error!void => .{ .build = match },
-                Error!BuildFn => .{ .route = match },
+                RoutingError!BuildFn => .{ .route = match },
                 else => @compileError("unknown function return type" ++ @typeName(ptr.child)),
             },
             else => .{ .simple = match },
         },
         .Fn => |fnc| switch (fnc.return_type orelse null) {
             Error!void => .{ .build = match },
-            Error!BuildFn => .{ .route = match },
+            RoutingError!BuildFn => .{ .route = match },
             else => @compileError("unknown function return type"),
         },
         else => |el| @compileError("match type not supported, for provided type [" ++
