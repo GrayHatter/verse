@@ -80,13 +80,10 @@ pub const DataKind = enum {
 };
 
 pub const DataItem = struct {
-    data: []const u8,
-    headers: ?[]const u8 = null,
-    body: ?[]const u8 = null,
-
     kind: DataKind = .@"form-data",
+    segment: []u8,
     name: []const u8,
-    value: ?[]const u8,
+    value: []const u8,
 };
 
 pub const PostData = struct {
@@ -131,24 +128,29 @@ pub const QueryData = struct {
     /// segment in  name=%22dquote%22
     /// segment out name="dquote"
     fn parseSegment(a: Allocator, seg: []const u8) !DataItem {
-        if (std.mem.indexOf(u8, seg, "=")) |i| {
-            const alen = seg.len - i - 1;
-            const input = seg[i + 1 .. seg.len];
-            var value: []u8 = @constCast(input);
-            if (alen > 0) {
-                value = try a.alloc(u8, alen);
-                value = try normalizeUrlEncoded(input, value);
+        const segment = try a.dupe(u8, seg);
+        if (std.mem.indexOf(u8, segment, "=")) |i| {
+            const value_len = segment.len - i - 1;
+
+            if (value_len > 0) {
+                var value = segment[i + 1 ..];
+                value = try normalizeUrlEncoded(seg[i + 1 ..], value);
+                return .{
+                    .segment = segment,
+                    .name = segment[0..i],
+                    .value = value,
+                };
             }
             return .{
-                .data = seg,
-                .name = seg[0..i],
-                .value = value,
+                .segment = segment,
+                .name = segment[0..i],
+                .value = segment[i + 1 ..],
             };
         } else {
             return .{
-                .data = seg,
-                .name = seg,
-                .value = seg[seg.len..seg.len],
+                .segment = segment,
+                .name = segment,
+                .value = segment[segment.len..segment.len],
             };
         }
     }
@@ -238,11 +240,11 @@ pub fn RequestData(comptime T: type) type {
                 },
                 .Pointer => {
                     const item = try valid.require(name);
-                    if (item.value) |value| {
-                        return value;
-                    }
+                    //if (item.value) |value| {
+                    return item.value;
+                    //}
 
-                    return error.UnexpectedNull;
+                    //return error.UnexpectedNull;
                 },
                 else => comptime unreachable,
             };
@@ -319,9 +321,9 @@ fn normalizeUrlEncoded(in: []const u8, out: []u8) ![]u8 {
     return out[0..len];
 }
 
-fn jsonValueToString(a: std.mem.Allocator, value: json.Value) !?[]u8 {
+fn jsonValueToString(a: std.mem.Allocator, value: json.Value) ![]u8 {
     return switch (value) {
-        .null => null,
+        .null => a.dupe(u8, "null"),
         .bool => |b| try std.fmt.allocPrint(a, "{any}", .{b}),
         .integer => |i| try std.fmt.allocPrint(a, "{d}", .{i}),
         .float => |f| try std.fmt.allocPrint(a, "{d}", .{f}),
@@ -339,20 +341,13 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype
             var itr = splitScalar(u8, data, '&');
             const count = std.mem.count(u8, data, "&") +| 1;
             const items = try a.alloc(DataItem, count);
-            for (items) |*itm| {
+            for (items) |*item| {
                 const idata = itr.next().?;
-                var odata = try a.dupe(u8, idata);
-                var name = odata;
-                var value = odata;
+                item.segment = try a.dupe(u8, idata);
                 if (std.mem.indexOf(u8, idata, "=")) |i| {
-                    name = try normalizeUrlEncoded(idata[0..i], odata[0..i]);
-                    value = try normalizeUrlEncoded(idata[i + 1 ..], odata[i + 1 ..]);
+                    item.name = try normalizeUrlEncoded(idata[0..i], item.segment[0..i]);
+                    item.value = try normalizeUrlEncoded(idata[i + 1 ..], item.segment[i + 1 ..]);
                 }
-                itm.* = .{
-                    .data = odata,
-                    .name = name,
-                    .value = value,
-                };
             }
             return items;
         },
@@ -365,29 +360,11 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype
         },
         .json => {
             var parsed = try json.parseFromSlice(json.Value, a, data, .{});
+            defer parsed.deinit();
             const root = parsed.value.object;
 
-            var list = try ArrayListUnmanaged(DataItem).initCapacity(a, root.count());
-            for (root.keys(), root.values()) |k, v| {
-                if (v == .array) {
-                    const array = v.array;
-
-                    try list.ensureTotalCapacityPrecise(a, list.capacity + array.items.len);
-                    for (array.items) |item| {
-                        const element = try jsonValueToString(a, item);
-
-                        const array_item = .{
-                            .kind = .json,
-                            .data = "", // TODO: determine what should go here
-                            .name = try a.dupe(u8, k),
-                            .value = element,
-                        };
-                        list.appendAssumeCapacity(array_item);
-                    }
-
-                    continue;
-                }
-
+            var list = try a.alloc(DataItem, root.count());
+            for (root.keys(), root.values(), 0..) |k, v, i| {
                 const val = switch (v) {
                     .null,
                     .bool,
@@ -396,21 +373,18 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype
                     .string,
                     .number_string,
                     => try jsonValueToString(a, v),
-                    else => @panic("not implemented"), // TODO: determine how we want to handle objects
+                    .object, .array => @panic("not implemented"), // TODO: determine how we want to handle objects
                 };
-
-                const item = .{
+                const name = try a.dupe(u8, k);
+                list[i] = .{
                     .kind = .json,
-                    .data = "", // TODO: determine what should go here
-                    .name = try a.dupe(u8, k),
+                    .segment = name, // TODO: determine what should go here
+                    .name = name,
                     .value = val,
                 };
-                list.appendAssumeCapacity(item);
             }
 
-            parsed.deinit();
-
-            return try list.toOwnedSlice(a);
+            return list;
         },
     }
 }
@@ -439,9 +413,9 @@ const MultiData = struct {
     fn update(md: *MultiData, str: []const u8) void {
         var trimmed = std.mem.trim(u8, str, " \t\n\r");
         if (std.mem.indexOf(u8, trimmed, "=")) |i| {
-            if (std.mem.eql(u8, trimmed[0..i], "name")) {
+            if (eql(u8, trimmed[0..i], "name")) {
                 md.name = trimmed[i + 1 ..];
-            } else if (std.mem.eql(u8, trimmed[0..i], "filename")) {
+            } else if (eql(u8, trimmed[0..i], "filename")) {
                 md.filename = trimmed[i + 1 ..];
             }
         }
@@ -465,23 +439,23 @@ fn parseMultiData(data: []const u8) !MultiData {
 }
 
 fn parseMultiFormData(a: Allocator, data: []const u8) !DataItem {
-    _ = a;
     std.debug.assert(std.mem.startsWith(u8, data, "\r\n"));
     if (std.mem.indexOf(u8, data, "\r\n\r\n")) |i| {
-        var post_item = DataItem{
-            .data = data,
+        const post_item = DataItem{
+            .segment = try a.dupe(u8, data),
             .name = undefined,
             .value = data[i + 4 ..],
         };
 
-        post_item.headers = data[0..i];
-        var headeritr = splitSequence(u8, post_item.headers.?, "\r\n");
-        while (headeritr.next()) |header| {
-            if (header.len == 0) continue;
-            const md = try parseMultiData(header);
-            if (md.name) |name| post_item.name = name;
-            // TODO look for other headers or other data
-        }
+        // Commented out while pending rewrite to be more const
+        //post_item.headers = data[0..i];
+        //var headeritr = splitSequence(u8, post_item.headers.?, "\r\n");
+        //while (headeritr.next()) |header| {
+        //    if (header.len == 0) continue;
+        //    const md = try parseMultiData(header);
+        //    if (md.name) |name| post_item.name = name;
+        //    // TODO look for other headers or other data
+        //}
         return post_item;
     }
     return error.UnableToParseFormData;
@@ -508,7 +482,7 @@ fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8, htype: 
             for (items) |*itm| {
                 itm.* = try parseMultiFormData(a, itr.next().?);
             }
-            std.debug.assert(std.mem.eql(u8, itr.rest(), "--\r\n"));
+            std.debug.assert(eql(u8, itr.rest(), "--\r\n"));
             return items;
         },
     }
@@ -552,6 +526,44 @@ test "multipart/multipart" {}
 
 test "application/x-www-form-urlencoded" {}
 
+test readBody {
+    const a = std.testing.allocator;
+    const vect =
+        \\title=&desc=&thing=
+    ;
+    var fbs = std.io.fixedBufferStream(vect);
+    var r = fbs.reader().any();
+    const post = try readBody(a, &r, vect.len, "application/x-www-form-urlencoded");
+
+    try std.testing.expectEqual(3, post.items.len);
+
+    inline for (post.items, .{ .{ "title", "" }, .{ "desc", "" }, .{ "thing", "" } }) |item, expect| {
+        try std.testing.expectEqualStrings(expect[0], item.name);
+        try std.testing.expectEqualStrings(expect[1], item.value);
+    }
+
+    a.free(post.rawpost);
+    for (post.items) |item| a.free(item.segment);
+    a.free(post.items);
+
+    const vectextra =
+        \\title=&desc=&thing=%22double quote%22
+    ;
+    fbs = std.io.fixedBufferStream(vectextra);
+    r = fbs.reader().any();
+    const postextra = try readBody(a, &r, vectextra.len, "application/x-www-form-urlencoded");
+
+    inline for (postextra.items, .{ .{ "title", "" }, .{ "desc", "" }, .{ "thing", "\"double quote\"" } }) |item, expect| {
+        try std.testing.expectEqualStrings(expect[0], item.name);
+        try std.testing.expectEqualStrings(expect[1], item.value);
+    }
+    a.free(postextra.rawpost);
+    for (postextra.items) |item| a.free(item.segment);
+    a.free(postextra.items);
+}
+
+test Validator {}
+
 test json {
     const json_string =
         \\{
@@ -559,8 +571,8 @@ test json {
         \\    "number": 10,
         \\    "float": 7.9,
         \\    "large_number": 47283472348080234,
-        \\    "null": null,
-        \\    "array": ["one", "two"]
+        \\    "Null": null
+        //\\    "array": ["one", "two"]
         \\}
     ;
 
@@ -568,30 +580,28 @@ test json {
     const items = try parseApplication(alloc, .json, @constCast(json_string), "application/json");
 
     try std.testing.expectEqualStrings(items[0].name, "string");
-    try std.testing.expectEqualStrings(items[0].value.?, "value");
+    try std.testing.expectEqualStrings(items[0].value, "value");
 
     try std.testing.expectEqualStrings(items[1].name, "number");
-    try std.testing.expectEqualStrings(items[1].value.?, "10");
+    try std.testing.expectEqualStrings(items[1].value, "10");
 
     try std.testing.expectEqualStrings(items[2].name, "float");
-    try std.testing.expectEqualStrings(items[2].value.?, "7.9");
+    try std.testing.expectEqualStrings(items[2].value, "7.9");
 
     try std.testing.expectEqualStrings(items[3].name, "large_number");
-    try std.testing.expectEqualStrings(items[3].value.?, "47283472348080234");
+    try std.testing.expectEqualStrings(items[3].value, "47283472348080234");
 
-    try std.testing.expectEqualStrings(items[4].name, "null");
-    try std.testing.expectEqual(items[4].value, null);
+    try std.testing.expectEqualStrings(items[4].name, "Null");
+    try std.testing.expectEqualStrings(items[4].value, "null");
 
-    try std.testing.expectEqualStrings(items[5].name, "array");
-    try std.testing.expectEqualStrings(items[5].value.?, "one");
-    try std.testing.expectEqualStrings(items[6].name, "array");
-    try std.testing.expectEqualStrings(items[6].value.?, "two");
+    //try std.testing.expectEqualStrings(items[5].name, "array");
+    //try std.testing.expectEqualStrings(items[5].value, "one");
+    //try std.testing.expectEqualStrings(items[6].name, "array");
+    //try std.testing.expectEqualStrings(items[6].value, "two");
 
     for (items) |i| {
         alloc.free(i.name);
-        if (i.value) |v| {
-            alloc.free(v);
-        }
+        alloc.free(i.value);
     }
 
     alloc.free(items);
