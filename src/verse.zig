@@ -5,6 +5,7 @@ pub const RequestData = @import("request_data.zig");
 pub const Template = @import("template.zig");
 pub const Router = @import("router.zig");
 pub const UriIter = Router.UriIter;
+pub const Endpoint = @import("endpoint.zig");
 
 pub const Headers = @import("headers.zig");
 pub const Auth = @import("auth.zig");
