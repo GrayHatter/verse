@@ -237,7 +237,7 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {
             var reader = zreq.conn.stream.reader().any();
-            post_data = try Request.Data.readBody(a, &reader, post_size, h_type);
+            post_data = try Request.Data.readPost(a, &reader, post_size, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },

@@ -68,7 +68,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
         if (h_len > 0) {
             const h_type = req.head.content_type orelse "text/plain";
             var reader = try req.reader();
-            post_data = try RequestData.readBody(a, &reader, h_len, h_type);
+            post_data = try RequestData.readPost(a, &reader, h_len, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },

@@ -90,6 +90,23 @@ pub const PostData = struct {
     rawpost: []u8,
     items: []DataItem,
 
+    pub fn init(a: Allocator, size: usize, reader: *AnyReader, ct: ContentType) !PostData {
+        const post_buf: []u8 = try a.alloc(u8, size);
+        const read_size = try reader.read(post_buf);
+        if (read_size != size) return error.UnexpectedHttpBodySize;
+
+        const items = switch (ct.base) {
+            .application => |ap| try parseApplication(a, ap, post_buf),
+            .multipart, .message => |mp| try parseMulti(a, mp, post_buf),
+            .audio, .font, .image, .text, .video => @panic("content-type not implemented"),
+        };
+
+        return .{
+            .rawpost = post_buf,
+            .items = items,
+        };
+    }
+
     pub fn validate(pdata: PostData, comptime T: type) !T {
         return RequestData(T).initPost(pdata);
     }
@@ -333,11 +350,9 @@ fn jsonValueToString(a: std.mem.Allocator, value: json.Value) ![]u8 {
     };
 }
 
-fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8, htype: []const u8) ![]DataItem {
+fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]DataItem {
     switch (ap) {
         .@"x-www-form-urlencoded" => {
-            std.debug.assert(std.mem.startsWith(u8, htype, "application/x-www-form-urlencoded"));
-
             var itr = splitScalar(u8, data, '&');
             const count = std.mem.count(u8, data, "&") +| 1;
             const items = try a.alloc(DataItem, count);
@@ -462,19 +477,15 @@ fn parseMultiFormData(a: Allocator, data: []const u8) !DataItem {
 }
 
 /// Pretends to follow RFC2046
-fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8, htype: []const u8) ![]DataItem {
+fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8) ![]DataItem {
     var boundry_buffer = [_]u8{'-'} ** 74;
     switch (mp) {
         .mixed => {
             return error.NotImplemented;
         },
-        .@"form-data" => {
-            std.debug.assert(std.mem.startsWith(u8, htype, "multipart/form-data; boundary="));
-            std.debug.assert(htype.len > 30);
-            const bound_given = htype[30..];
-            @memcpy(boundry_buffer[2 .. bound_given.len + 2], bound_given);
-
-            const boundry = boundry_buffer[0 .. bound_given.len + 2];
+        .@"form-data" => |fd| {
+            @memcpy(boundry_buffer[2..][0..fd.boundary.len], fd.boundary);
+            const boundry = boundry_buffer[0 .. fd.boundary.len + 2];
             const count = std.mem.count(u8, data, boundry) -| 1;
             const items = try a.alloc(DataItem, count);
             var itr = splitSequence(u8, data, boundry);
@@ -488,26 +499,8 @@ fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8, htype: 
     }
 }
 
-pub fn readBody(
-    a: Allocator,
-    reader: *std.io.AnyReader,
-    size: usize,
-    htype: []const u8,
-) !PostData {
-    const post_buf: []u8 = try a.alloc(u8, size);
-    const read_size = try reader.read(post_buf);
-    if (read_size != size) return error.UnexpectedHttpBodySize;
-
-    const items = switch ((try ContentType.fromStr(htype)).base) {
-        .application => |ap| try parseApplication(a, ap, post_buf, htype),
-        .multipart, .message => |mp| try parseMulti(a, mp, post_buf, htype),
-        .audio, .font, .image, .text, .video => @panic("content-type not implemented"),
-    };
-
-    return .{
-        .rawpost = post_buf,
-        .items = items,
-    };
+pub fn readPost(a: Allocator, reader: *AnyReader, size: usize, htype: []const u8) !PostData {
+    return PostData.init(a, size, reader, try ContentType.fromStr(htype));
 }
 
 pub fn readQuery(a: Allocator, query: []const u8) !QueryData {
@@ -526,14 +519,14 @@ test "multipart/multipart" {}
 
 test "application/x-www-form-urlencoded" {}
 
-test readBody {
+test readPost {
     const a = std.testing.allocator;
     const vect =
         \\title=&desc=&thing=
     ;
     var fbs = std.io.fixedBufferStream(vect);
     var r = fbs.reader().any();
-    const post = try readBody(a, &r, vect.len, "application/x-www-form-urlencoded");
+    const post = try readPost(a, &r, vect.len, "application/x-www-form-urlencoded");
 
     try std.testing.expectEqual(3, post.items.len);
 
@@ -551,7 +544,7 @@ test readBody {
     ;
     fbs = std.io.fixedBufferStream(vectextra);
     r = fbs.reader().any();
-    const postextra = try readBody(a, &r, vectextra.len, "application/x-www-form-urlencoded");
+    const postextra = try readPost(a, &r, vectextra.len, "application/x-www-form-urlencoded");
 
     inline for (postextra.items, .{ .{ "title", "" }, .{ "desc", "" }, .{ "thing", "\"double quote\"" } }) |item, expect| {
         try std.testing.expectEqualStrings(expect[0], item.name);
@@ -577,7 +570,7 @@ test json {
     ;
 
     const alloc = std.testing.allocator;
-    const items = try parseApplication(alloc, .json, @constCast(json_string), "application/json");
+    const items = try parseApplication(alloc, .json, @constCast(json_string));
 
     try std.testing.expectEqualStrings(items[0].name, "string");
     try std.testing.expectEqualStrings(items[0].value, "value");
@@ -610,9 +603,10 @@ test json {
 pub const ContentType = @import("content-type.zig");
 
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const AnyReader = std.io.AnyReader;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 const Type = @import("builtin").Type;
-const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
 const splitSequence = std.mem.splitSequence;
