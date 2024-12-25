@@ -94,10 +94,78 @@ pub const Video = enum {
     mp4,
 };
 
-pub const MultiPart = enum {
-    mixed,
-    @"form-data",
+/// If created using fromStr that string must outlive the Multipart
+pub const MultiPart = union(enum) {
+    mixed: Mixed,
+    @"form-data": FormData,
+
+    pub fn fromStr(str: []const u8) !MultiPart {
+        inline for (@typeInfo(MultiPart).Union.fields) |f| {
+            if (startsWith(u8, str, f.name)) {
+                return try f.type.fromStr(str);
+            }
+        } else {
+            return error.InvalidMultiPart;
+        }
+    }
+
+    pub const Mixed = struct {
+        boundary: []const u8,
+
+        pub fn fromStr(str: []const u8) !MultiPart {
+            if (indexOf(u8, str, "boundary=\"")) |i| {
+                return .{ .mixed = .{ .boundary = str[i + 10 .. str.len - 1] } };
+            } else if (indexOf(u8, str, "boundary=")) |i| {
+                return .{ .mixed = .{ .boundary = str[i + 9 ..] } };
+            } else return error.InvalidMultiPart;
+        }
+    };
+    pub const FormData = struct {
+        boundary: []const u8,
+
+        pub fn fromStr(str: []const u8) !MultiPart {
+            if (indexOf(u8, str, "boundary=\"")) |i| {
+                return .{ .@"form-data" = .{ .boundary = str[i + 10 .. str.len - 1] } };
+            } else if (indexOf(u8, str, "boundary=")) |i| {
+                return .{ .@"form-data" = .{ .boundary = str[i + 9 ..] } };
+            } else return error.InvalidMultiPart;
+        }
+    };
 };
+
+test MultiPart {
+    // RFC2046
+    // valid
+    const mixed_0 = "Content-Type: multipart/mixed; boundary=gc0p4Jq0M2Yt08j34c0p";
+    // invalid
+    const mixed_1 = "Content-Type: multipart/mixed; boundary=gc0pJq0M:08jU534c0p";
+    // valid
+    const mixed_2 = "Content-Type: multipart/mixed; boundary=\"gc0pJq0M:08jU534c0p\"";
+
+    const test_m0 = try MultiPart.fromStr(mixed_0[24..]);
+    const test_m1 = try MultiPart.fromStr(mixed_1[24..]);
+    const test_m2 = try MultiPart.fromStr(mixed_2[24..]);
+
+    const boundary_0 = "gc0p4Jq0M2Yt08j34c0p";
+    const boundary_1 = "gc0pJq0M:08jU534c0p";
+    const boundary_2 = "gc0pJq0M:08jU534c0p";
+
+    try std.testing.expectEqualStrings(boundary_0, test_m0.mixed.boundary);
+    try std.testing.expectEqualStrings(boundary_1, test_m1.mixed.boundary); // This test should error
+    try std.testing.expectEqualStrings(boundary_2, test_m2.mixed.boundary);
+
+    const fd_0 = "Content-Type: multipart/form-data; boundary=gc0p4Jq0M2Yt08j34c0p";
+    const fd_1 = "Content-Type: multipart/form-data; boundary=gc0pJq0M:08jU534c0p";
+    const fd_2 = "Content-Type: multipart/form-data; boundary=\"gc0pJq0M:08jU534c0p\"";
+
+    const test_fd0 = try MultiPart.fromStr(fd_0[24..]);
+    const test_fd1 = try MultiPart.fromStr(fd_1[24..]);
+    const test_fd2 = try MultiPart.fromStr(fd_2[24..]);
+
+    try std.testing.expectEqualStrings(boundary_0, test_fd0.@"form-data".boundary);
+    try std.testing.expectEqualStrings(boundary_1, test_fd1.@"form-data".boundary); // This test should error
+    try std.testing.expectEqualStrings(boundary_2, test_fd2.@"form-data".boundary);
+}
 
 pub const CharSet = enum {
     @"utf-8",
@@ -148,7 +216,7 @@ fn subWrap(comptime Kind: type, str: []const u8) !Kind {
 fn wrap(comptime kind: type, val: anytype) !ContentType {
     return .{
         .base = switch (kind) {
-            MultiPart => .{ .multipart = try subWrap(kind, val) },
+            MultiPart => .{ .multipart = try MultiPart.fromStr(val) },
             Application => .{ .application = try subWrap(kind, val) },
             Audio => .{ .audio = try subWrap(kind, val) },
             Font => .{ .font = try subWrap(kind, val) },
@@ -165,4 +233,5 @@ test ContentType {
 }
 
 const std = @import("std");
-pub const startsWith = std.mem.startsWith;
+const startsWith = std.mem.startsWith;
+const indexOf = std.mem.indexOf;
