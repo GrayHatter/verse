@@ -350,29 +350,29 @@ fn jsonValueToString(a: std.mem.Allocator, value: json.Value) ![]u8 {
     };
 }
 
+fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]DataItem {
+    var itr = splitScalar(u8, data, '&');
+    const count = std.mem.count(u8, data, "&") +| 1;
+    const items = try a.alloc(DataItem, count);
+    for (items) |*item| {
+        const idata = itr.next().?;
+        item.segment = try a.dupe(u8, idata);
+        if (std.mem.indexOf(u8, idata, "=")) |i| {
+            item.name = try normalizeUrlEncoded(idata[0..i], item.segment[0..i]);
+            item.value = try normalizeUrlEncoded(idata[i + 1 ..], item.segment[i + 1 ..]);
+        }
+    }
+    return items;
+}
+
 fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]DataItem {
     switch (ap) {
-        .@"x-www-form-urlencoded" => {
-            var itr = splitScalar(u8, data, '&');
-            const count = std.mem.count(u8, data, "&") +| 1;
-            const items = try a.alloc(DataItem, count);
-            for (items) |*item| {
-                const idata = itr.next().?;
-                item.segment = try a.dupe(u8, idata);
-                if (std.mem.indexOf(u8, idata, "=")) |i| {
-                    item.name = try normalizeUrlEncoded(idata[0..i], item.segment[0..i]);
-                    item.value = try normalizeUrlEncoded(idata[i + 1 ..], item.segment[i + 1 ..]);
-                }
-            }
-            return items;
-        },
+        .@"x-www-form-urlencoded" => return try normWwwFormUrlEncoded(a, data),
         .@"x-git-upload-pack-request" => {
             // Git just uses the raw data instead, no need to preprocess
             return &[0]DataItem{};
         },
-        .@"octet-stream" => {
-            unreachable; // Not implemented
-        },
+        .@"octet-stream" => unreachable, // Not implemented
         .json => {
             var parsed = try json.parseFromSlice(json.Value, a, data, .{});
             defer parsed.deinit();
