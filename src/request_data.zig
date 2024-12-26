@@ -365,43 +365,43 @@ fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]DataItem {
     return items;
 }
 
-fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]DataItem {
-    switch (ap) {
-        .@"x-www-form-urlencoded" => return try normWwwFormUrlEncoded(a, data),
-        .@"x-git-upload-pack-request" => {
-            // Git just uses the raw data instead, no need to preprocess
-            return &[0]DataItem{};
-        },
-        .@"octet-stream" => unreachable, // Not implemented
-        .json => {
-            var parsed = try json.parseFromSlice(json.Value, a, data, .{});
-            defer parsed.deinit();
-            const root = parsed.value.object;
+fn normJson(a: Allocator, data: []u8) ![]DataItem {
+    var parsed = try json.parseFromSlice(json.Value, a, data, .{});
+    defer parsed.deinit();
+    const root = parsed.value.object;
 
-            var list = try a.alloc(DataItem, root.count());
-            for (root.keys(), root.values(), 0..) |k, v, i| {
-                const val = switch (v) {
-                    .null,
-                    .bool,
-                    .integer,
-                    .float,
-                    .string,
-                    .number_string,
-                    => try jsonValueToString(a, v),
-                    .object, .array => @panic("not implemented"), // TODO: determine how we want to handle objects
-                };
-                const name = try a.dupe(u8, k);
-                list[i] = .{
-                    .kind = .json,
-                    .segment = name, // TODO: determine what should go here
-                    .name = name,
-                    .value = val,
-                };
-            }
-
-            return list;
-        },
+    var list = try a.alloc(DataItem, root.count());
+    for (root.keys(), root.values(), 0..) |k, v, i| {
+        const val = switch (v) {
+            .null,
+            .bool,
+            .integer,
+            .float,
+            .string,
+            .number_string,
+            => try jsonValueToString(a, v),
+            .object, .array => @panic("not implemented"), // TODO: determine how we want to handle objects
+        };
+        const name = try a.dupe(u8, k);
+        list[i] = .{
+            .kind = .json,
+            .segment = name, // TODO: determine what should go here
+            .name = name,
+            .value = val,
+        };
     }
+
+    return list;
+}
+
+fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]DataItem {
+    return switch (ap) {
+        .@"x-www-form-urlencoded" => try normWwwFormUrlEncoded(a, data),
+        // Git just uses the raw data instead, no need to preprocess
+        .@"x-git-upload-pack-request" => &[0]DataItem{},
+        .@"octet-stream" => unreachable, // Not implemented
+        .json => try normJson(a, data),
+    };
 }
 
 const DataHeader = enum {
