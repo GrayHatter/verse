@@ -30,7 +30,7 @@ pub fn Validator(comptime T: type) type {
         }
 
         pub fn require(v: *Self, name: []const u8) !DataItem {
-            return v.optional(name) orelse error.DataMissing;
+            return v.optionalItem(name) orelse error.DataMissing;
         }
 
         pub fn requirePos(v: *Self, name: []const u8, skip: usize) !DataItem {
@@ -47,21 +47,25 @@ pub fn Validator(comptime T: type) type {
             return error.DataMissing;
         }
 
-        pub fn optional(v: *Self, name: []const u8) ?DataItem {
+        pub fn optionalItem(v: *Self, name: []const u8) ?DataItem {
             for (v.data.items) |item| {
                 if (eql(u8, item.name, name)) return item;
             }
             return null;
         }
 
-        pub fn optionalBool(v: *Self, name: []const u8) ?bool {
-            if (v.optional(name)) |boolish| {
-                if (eql(u8, boolish.value, "0") or eql(u8, boolish.value, "false")) {
-                    return false;
+        pub fn optional(v: *Self, OT: type, name: []const u8) ?OT {
+            if (v.optionalItem(name)) |item| {
+                switch (OT) {
+                    bool => {
+                        if (eql(u8, item.value, "0") or eql(u8, item.value, "false")) {
+                            return false;
+                        }
+                        return true;
+                    },
+                    else => return item,
                 }
-                return true;
-            }
-            return null;
+            } else return null;
         }
 
         pub fn files(_: *Self, _: []const u8) !void {
@@ -187,7 +191,7 @@ pub fn RequestData(comptime T: type) type {
             var query_valid = data.query.validator();
             var mpost_valid = if (data.post) |post| post.validator() else null;
             var req: T = undefined;
-            inline for (std.meta.fields(T)) |field| {
+            inline for (@typeInfo(T).Struct.fields) |field| {
                 if (mpost_valid) |*post_valid| {
                     @field(req, field.name) = get(field.type, field.name, post_valid, field.default_value) catch try get(field.type, field.name, &query_valid, field.default_value);
                 } else {
@@ -206,63 +210,18 @@ pub fn RequestData(comptime T: type) type {
 
         fn get(FieldType: type, comptime name: []const u8, valid: anytype, default: ?*const anyopaque) !FieldType {
             return switch (@typeInfo(FieldType)) {
-                .Optional => |opt| switch (opt.child) {
-                    bool => if (valid.optionalBool(name)) |b|
-                        b
-                    else if (default != null)
-                        @as(*const ?bool, @ptrCast(default.?)).*
+                .Optional => |opt| get(opt.child, name, valid, default) catch |err| switch (err) {
+                    error.DataMissing => if (default != null)
+                        @as(*const FieldType, @alignCast(@ptrCast(default.?))).*
                     else
-                        null,
-                    else => if (valid.optional(name)) |o| o.value else null,
+                        return null,
+                    else => return err,
                 },
-                .Bool => {
-                    const item = try valid.require(name);
-                    if (item.value) |value| {
-                        if (eql(u8, value, "true")) {
-                            return true;
-                        }
-
-                        if (eql(u8, value, "false")) {
-                            return false;
-                        }
-
-                        return error.InvalidBool;
-                    }
-
-                    return error.UnexpectedNull;
-                },
-                .Int => {
-                    const item = try valid.require(name);
-                    if (item.value) |value| {
-                        return try std.fmt.parseInt(FieldType, value, 10);
-                    }
-
-                    return error.UnexpectedNull;
-                },
-                .Float => {
-                    const item = try valid.require(name);
-                    if (item.value) |value| {
-                        return try std.fmt.parseFloat(FieldType, value);
-                    }
-
-                    return error.UnexpectedNull;
-                },
-                .Enum => {
-                    const item = try valid.require(name);
-                    if (item.value) |value| {
-                        return std.meta.stringToEnum(FieldType, value) orelse error.InvalidEnumMember;
-                    }
-
-                    return error.UnexpectedNull;
-                },
-                .Pointer => {
-                    const item = try valid.require(name);
-                    //if (item.value) |value| {
-                    return item.value;
-                    //}
-
-                    //return error.UnexpectedNull;
-                },
+                .Bool => valid.optional(bool, name) orelse return error.DataMissing,
+                .Int => try parseInt(FieldType, (try valid.require(name)).value, 10),
+                .Float => try parseFloat(FieldType, (try valid.require(name)).value),
+                .Enum => return stringToEnum(FieldType, (try valid.require(name)).value) orelse error.InvalidEnumMember,
+                .Pointer => (try valid.require(name)).value,
                 else => comptime unreachable,
             };
         }
@@ -311,6 +270,51 @@ pub fn RequestData(comptime T: type) type {
             return req;
         }
     };
+}
+
+test RequestData {
+    const a = std.testing.allocator;
+
+    const Struct = struct {
+        bool: bool,
+        int: usize,
+        float: f64,
+        char: u8,
+        str: []const u8,
+
+        opt_bool: ?bool,
+        opt_int: ?usize,
+        opt_float: ?f64,
+        opt_char: ?u8,
+        opt_str: ?[]const u8,
+    };
+
+    const all_valid =
+        \\bool=true&int=10&float=0.123&char=32&str=this%20is%20a%20string
+    ;
+
+    var fbs = std.io.fixedBufferStream(all_valid);
+    var r = fbs.reader().any();
+    const post = try readPost(a, &r, all_valid.len, "application/x-www-form-urlencoded");
+    const data = try post.validate(Struct);
+
+    try std.testing.expectEqualDeep(Struct{
+        .bool = true,
+        .int = 10,
+        .float = 0.123,
+        .char = ' ',
+        .str = "this is a string",
+
+        .opt_bool = null,
+        .opt_int = null,
+        .opt_float = null,
+        .opt_char = null,
+        .opt_str = null,
+    }, data);
+
+    a.free(post.rawpost);
+    for (post.items) |item| a.free(item.segment);
+    a.free(post.items);
 }
 
 fn normalizeUrlEncoded(in: []const u8, out: []u8) ![]u8 {
@@ -607,6 +611,9 @@ const Allocator = std.mem.Allocator;
 const AnyReader = std.io.AnyReader;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 const Type = @import("builtin").Type;
+const parseInt = std.fmt.parseInt;
+const parseFloat = std.fmt.parseFloat;
+const stringToEnum = std.meta.stringToEnum;
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
 const splitSequence = std.mem.splitSequence;
