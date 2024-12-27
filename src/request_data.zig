@@ -251,7 +251,7 @@ pub fn RequestData(comptime T: type) type {
             var req: T = undefined;
             inline for (std.meta.fields(T)) |field| {
                 @field(req, field.name) = switch (@typeInfo(field.type)) {
-                    .Optional => if (valid.optional(field.name)) |o| o.value else null,
+                    .Optional => if (valid.optionalItem(field.name)) |o| o.value else null,
                     .Pointer => |fptr| switch (fptr.child) {
                         u8 => (try valid.require(field.name)).value,
                         []const u8 => arr: {
