@@ -1,8 +1,3 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-pub const AuthZ = @import("authorization.zig");
-pub const AuthN = @import("authentication.zig");
-
 pub const Auth = @This();
 pub const User = @import("auth/user.zig");
 
@@ -144,3 +139,8 @@ test AnyAuth {
     const erruser = provided.lookupUser("123456");
     try std.testing.expectError(error.UnknownUser, erruser);
 }
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+pub const AuthZ = @import("authorization.zig");
+pub const AuthN = @import("authentication.zig");
