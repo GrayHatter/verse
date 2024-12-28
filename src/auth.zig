@@ -85,8 +85,10 @@ const TestingAuth = struct {
         return .{};
     }
 
-    pub fn lookupUser(_: *const TestingAuth, user_id: []const u8) Error!User {
-        // Do not use
+    fn lookupUser(_: *const TestingAuth, user_id: []const u8) Error!User {
+        // Using std.mem.eql in this way is not a safe implementation for any
+        // reasonable authentication system. The specific constant time
+        // comparison you should use depends strongly on the auth source.
         if (std.mem.eql(u8, "12345", user_id)) {
             return User{
                 .user_ptr = undefined,
