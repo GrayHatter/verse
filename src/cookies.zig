@@ -107,19 +107,11 @@ pub const Jar = struct {
         };
     }
 
-    pub fn initFromHeaders(a: Allocator, headers: *Headers) !Jar {
+    pub fn initFromHeader(a: Allocator, header: []const u8) !Jar {
         var jar = try init(a);
-        var itr = headers.iterator();
-        while (itr.next()) |header| {
-            // TODO we should probably use ASCII case equal here but it's not
-            // implemented that way because it might be better to normalize the
-            // incoming header names at the edge.
-            if (eql(u8, header.name, "Cookie")) {
-                var cookies = splitSequence(u8, header.value, "; ");
-                while (cookies.next()) |cookie| {
-                    try jar.add(Cookie.fromHeader(cookie));
-                }
-            }
+        var cookies = splitSequence(u8, header, "; ");
+        while (cookies.next()) |cookie| {
+            try jar.add(Cookie.fromHeader(cookie));
         }
 
         return jar;

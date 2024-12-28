@@ -95,6 +95,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var referer: ?Referer = null;
     var encoding: Encoding = Encoding.default;
     var authorization: ?Authorization = null;
+    var cookie_header: ?[]const u8 = null;
 
     for (zwsgi.vars) |v| {
         try headers.add(v.key, v.val);
@@ -104,18 +105,20 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
             method = Methods.fromStr(v.val) catch Methods.GET;
         } else if (eql(u8, v.key, "REMOTE_ADDR")) {
             remote_addr = v.val;
-        } else if (eqlIgnoreCase("ACCEPT", v.key)) {
+        } else if (eqlIgnoreCase("HTTP_ACCEPT", v.key)) {
             accept = v.val;
-        } else if (eqlIgnoreCase("HOST", v.key)) {
+        } else if (eqlIgnoreCase("HTTP_HOST", v.key)) {
             host = v.val;
-        } else if (eqlIgnoreCase("USER_AGENT", v.key)) {
+        } else if (eqlIgnoreCase("HTTP_USER_AGENT", v.key)) {
             uagent = v.val;
-        } else if (eqlIgnoreCase("REFERER", v.key)) {
+        } else if (eqlIgnoreCase("HTTP_REFERER", v.key)) {
             referer = v.val;
-        } else if (eqlIgnoreCase("ACCEPT-ENCODING", v.key)) {
+        } else if (eqlIgnoreCase("HTTP_ACCEPT_ENCODING", v.key)) {
             encoding = Encoding.fromStr(v.val);
-        } else if (eqlIgnoreCase("AUTHORIZATION", v.key)) {
+        } else if (eqlIgnoreCase("HTTP_AUTHORIZATION", v.key)) {
             authorization = v.val;
+        } else if (eqlIgnoreCase("HTTP_COOKIE", v.key)) {
+            cookie_header = v.val;
         }
     }
     return .{
@@ -128,7 +131,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         .method = Methods.GET,
         .uri = uri orelse return error.InvalidRequest,
         .headers = headers,
-        .cookie_jar = try Cookies.Jar.initFromHeaders(a, &headers),
+        .cookie_jar = if (cookie_header) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
         .data = data,
         .raw = .{ .zwsgi = zwsgi },
     };
@@ -144,6 +147,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
     var referer: ?Referer = null;
     var encoding: Encoding = Encoding.default;
     var authorization: ?Authorization = null;
+    var cookie_header: ?[]const u8 = null;
 
     while (itr.next()) |head| {
         try headers.add(head.name, head.value);
@@ -159,6 +163,8 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
             encoding = Encoding.fromStr(head.value);
         } else if (eqlIgnoreCase("authorization", head.name)) {
             authorization = head.value;
+        } else if (eqlIgnoreCase("cookie", head.name)) {
+            cookie_header = head.value;
         }
     }
 
@@ -180,7 +186,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
         .method = translateStdHttp(http.head.method),
         .uri = http.head.target,
         .headers = headers,
-        .cookie_jar = try Cookies.Jar.initFromHeaders(a, &headers),
+        .cookie_jar = if (cookie_header) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
         .data = data,
         .raw = .{ .http = http },
     };
