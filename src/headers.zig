@@ -1,6 +1,5 @@
-const std = @import("std");
-
-const Allocator = std.mem.Allocator;
+alloc: Allocator,
+headers: HeaderMap,
 
 pub const Headers = @This();
 
@@ -15,9 +14,6 @@ const ValueList = struct {
 };
 
 const HeaderMap = std.StringArrayHashMap(*ValueList);
-
-alloc: Allocator,
-headers: HeaderMap,
 
 pub fn init(a: Allocator) Headers {
     return .{
@@ -123,10 +119,17 @@ pub fn toSlice(h: Headers, a: Allocator) ![]Header {
     return slice;
 }
 
-pub fn format(h: Headers, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
-    _ = h;
-    _ = out;
-    unreachable;
+pub fn format(h: Headers, comptime fmts: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+    comptime if (fmts.len > 0) @compileError("Header format string must be empty");
+    var iter = h.headers.iterator();
+
+    while (iter.next()) |next| {
+        var old: ?*ValueList = next.value_ptr.*;
+        while (old) |this| {
+            try out.print("{s}: {s}\n", .{ next.key_ptr.*, this.value });
+            old = this.next;
+        }
+    }
 }
 
 test Headers {
@@ -146,3 +149,6 @@ test Headers {
     const second = hmap.headers.get("second");
     try std.testing.expectEqualStrings(second.?.value, "4");
 }
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
