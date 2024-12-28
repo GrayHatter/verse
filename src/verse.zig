@@ -26,6 +26,11 @@ uri: UriIter,
 
 // TODO fix this unstable API
 auth: Auth.Provider,
+/// user is set to exactly what is provided directly by the active Auth.Provider.
+/// It's possible for an Auth.Provider to return a User that is invalid.
+/// Depending on the need for any given use, users should always verify the
+/// validity in addition to the existence of this user field.
+user: ?Auth.User = null,
 /// The RouteData API is currently unstable, use with caution
 route_data: RouteData,
 

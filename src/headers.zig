@@ -8,6 +8,12 @@ pub const Header = struct {
     value: []const u8,
 };
 
+/// Unstable API that may get removed
+pub const HeaderList = struct {
+    name: []const u8,
+    value_list: *ValueList,
+};
+
 const ValueList = struct {
     value: []const u8,
     next: ?*ValueList = null,
@@ -56,6 +62,15 @@ pub fn add(h: *Headers, name: []const u8, value: []const u8) !void {
         gop.value_ptr.*.value = value;
         gop.value_ptr.*.next = null;
     }
+}
+
+pub fn get(h: *const Headers, name: []const u8) ?HeaderList {
+    if (h.headers.get(name)) |header| {
+        return .{
+            .name = name,
+            .value_list = header,
+        };
+    } else return null;
 }
 
 /// Starting an iteration will lock the map pointers, callers must complete the
