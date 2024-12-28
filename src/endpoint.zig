@@ -7,8 +7,8 @@ pub const Target = struct {
 };
 
 pub const Options = struct {
-    mode: Verse.Server.RunMode = .{ .http = .{} },
-    auth: Verse.Auth.AnyAuth = .{ .ctx = undefined, .vtable = Verse.Auth.VTable.DefaultEmpty },
+    mode: Server.RunMode = .{ .http = .{} },
+    auth: Auth.Provider = Auth.InvalidAuth.provider(),
 };
 
 pub fn Endpoints(endpoints: anytype) type {
@@ -34,8 +34,8 @@ pub fn Endpoints(endpoints: anytype) type {
             try server.serve();
         }
 
-        pub fn route(v: *Verse) !Verse.Router.BuildFn {
-            return Verse.Router.router(v, &routes);
+        pub fn route(v: *Verse) !Router.BuildFn {
+            return Router.router(v, &routes);
         }
     };
 }
@@ -53,12 +53,12 @@ fn routeCount(EP: type) usize {
     return count;
 }
 
-fn buildRoutes(EP: anytype) [routeCount(EP)]Verse.Router.Match {
-    var match: [routeCount(EP)]Verse.Router.Match = undefined;
+fn buildRoutes(EP: anytype) [routeCount(EP)]Router.Match {
+    var match: [routeCount(EP)]Router.Match = undefined;
     var idx: usize = 0;
     for (@typeInfo(EP).Struct.decls) |decl| {
         if (std.mem.eql(u8, "index", decl.name)) {
-            match[idx] = Verse.Router.ANY("", EP.index);
+            match[idx] = Router.ANY("", EP.index);
             idx += 1;
         }
     }
@@ -69,3 +69,6 @@ fn buildRoutes(EP: anytype) [routeCount(EP)]Verse.Router.Match {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Verse = @import("verse.zig");
+const Auth = @import("auth.zig");
+const Server = @import("server.zig");
+const Router = @import("router.zig");

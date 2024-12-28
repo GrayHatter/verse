@@ -1,8 +1,9 @@
+provider: Provider,
+current_user: ?User = null,
+
 pub const Auth = @This();
 pub const User = @import("auth/user.zig");
-
-provider: AnyAuth,
-current_user: ?User = null,
+pub const Provider = @import("auth/provider.zig");
 
 pub const Error = error{
     UnknownUser,
@@ -22,76 +23,50 @@ pub fn requireValid(a: Auth) error{Unauthenticated}!void {
     if (a.current_user == null or !a.valid()) return error.Unauthenticated;
 }
 
-pub fn Provider(T: type) type {
-    return struct {
-        const Self = @This();
-        ctx: T,
+pub const MTLS = struct {
+    pub fn provider(mtls: *MTLS) Provider {
+        return Provider{
+            .ctx = mtls,
+            .vtable = .{
+                .valid = validPtr,
+                .lookup_user = lookupUserPtr,
+            },
+        };
+    }
 
-        pub fn init(ctx: T) Self {
-            return .{
-                .ctx = ctx,
-            };
-        }
+    pub fn valid(mtls: *MTLS) bool {
+        _ = mtls;
+        return false;
+    }
 
-        /// TODO document the implications of non consttime function
-        pub fn lookupUser(self: *const Self, user_id: []const u8) Error!User {
-            return try self.ctx.lookupUser(user_id);
-        }
+    fn validPtr(ptr: *anyopaque) bool {
+        const self: *MTLS = @ptrCast(ptr);
+        return self.valid();
+    }
 
-        pub fn any(self: *const Self) AnyAuth {
-            return .{
-                .ctx = self,
-                .vtable = .{
-                    .valid = null,
-                    .lookup_user = lookupUserUntyped,
-                },
-            };
-        }
+    pub fn lookupUser(mtls: *MTLS, user_id: []const u8) Error!User {
+        _ = mtls;
+        _ = user_id;
+        return error.UnknownUser;
+    }
 
-        fn lookupUserUntyped(self: *const anyopaque, user_id: []const u8) Error!User {
-            const typed: *const T = @ptrCast(self);
-            return typed.lookupUser(user_id);
-        }
-    };
+    pub fn lookupUserPtr(ptr: *anyopaque, user_id: []const u8) Error!User {
+        const self: *MTLS = @ptrCast(ptr);
+        return self.lookupUser(user_id);
+    }
+};
+
+test MTLS {
+    //const a = std.testing.allocator;
+
 }
 
-/// Auth VTable
-pub const VTable = struct {
-    lookup_user: ?LookupUserFn,
-    valid: ?ValidFn,
-
-    pub const LookupUserFn = *const fn (*const anyopaque, []const u8) Error!User;
-    pub const ValidFn = *const fn (*const anyopaque) Error!bool;
-    pub const DefaultEmpty = .{
-        .lookup_user = null,
-        .valid = null,
-    };
-};
-
-/// Type Erased Version of an auth provider
-pub const AnyAuth = struct {
-    ctx: *const anyopaque,
-    vtable: VTable,
-
-    pub fn valid(self: AnyAuth) Error!bool {
-        if (self.vtable.valid) |v| {
-            return try v(self.ctx);
-        } else return error.NotProvided;
-    }
-
-    pub fn lookupUser(self: AnyAuth, user_id: []const u8) Error!User {
-        if (self.vtable.lookup_user) |lookup_fn| {
-            return try lookup_fn(self.ctx, user_id);
-        } else return error.NotProvided;
-    }
-};
-
-pub const MTLSAuth = struct {};
-
-pub const InvalidProvider = struct {
-    pub fn empty() AnyAuth {
-        const P = Provider(@This());
-        return P.init(@This(){}).any();
+pub const InvalidAuth = struct {
+    pub fn provider() Provider {
+        return Provider{
+            .ctx = undefined,
+            .vtable = Provider.VTable.DefaultEmpty,
+        };
     }
 
     fn lookupUser(_: @This(), _: []const u8) Error!User {
@@ -118,7 +93,7 @@ const TestingAuth = struct {
         return typed.lookupUser(user_id);
     }
 
-    pub fn any(self: *const TestingAuth) AnyAuth {
+    pub fn provider(self: *TestingAuth) Provider {
         return .{
             .ctx = self,
             .vtable = .{
@@ -130,28 +105,15 @@ const TestingAuth = struct {
 };
 
 test Provider {
-    const expected_user = User{
+    const expected_user = Auth.User{
         .username = "testing",
     };
 
-    const ProvidedAuth = Provider(TestingAuth);
-    const p = ProvidedAuth.init(TestingAuth{});
-    const user = p.lookupUser("12345");
+    var t = TestingAuth{};
+    const provider = t.provider();
+    const user = provider.lookupUser("12345");
     try std.testing.expectEqualDeep(expected_user, user);
-    const erruser = p.lookupUser("123456");
-    try std.testing.expectError(error.UnknownUser, erruser);
-}
-
-test AnyAuth {
-    const expected_user = User{
-        .username = "testing",
-    };
-
-    var provided = TestingAuth.init().any();
-
-    const user = provided.lookupUser("12345");
-    try std.testing.expectEqualDeep(expected_user, user);
-    const erruser = provided.lookupUser("123456");
+    const erruser = provider.lookupUser("123456");
     try std.testing.expectError(error.UnknownUser, erruser);
 }
 

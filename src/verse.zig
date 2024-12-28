@@ -91,7 +91,7 @@ pub fn init(a: Allocator, req: *const Request) !Verse {
         },
         .uri = splitScalar(u8, req.uri[1..], '/'),
         .auth = Auth{
-            .provider = Auth.InvalidProvider.empty(),
+            .provider = Auth.InvalidAuth.provider(),
         },
         .headers = Headers.init(a),
         .cookie_jar = try Cookies.Jar.init(a),

@@ -1,17 +1,8 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-
-const Verse = @import("verse.zig");
-const Router = @import("router.zig");
-
-pub const Server = @This();
-
-pub const zWSGI = @import("zwsgi.zig");
-pub const Http = @import("http.zig");
-
 alloc: Allocator,
 router: Router,
 interface: Interface,
+
+pub const Server = @This();
 
 pub const RunModes = enum {
     zwsgi,
@@ -34,7 +25,7 @@ pub const Interface = union(RunModes) {
 pub const Options = struct {
     mode: RunMode = .{ .http = .{} },
     router: Router,
-    auth: Verse.Auth.AnyAuth = .{ .ctx = undefined, .vtable = Verse.Auth.VTable.DefaultEmpty },
+    auth: Auth.Provider = Auth.InvalidAuth.provider(),
 };
 
 pub fn init(a: Allocator, opts: Options) !Server {
@@ -60,3 +51,12 @@ pub fn serve(srv: *Server) !void {
 test Server {
     std.testing.refAllDecls(@This());
 }
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const Verse = @import("verse.zig");
+const Auth = @import("auth.zig");
+const Router = @import("router.zig");
+pub const zWSGI = @import("zwsgi.zig");
+pub const Http = @import("http.zig");
