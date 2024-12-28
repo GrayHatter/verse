@@ -1,9 +1,11 @@
-provider: Provider,
-current_user: ?User = null,
-
 pub const Auth = @This();
-pub const User = @import("auth/user.zig");
+
 pub const Provider = @import("auth/provider.zig");
+
+pub const AuthZ = @import("authorization.zig");
+pub const AuthN = @import("authentication.zig");
+
+pub const User = @import("auth/user.zig");
 
 pub const Error = error{
     UnknownUser,
@@ -13,15 +15,15 @@ pub const Error = error{
 
 /// Fails closed: the provider used may return an error which will be caught and
 /// returned as false.
-pub fn valid(a: Auth) bool {
-    return a.provider.valid() catch false;
-}
+//pub fn valid(a: Auth) bool {
+//    return a.provider.valid() catch false;
+//}
 
 /// Unauthenticated is the only error this is able to return as the correct
 /// definition for an HTTP 401
-pub fn requireValid(a: Auth) error{Unauthenticated}!void {
-    if (a.current_user == null or !a.valid()) return error.Unauthenticated;
-}
+//pub fn requireValid(a: Auth) error{Unauthenticated}!void {
+//    if (a.current_user == null or !a.valid()) return error.Unauthenticated;
+//}
 
 pub const MTLS = struct {
     pub fn provider(mtls: *MTLS) Provider {
@@ -34,19 +36,16 @@ pub const MTLS = struct {
         };
     }
 
-    pub fn valid(mtls: *MTLS) bool {
-        _ = mtls;
+    pub fn valid(_: *MTLS, _: *const User) bool {
         return false;
     }
 
-    fn validPtr(ptr: *anyopaque) bool {
+    fn validPtr(ptr: *anyopaque, user: *const User) bool {
         const self: *MTLS = @ptrCast(ptr);
-        return self.valid();
+        return self.valid(user);
     }
 
-    pub fn lookupUser(mtls: *MTLS, user_id: []const u8) Error!User {
-        _ = mtls;
-        _ = user_id;
+    pub fn lookupUser(_: *MTLS, _: []const u8) Error!User {
         return error.UnknownUser;
     }
 
@@ -65,12 +64,19 @@ pub const InvalidAuth = struct {
     pub fn provider() Provider {
         return Provider{
             .ctx = undefined,
-            .vtable = Provider.VTable.DefaultEmpty,
+            .vtable = .{
+                .valid = valid,
+                .lookup_user = lookupUser,
+            },
         };
     }
 
-    fn lookupUser(_: @This(), _: []const u8) Error!User {
-        return error.NotProvided;
+    fn valid(_: *const anyopaque, _: *const User) bool {
+        return false;
+    }
+
+    fn lookupUser(_: *const anyopaque, _: []const u8) Error!User {
+        return error.UnknownUser;
     }
 };
 
@@ -83,7 +89,7 @@ const TestingAuth = struct {
         // Do not use
         if (std.mem.eql(u8, "12345", user_id)) {
             return User{
-                .username = "testing",
+                .user_ptr = undefined,
             };
         } else return error.UnknownUser;
     }
@@ -106,7 +112,7 @@ const TestingAuth = struct {
 
 test Provider {
     const expected_user = Auth.User{
-        .username = "testing",
+        .user_ptr = undefined,
     };
 
     var t = TestingAuth{};
@@ -119,5 +125,3 @@ test Provider {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-pub const AuthZ = @import("authorization.zig");
-pub const AuthN = @import("authentication.zig");

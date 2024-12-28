@@ -25,7 +25,7 @@ downstream: union(Downstream) {
 uri: UriIter,
 
 // TODO fix this unstable API
-auth: Auth,
+auth: Auth.Provider,
 /// The RouteData API is currently unstable, use with caution
 route_data: RouteData,
 
@@ -90,9 +90,7 @@ pub fn init(a: Allocator, req: *const Request) !Verse {
             .http => .{ .http = req.raw.http.server.connection.stream },
         },
         .uri = splitScalar(u8, req.uri[1..], '/'),
-        .auth = Auth{
-            .provider = Auth.InvalidAuth.provider(),
-        },
+        .auth = Auth.InvalidAuth.provider(),
         .headers = Headers.init(a),
         .cookie_jar = try Cookies.Jar.init(a),
         .route_data = .{ .items = std.ArrayList(RouteData.Pair).init(a) },

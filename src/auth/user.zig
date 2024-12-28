@@ -1,5 +1,5 @@
 //! This is a default User provided by Verse. This is almost certainly not what
 //! you want.
-pub const User = @This();
+user_ptr: *anyopaque,
 
-username: []const u8 = "invalid username",
+pub const User = @This();
