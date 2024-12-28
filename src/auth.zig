@@ -41,7 +41,10 @@ pub fn Provider(T: type) type {
         pub fn any(self: *const Self) AnyAuth {
             return .{
                 .ctx = self,
-                .lookup_user = lookupUserUntyped,
+                .vtable = .{
+                    .valid = null,
+                    .lookup_user = lookupUserUntyped,
+                },
             };
         }
 
@@ -52,23 +55,32 @@ pub fn Provider(T: type) type {
     };
 }
 
-/// Type Erased Version of an auth provider
-pub const AnyAuth = struct {
-    ctx: *const anyopaque,
-    lookup_user: ?LookupUserFn = null,
-    valid_: ?ValidFn = null,
+/// Auth VTable
+pub const VTable = struct {
+    lookup_user: ?LookupUserFn,
+    valid: ?ValidFn,
 
     pub const LookupUserFn = *const fn (*const anyopaque, []const u8) Error!User;
     pub const ValidFn = *const fn (*const anyopaque) Error!bool;
+    pub const DefaultEmpty = .{
+        .lookup_user = null,
+        .valid = null,
+    };
+};
+
+/// Type Erased Version of an auth provider
+pub const AnyAuth = struct {
+    ctx: *const anyopaque,
+    vtable: VTable,
 
     pub fn valid(self: AnyAuth) Error!bool {
-        if (self.valid_) |v| {
+        if (self.vtable.valid) |v| {
             return try v(self.ctx);
         } else return error.NotProvided;
     }
 
     pub fn lookupUser(self: AnyAuth, user_id: []const u8) Error!User {
-        if (self.lookup_user) |lookup_fn| {
+        if (self.vtable.lookup_user) |lookup_fn| {
             return try lookup_fn(self.ctx, user_id);
         } else return error.NotProvided;
     }
@@ -109,7 +121,10 @@ const TestingAuth = struct {
     pub fn any(self: *const TestingAuth) AnyAuth {
         return .{
             .ctx = self,
-            .lookup_user = lookupUserUntyped,
+            .vtable = .{
+                .valid = null,
+                .lookup_user = lookupUserUntyped,
+            },
         };
     }
 };
