@@ -12,7 +12,10 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var server = try Verse.Server.init(alloc, .{ .http = .{ .port = 8080 } }, .{ .routefn = route });
+    var server = try Verse.Server.init(alloc, .{
+        .mode = .{ .http = .{ .port = 8080 } },
+        .router = .{ .routefn = route },
+    });
 
     server.serve() catch |err| {
         std.debug.print("error: {any}", .{err});

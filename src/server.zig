@@ -13,31 +13,37 @@ alloc: Allocator,
 router: Router,
 interface: Interface,
 
-pub const RunMode = enum {
+pub const RunModes = enum {
     zwsgi,
     http,
     other,
 };
 
-pub const Interface = union(RunMode) {
-    zwsgi: zWSGI,
-    http: Http,
-    other: void,
-};
-
-pub const Options = union(RunMode) {
+pub const RunMode = union(RunModes) {
     zwsgi: zWSGI.Options,
     http: Http.Options,
     other: void,
 };
 
-pub fn init(a: Allocator, opts: Options, router: Router) !Server {
+pub const Interface = union(RunModes) {
+    zwsgi: zWSGI,
+    http: Http,
+    other: void,
+};
+
+pub const Options = struct {
+    mode: RunMode = .{ .http = .{} },
+    router: Router,
+    auth: Verse.Auth.AnyAuth = .{ .ctx = undefined, .vtable = Verse.Auth.VTable.DefaultEmpty },
+};
+
+pub fn init(a: Allocator, opts: Options) !Server {
     return .{
         .alloc = a,
-        .router = router,
-        .interface = switch (opts) {
-            .zwsgi => .{ .zwsgi = zWSGI.init(a, opts.zwsgi, router) },
-            .http => .{ .http = try Http.init(a, opts.http, router) },
+        .router = opts.router,
+        .interface = switch (opts.mode) {
+            .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, z, opts.router) },
+            .http => |h| .{ .http = try Http.init(a, h, opts.router) },
             .other => unreachable,
         },
     };

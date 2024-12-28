@@ -6,6 +6,11 @@ pub const Target = struct {
     name: []const u8,
 };
 
+pub const Options = struct {
+    mode: Verse.Server.RunMode = .{ .http = .{} },
+    auth: Verse.Auth.AnyAuth = .{ .ctx = undefined, .vtable = Verse.Auth.VTable.DefaultEmpty },
+};
+
 pub fn Endpoints(endpoints: anytype) type {
     if (@typeInfo(@TypeOf(endpoints)).Struct.is_tuple == false) return error.InvalidEndpointTypes;
     inline for (endpoints) |ep| {
@@ -21,8 +26,11 @@ pub fn Endpoints(endpoints: anytype) type {
             return .{};
         }
 
-        pub fn serve(_: *Self, a: Allocator, options: Verse.Server.Options) !void {
-            var server = try Verse.Server.init(a, options, .{ .routefn = route });
+        pub fn serve(_: *Self, a: Allocator, options: Options) !void {
+            var server = try Verse.Server.init(a, .{
+                .mode = options.mode,
+                .router = .{ .routefn = route },
+            });
             try server.serve();
         }
 
