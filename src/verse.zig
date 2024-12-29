@@ -33,5 +33,4 @@ pub const NetworkError = errors.NetworkError;
 pub const Error = errors.Error;
 
 pub const html = @import("html.zig");
-pub const ini = @import("ini.zig");
 pub const auth = @import("auth.zig");
