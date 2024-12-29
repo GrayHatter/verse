@@ -176,5 +176,4 @@ test Provider {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Verse = @import("verse.zig");
 const Headers = @import("headers.zig");

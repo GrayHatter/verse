@@ -55,7 +55,6 @@ test Server {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const Verse = @import("verse.zig");
 const Auth = @import("auth.zig");
 const Router = @import("router.zig");
 pub const zWSGI = @import("zwsgi.zig");
