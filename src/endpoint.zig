@@ -34,8 +34,8 @@ pub fn Endpoints(endpoints: anytype) type {
             try server_.serve();
         }
 
-        pub fn route(v: *Verse) !Router.BuildFn {
-            return Router.router(v, &routes);
+        pub fn route(frame: *Frame) !Router.BuildFn {
+            return Router.router(frame, &routes);
         }
     };
 }
@@ -70,7 +70,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const router = @import("router.zig");
 const server = @import("server.zig");
-const Verse = @import("verse.zig");
+const Frame = @import("frame.zig");
 const Auth = @import("auth.zig");
 const Server = @import("server.zig");
 const Router = @import("router.zig");

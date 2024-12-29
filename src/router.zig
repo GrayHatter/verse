@@ -4,23 +4,23 @@ routerfn: RouterFn = defaultRouter,
 
 /// The default page generator, this is the function that will be called, and
 /// expected to write the page data back to the client.
-pub const BuildFn = *const fn (*Verse) Error!void;
+pub const BuildFn = *const fn (*Frame) Error!void;
 
 /// Similar to RouteFn and RouterFn above, Verse requires all page build steps
 /// to finish cleanly. While a default is provided. It's strongly recommended
 /// that a custom builder function be provided when custom error handling is
 /// desired.
-pub const BuilderFn = *const fn (*Verse, BuildFn) void;
+pub const BuilderFn = *const fn (*Frame, BuildFn) void;
 
 /// Route Functions are allowed to return errors for select cases where
 /// backtracking through the routing system might be useful. This in an
 /// exercise left to the caller, as eventually a sever default server error page
 /// will need to be returned.
-pub const RouteFn = *const fn (*Verse) RoutingError!BuildFn;
+pub const RouteFn = *const fn (*Frame) RoutingError!BuildFn;
 
 /// The provided RouteFn will be wrapped with a default error provider that will
 /// return a default BuildFn.
-pub const RouterFn = *const fn (*Verse, RouteFn) BuildFn;
+pub const RouterFn = *const fn (*Frame, RouteFn) BuildFn;
 
 /// TODO document
 pub const Router = @This();
@@ -214,31 +214,31 @@ pub fn defaultResponse(comptime code: std.http.Status) BuildFn {
     };
 }
 
-fn notFound(vrs: *Verse) Error!void {
-    vrs.status = .not_found;
+fn notFound(frame: *Frame) Error!void {
+    frame.status = .not_found;
     const E404 = @embedFile("fallback_html/404.html");
-    try vrs.quickStart();
-    return vrs.sendRawSlice(E404);
+    try frame.quickStart();
+    return frame.sendRawSlice(E404);
 }
 
-fn internalServerError(vrs: *Verse) Error!void {
+fn internalServerError(vrs: *Frame) Error!void {
     vrs.status = .internal_server_error;
     const E500 = @embedFile("fallback_html/500.html");
     try vrs.quickStart();
     return vrs.sendRawSlice(E500);
 }
 
-fn methodNotAllowed(vrs: *Verse) Error!void {
-    vrs.status = .method_not_allowed;
+fn methodNotAllowed(frame: *Frame) Error!void {
+    frame.status = .method_not_allowed;
     const E405 = @embedFile("fallback_html/405.html");
-    try vrs.quickStart();
-    return vrs.sendRawSlice(E405);
+    try frame.quickStart();
+    return frame.sendRawSlice(E405);
 }
 
-fn default(vrs: *Verse) Error!void {
+fn default(frame: *Frame) Error!void {
     const index = @embedFile("fallback_html/index.html");
-    try vrs.quickStart();
-    return vrs.sendRawSlice(index);
+    try frame.quickStart();
+    return frame.sendRawSlice(index);
 }
 
 pub const RoutingError = error{
@@ -251,10 +251,10 @@ pub const RoutingError = error{
 /// provide to verse with the Match array for your site. It can also be used
 /// internally within custom routing functions, that provide additional page,
 /// data or routing support/validation, before continuing to build the route.
-pub fn router(vrs: *Verse, comptime routes: []const Match) RoutingError!BuildFn {
-    const search = vrs.uri.peek() orelse {
+pub fn router(frame: *Frame, comptime routes: []const Match) RoutingError!BuildFn {
+    const search = frame.uri.peek() orelse {
         if (routes.len > 0 and routes[0].name.len == 0) {
-            switch (vrs.request.method) {
+            switch (frame.request.method) {
                 inline else => |m| if (routes[0].target(m)) |t| return switch (t) {
                     .build => |b| return b,
                     .route, .simple => return error.Unrouteable,
@@ -267,7 +267,7 @@ pub fn router(vrs: *Verse, comptime routes: []const Match) RoutingError!BuildFn 
     };
     inline for (routes) |ep| {
         if (eql(u8, search, ep.name)) {
-            switch (vrs.request.method) {
+            switch (frame.request.method) {
                 inline else => |m| {
                     if (comptime ep.target(m)) |target| {
                         switch (target) {
@@ -275,14 +275,14 @@ pub fn router(vrs: *Verse, comptime routes: []const Match) RoutingError!BuildFn 
                                 return call;
                             },
                             .route => |route| {
-                                return route(vrs) catch |err| switch (err) {
+                                return route(frame) catch |err| switch (err) {
                                     error.Unrouteable => return notFound,
                                     else => unreachable,
                                 };
                             },
                             inline .simple => |simple| {
-                                _ = vrs.uri.next();
-                                return router(vrs, simple);
+                                _ = frame.uri.next();
+                                return router(frame, simple);
                             },
                         }
                     } else return error.MethodNotAllowed;
@@ -299,7 +299,7 @@ pub fn router(vrs: *Verse, comptime routes: []const Match) RoutingError!BuildFn 
 /// Ideally it should also be able to return a response to the user, but that
 /// implementation detail is left to the caller. This default builder is
 /// provided and handles an abbreviated set of errors.
-pub fn defaultBuilder(vrs: *Verse, build: BuildFn) void {
+pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
     build(vrs) catch |err| {
         switch (err) {
             error.NoSpaceLeft,
@@ -346,8 +346,8 @@ const root = [_]Match{
     ROUTE("", default),
 };
 
-fn defaultRouter(vrs: *Verse, routefn: RouteFn) BuildFn {
-    return routefn(vrs) catch |err| switch (err) {
+fn defaultRouter(frame: *Frame, routefn: RouteFn) BuildFn {
+    return routefn(frame) catch |err| switch (err) {
         error.MethodNotAllowed => methodNotAllowed,
         error.NotFound => notFound,
         error.Unrouteable => internalServerError,
@@ -358,16 +358,16 @@ const root_with_static = root ++ [_]Match{
     ROUTE("static", StaticFile.file),
 };
 
-fn defaultRouterHtml(vrs: *Verse, routefn: RouteFn) Error!void {
-    if (vrs.uri.peek()) |first| {
+fn defaultRouterHtml(frame: *Frame, routefn: RouteFn) Error!void {
+    if (frame.uri.peek()) |first| {
         if (first.len > 0)
-            return routefn(vrs) catch router(vrs, &root_with_static) catch notFound;
+            return routefn(frame) catch router(frame, &root_with_static) catch notFound;
     }
     return internalServerError;
 }
 
-pub fn testingRouter(v: *Verse) RoutingError!BuildFn {
-    return router(v, &root);
+pub fn testingRouter(frame: *Frame) RoutingError!BuildFn {
+    return router(frame, &root);
 }
 
 const std = @import("std");
@@ -375,7 +375,7 @@ const log = std.log.scoped(.Verse);
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 
-const Verse = @import("verse.zig");
+const Frame = @import("frame.zig");
 const Request = @import("request.zig");
 const StaticFile = @import("static-file.zig");
 pub const Errors = @import("errors.zig");

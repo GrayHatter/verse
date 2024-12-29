@@ -6,7 +6,7 @@ const siginfo_t = std.posix.siginfo_t;
 const SIG = std.posix.SIG;
 const SA = std.posix.SA;
 
-const Verse = @import("verse.zig");
+const Frame = @import("frame.zig");
 const Request = @import("request.zig");
 const Router = @import("router.zig");
 
@@ -89,10 +89,10 @@ pub fn serve(z: *zWSGI) !void {
         var zreq = try zWSGIRequest.init(a, &acpt);
         const request_data = try requestData(a, &zreq);
         const request = try Request.initZWSGI(a, &zreq, request_data);
-        var verse = try Verse.init(a, &request);
+        var frame = try Frame.init(a, &request);
 
         defer {
-            const vars = verse.request.raw.zwsgi.vars;
+            const vars = frame.request.raw.zwsgi.vars;
             log.err("zWSGI: [{d:.3}] {s} - {s}: {s} -- \"{s}\"", .{
                 @as(f64, @floatFromInt(timer.lap())) / 1000000.0,
                 findOr(vars, "REMOTE_ADDR"),
@@ -102,8 +102,8 @@ pub fn serve(z: *zWSGI) !void {
             });
         }
 
-        const callable = z.router.routerfn(&verse, z.router.routefn);
-        z.router.builderfn(&verse, callable);
+        const callable = z.router.routerfn(&frame, z.router.routefn);
+        z.router.builderfn(&frame, callable);
     }
     log.warn("closing, and cleaning up", .{});
 }
@@ -263,8 +263,8 @@ test init {
     const a = std.testing.allocator;
 
     const R = struct {
-        fn route(verse: *Verse) Router.RoutingError!Router.BuildFn {
-            return Router.router(verse, &.{});
+        fn route(frame: *Frame) Router.RoutingError!Router.BuildFn {
+            return Router.router(frame, &.{});
         }
     };
 

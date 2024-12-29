@@ -23,14 +23,14 @@ pub fn main() !void {
     };
 }
 
-fn route(vrs: *verse.Verse) !BuildFn {
-    return Router.router(vrs, &routes);
+fn route(frame: *verse.Frame) !BuildFn {
+    return Router.router(frame, &routes);
 }
 
 // This page template is compiled/prepared at comptime.
 const ExamplePage = verse.PageData("templates/example.html");
 
-fn index(vrs: *verse.Verse) Router.Error!void {
+fn index(frame: *verse.Frame) Router.Error!void {
     var page = ExamplePage.init(.{
         // Simple Variables
         .simple_variable = "This is a simple variable",
@@ -76,5 +76,5 @@ fn index(vrs: *verse.Verse) Router.Error!void {
         .empty_vars = .{},
     });
 
-    try vrs.sendPage(&page);
+    try frame.sendPage(&page);
 }

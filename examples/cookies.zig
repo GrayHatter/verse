@@ -28,13 +28,13 @@ pub fn main() !void {
     };
 }
 
-fn route(vrs: *verse.Verse) !BuildFn {
-    return Router.router(vrs, &routes);
+fn route(frame: *verse.Frame) !BuildFn {
+    return Router.router(frame, &routes);
 }
 
-fn index(vrs: *verse.Verse) Router.Error!void {
+fn index(frame: *verse.Frame) Router.Error!void {
     var buffer: [2048]u8 = undefined;
-    const found = try print(&buffer, "{} cookies found by the server\n", .{vrs.request.cookie_jar.cookies.items.len});
+    const found = try print(&buffer, "{} cookies found by the server\n", .{frame.request.cookie_jar.cookies.items.len});
 
     const random_cookie = @tagName(random.enumValue(enum {
         chocolate_chip,
@@ -44,10 +44,10 @@ fn index(vrs: *verse.Verse) Router.Error!void {
         ginger_snap,
     }));
 
-    try vrs.cookie_jar.add(Cookie{
+    try frame.cookie_jar.add(Cookie{
         .name = "best-flavor",
         .value = random_cookie,
     });
-    try vrs.quickStart();
-    try vrs.sendRawSlice(found);
+    try frame.quickStart();
+    try frame.sendRawSlice(found);
 }

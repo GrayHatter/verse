@@ -50,10 +50,10 @@ pub fn once(http: *HTTP, srv: *net.Server) !void {
     const reqdata = try requestData(a, &hreq);
     const req = try Request.initHttp(a, &hreq, reqdata);
 
-    var verse = try Verse.init(a, &req);
+    var frame = try Frame.init(a, &req);
 
-    const callable = http.router.routerfn(&verse, http.router.routefn);
-    http.router.builderfn(&verse, callable);
+    const callable = http.router.routerfn(&frame, http.router.routefn);
+    http.router.builderfn(&frame, callable);
 }
 
 fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
@@ -119,7 +119,7 @@ test HTTP {
     thread.join();
 }
 
-const Verse = @import("verse.zig");
+const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Request = @import("request.zig");
 const RequestData = @import("request_data.zig");

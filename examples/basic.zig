@@ -23,11 +23,11 @@ pub fn main() !void {
     };
 }
 
-fn route(vrs: *verse.Verse) !BuildFn {
-    return Router.router(vrs, &routes);
+fn route(frame: *verse.Frame) !BuildFn {
+    return Router.router(frame, &routes);
 }
 
-fn index(vrs: *verse.Verse) Router.Error!void {
-    try vrs.quickStart();
-    try vrs.sendRawSlice("hello world");
+fn index(frame: *verse.Frame) Router.Error!void {
+    try frame.quickStart();
+    try frame.sendRawSlice("hello world");
 }
