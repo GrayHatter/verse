@@ -10,7 +10,7 @@ const Frame = @import("frame.zig");
 const Request = @import("request.zig");
 const Router = @import("router.zig");
 
-pub const zWSGI = @This();
+const zWSGI = @This();
 
 alloc: Allocator,
 unix_file: []const u8,

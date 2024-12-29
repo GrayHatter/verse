@@ -1,7 +1,7 @@
 alloc: Allocator,
 headers: HeaderMap,
 
-pub const Headers = @This();
+const Headers = @This();
 
 pub const Header = struct {
     name: []const u8,

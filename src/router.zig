@@ -23,7 +23,7 @@ pub const RouteFn = *const fn (*Frame) RoutingError!BuildFn;
 pub const RouterFn = *const fn (*Frame, RouteFn) BuildFn;
 
 /// TODO document
-pub const Router = @This();
+const Router = @This();
 
 /// TODO document
 pub const UriIter = std.mem.SplitIterator(u8, .scalar);

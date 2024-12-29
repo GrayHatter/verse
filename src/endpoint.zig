@@ -1,4 +1,4 @@
-pub const Endpoint = @This();
+const Endpoint = @This();
 
 targets: []Target,
 

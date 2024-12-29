@@ -1,4 +1,4 @@
-pub const Request = @This();
+const Request = @This();
 
 pub const Data = @import("request_data.zig");
 

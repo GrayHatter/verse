@@ -1,5 +1,5 @@
 //! Verse HTTP server
-pub const HTTP = @This();
+const HTTP = @This();
 
 const MAX_HEADER_SIZE = 1 <<| 13;
 

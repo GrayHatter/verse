@@ -6,7 +6,7 @@ pub const default: ContentType = .{
     .parameter = .@"utf-8",
 };
 
-pub const ContentType = @This();
+const ContentType = @This();
 
 pub const ContentBase = union(Base) {
     application: Application,

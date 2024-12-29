@@ -2,7 +2,7 @@ alloc: Allocator,
 router: Router,
 interface: Interface,
 
-pub const Server = @This();
+const Server = @This();
 
 pub const RunModes = enum {
     zwsgi,

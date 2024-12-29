@@ -1,4 +1,4 @@
-pub const Frame = @This();
+const Frame = @This();
 
 const Server = @import("server.zig");
 const Request = @import("request.zig");

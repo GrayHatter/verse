@@ -1,4 +1,4 @@
-pub const Auth = @This();
+const Auth = @This();
 
 pub const Provider = @import("auth/provider.zig");
 pub const User = @import("auth/user.zig");

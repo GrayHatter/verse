@@ -2,4 +2,4 @@
 //! you want.
 user_ptr: ?*anyopaque,
 
-pub const User = @This();
+const User = @This();
