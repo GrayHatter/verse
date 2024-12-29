@@ -4,13 +4,13 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const verse_lib = b.addModule("verse", .{
-        .root_source_file = b.path("src/verse.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/verse.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
