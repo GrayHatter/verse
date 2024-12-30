@@ -1,6 +1,6 @@
-const request_data = @import("request_data.zig");
+pub const RequestData = @import("request_data.zig");
 const cookies = @import("cookies.zig");
-const template = @import("template.zig");
+pub const Template = @import("template.zig");
 const errors = @import("errors.zig");
 const endpoint = @import("endpoint.zig");
 
@@ -11,16 +11,9 @@ pub const Request = @import("request.zig");
 pub const ContentType = @import("content-type.zig");
 pub const Headers = @import("headers.zig");
 
-pub const RequestData = request_data.RequestData;
-pub const QueryData = request_data.QueryData;
-pub const PostData = request_data.PostData;
-pub const Validator = request_data.Validator;
-
 pub const Cookie = cookies.Cookie;
 
-pub const Template = template.Template;
-pub const PageData = template.PageData;
-pub const findTemplate = template.findTemplate;
+pub const PageData = Template.PageData;
 
 pub const fileOnDisk = @import("static-file.zig").fileOnDisk;
 
