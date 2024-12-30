@@ -7,98 +7,39 @@ const allocPrint = std.fmt.allocPrint;
 const log = std.log.scoped(.Verse);
 
 const build_mode = @import("builtin").mode;
-const compiled = @import("comptime_templates");
+
 pub const Structs = @import("comptime_structs");
-
 pub const Directive = @import("template/directive.zig");
+pub const Template = @import("template/Template.zig");
 
-pub const Pages = @import("template/page.zig");
+pub const html = @import("template/html.zig");
+
+const Pages = @import("template/page.zig");
 pub const Page = Pages.Page;
 pub const PageRuntime = Pages.PageRuntime;
 
 const MAX_BYTES = 2 <<| 15;
 
-pub const Template = struct {
-    // path: []const u8,
-    name: []const u8 = "undefined",
-    blob: []const u8,
-    parent: ?*const Template = null,
+const template_data = @import("template/builtins.zig");
+pub const builtin = template_data.builtin;
+pub var dynamic = &template_data.dynamic;
 
-    pub fn pageOf(self: Template, comptime Kind: type, data: Kind) PageRuntime(Kind) {
-        return PageRuntime(Kind).init(.{ .name = self.name, .blob = self.blob }, data);
-    }
-
-    pub fn format(_: Template, comptime _: []const u8, _: std.fmt.FormatOptions, _: anytype) !void {
-        comptime unreachable;
-    }
-};
-
-fn tailPath(path: []const u8) []const u8 {
-    if (indexOfScalar(u8, path, '/')) |i| {
-        return path[i + 1 ..];
-    }
-    return path[0..0];
-}
-
-pub const builtin: []const Template = constructTemplates();
-
-fn constructTemplates() []const Template {
-    var t: []const Template = &[0]Template{};
-    for (compiled.data) |filedata| {
-        t = t ++ [_]Template{.{
-            .name = tailPath(filedata.path),
-            .blob = filedata.blob,
-        }};
-    }
-    return t;
-}
-
-pub var dynamic: []const Template = undefined;
-
-fn loadDynamicTemplates(a: Allocator, path: []const u8) !void {
-    var cwd = std.fs.cwd();
-    var idir = cwd.openDir(path, .{ .iterate = true }) catch |err| {
-        log.warn("Unable to build dynamic templates ({})", .{err});
-        return;
-    };
-    defer idir.close();
-    var itr = idir.iterate();
-    var list = std.ArrayList(Template).init(a);
-    errdefer list.clearAndFree();
-    while (try itr.next()) |file| {
-        if (file.kind != .file) continue;
-        const name = try std.mem.join(a, "/", &[2][]const u8{
-            path,
-            file.name,
-        });
-        defer a.free(name);
-        const tail = tailPath(file.name);
-        const name_ = try a.dupe(u8, tail);
-        try list.append(.{
-            //.path = path,
-            .name = name_,
-            .blob = try cwd.readFileAlloc(a, name, MAX_BYTES),
-        });
-    }
-    dynamic = try list.toOwnedSlice();
-}
-
-pub fn initDynamic(a: Allocator, path: []const u8) void {
-    loadDynamicTemplates(a, path) catch unreachable;
-}
+const initDynamic = template_data.initDynamic;
+const makeStructName = template_data.makeStructName;
+pub const findTemplate = template_data.findTemplate;
 
 pub fn raze(a: Allocator) void {
-    for (dynamic) |t| {
+    for (dynamic.*) |t| {
         // leaks?
         a.free(t.name);
         a.free(t.blob);
     }
-    a.free(dynamic);
+    a.free(dynamic.*);
 }
 
 pub fn findWhenever(name: []const u8) Template {
-    for (dynamic) |d| {
-        if (std.mem.eql(u8, d.name, name)) {
+    for (dynamic.*) |d| {
+        if (eql(u8, d.name, name)) {
             return d;
         }
     }
@@ -111,25 +52,6 @@ pub fn load(a: Allocator, comptime name: []const u8) Template {
     return t;
 }
 
-pub fn findTemplate(comptime name: []const u8) Template {
-    inline for (builtin) |bi| {
-        if (comptime eql(u8, bi.name, name)) {
-            return bi;
-        }
-    }
-
-    var errstr: [:0]const u8 = "Template " ++ name ++ " not found!";
-    inline for (builtin) |bi| {
-        if (comptime endsWith(u8, bi.name, name)) {
-            errstr = errstr ++ "\nDid you mean" ++ " " ++ bi.name ++ "?";
-        }
-    }
-    // If you're reading this, it's probably because your template.html is
-    // either missing, not included in the build.zig search dirs, or typo'd.
-    // But it's important for you to know... I hope you have a good day :)
-    @compileError(errstr);
-}
-
 pub fn PageData(comptime name: []const u8) type {
     //const n = std.fmt.comptimePrint("search for {s}", .{"templates/" ++ name});
     //const data = @embedFile(name);
@@ -140,86 +62,46 @@ pub fn PageData(comptime name: []const u8) type {
     return Page(template, page_data);
 }
 
-fn intToWord(in: u8) []const u8 {
-    return switch (in) {
-        '4' => "Four",
-        '5' => "Five",
-        else => unreachable,
-    };
-}
-
-pub fn makeStructName(comptime in: []const u8, comptime out: []u8) usize {
-    var ltail = in;
-    if (comptime std.mem.lastIndexOf(u8, in, "/")) |i| {
-        ltail = ltail[i..];
-    }
-
-    var i = 0;
-    var next_upper = true;
-    inline for (ltail) |chr| {
-        switch (chr) {
-            'a'...'z', 'A'...'Z' => {
-                if (next_upper) {
-                    out[i] = std.ascii.toUpper(chr);
-                } else {
-                    out[i] = chr;
-                }
-                next_upper = false;
-                i += 1;
-            },
-            '0'...'9' => {
-                for (intToWord(chr)) |cchr| {
-                    out[i] = cchr;
-                    i += 1;
-                }
-            },
-            '-', '_', '.' => {
-                next_upper = true;
-            },
-            else => {},
-        }
-    }
-
-    return i;
-}
-
-pub fn makeFieldName(in: []const u8, out: []u8) usize {
-    var i: usize = 0;
-    for (in) |chr| {
-        switch (chr) {
-            'a'...'z' => {
-                out[i] = chr;
-                i += 1;
-            },
-            'A'...'Z' => {
-                if (i != 0) {
-                    out[i] = '_';
-                    i += 1;
-                }
-                out[i] = std.ascii.toLower(chr);
-                i += 1;
-            },
-            '0'...'9' => {
-                for (intToWord(chr)) |cchr| {
-                    out[i] = cchr;
-                    i += 1;
-                }
-            },
-            '-', '_', '.' => {
-                out[i] = '_';
-                i += 1;
-            },
-            else => {},
-        }
-    }
-
-    return i;
-}
-
 pub fn findPageType(comptime name: []const u8) type {
     var local: [0xFFFF]u8 = undefined;
     const llen = comptime makeStructName(name, &local);
     return @field(Structs, local[0..llen]);
+}
+
+// remove if https://github.com/ziglang/zig/pull/22366 is merged
+fn testPrint(comptime fmt: []const u8, args: anytype) void {
+    if (@inComptime()) {
+        @compileError(std.fmt.comptimePrint(fmt, args));
+    } else if (std.testing.backend_can_print) {
+        std.debug.print(fmt, args);
+    }
+}
+
+test findPageType {
+    // Copied from the example template html to create this test, the example
+    // html is the cannon definition.
+    const Type = findPageType("ExampleHtml");
+
+    const expected: Type = .{
+        .simple_variable = "",
+        .required_and_provided = "",
+        .null_variable = null,
+        .default_provided = "",
+        .default_missing = "",
+        .positive_number = 0,
+        .optional_with = null,
+        .namespaced_with = .{ .simple_variable = "" },
+        .basic_loop = undefined, // TODO FIXME
+        .slices = &[_][]const u8{ "", "" },
+        .include_vars = .{
+            .template_name = "",
+            .simple_variable = "",
+            .nullable = null,
+        },
+        .empty_vars = .{},
+    };
+    // Ensure it builds, then trust the compiler
+    try std.testing.expect(@sizeOf(@TypeOf(expected)) > 0);
 }
 
 test "load templates" {

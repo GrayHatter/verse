@@ -5,7 +5,8 @@ const bufPrint = std.fmt.bufPrint;
 const indexOf = std.mem.indexOf;
 const indexOfPos = std.mem.indexOfPos;
 const compiled = @import("comptime_templates");
-const Template = @import("template.zig");
+const Directive = @import("directive.zig");
+const Page = @import("page.zig");
 
 const AbstTree = struct {
     pub const Member = struct {
@@ -139,7 +140,7 @@ fn emitVars(a: Allocator, fdata: []const u8, current: *AbstTree) !void {
     while (data.len > 0) {
         if (indexOf(u8, data, "<")) |offset| {
             data = data[offset..];
-            if (Template.Directive.init(data)) |drct| {
+            if (Directive.init(data)) |drct| {
                 data = data[drct.tag_block.len..];
                 const s_name = makeStructName(drct.noun);
                 var f_name = makeFieldName(drct.noun);
@@ -204,7 +205,7 @@ fn emitVars(a: Allocator, fdata: []const u8, current: *AbstTree) !void {
                         }
                     },
                 }
-            } else if (Template.Pages.commentTag(data)) |skip| {
+            } else if (Page.commentTag(data)) |skip| {
                 data = data[skip..];
             } else if (indexOfPos(u8, data, 1, "<")) |next| {
                 data = data[next..];

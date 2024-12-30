@@ -12,7 +12,7 @@ pub const Otherwise = union(enum) {
     required: void,
     delete: void,
     default: []const u8,
-    template: Template.Template,
+    template: Template,
     //page: type,
 };
 
@@ -382,7 +382,7 @@ pub fn withTyped(self: Directive, T: type, block: T, out: anytype) anyerror!void
     try p.format("", .{}, out);
 }
 
-fn getDynamic(name: []const u8) ?Template.Template {
+fn getDynamic(name: []const u8) ?Template {
     for (0..dynamic.*.len) |i| {
         if (eql(u8, dynamic.*[i].name, name)) {
             return dynamic.*[i];
@@ -391,9 +391,9 @@ fn getDynamic(name: []const u8) ?Template.Template {
     return null;
 }
 
-fn getBuiltin(name: []const u8) ?Template.Template {
+fn getBuiltin(name: []const u8) ?Template {
     if (@inComptime()) {
-        return Template.findTemplate(name);
+        return template_data.findTemplate(name);
     }
     for (0..builtin.len) |i| {
         if (eql(u8, builtin[i].name, name)) {
@@ -489,7 +489,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
 
 const Pages = @import("page.zig");
 const PageRuntime = Pages.PageRuntime;
-const Template = @import("../template.zig");
+const Template = @import("Template.zig");
 
 const std = @import("std");
 const eql = std.mem.eql;
@@ -506,6 +506,7 @@ const trim = std.mem.trim;
 const trimLeft = std.mem.trimLeft;
 const whitespace = std.ascii.whitespace[0..];
 
-const dynamic = &Template.dynamic;
-const builtin = Template.builtin;
-const makeFieldName = Template.makeFieldName;
+const template_data = @import("builtins.zig");
+const dynamic = &template_data.dynamic;
+const builtin = template_data.builtin;
+const makeFieldName = template_data.makeFieldName;

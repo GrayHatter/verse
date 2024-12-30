@@ -1,5 +1,6 @@
 const std = @import("std");
 const verse = @import("verse");
+const PageData = verse.template.PageData;
 const Router = verse.Router;
 const BuildFn = Router.BuildFn;
 
@@ -28,7 +29,7 @@ fn route(frame: *verse.Frame) !BuildFn {
 }
 
 // This page template is compiled/prepared at comptime.
-const ExamplePage = verse.PageData("templates/example.html");
+const ExamplePage = PageData("templates/example.html");
 
 fn index(frame: *verse.Frame) Router.Error!void {
     var page = ExamplePage.init(.{

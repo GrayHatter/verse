@@ -145,7 +145,7 @@ pub const Compiler = struct {
         const t_compiler = self.b.addExecutable(.{
             .name = "template-compiler",
             .root_source_file = .{
-                .cwd_relative = self.b.pathJoin(&.{ local_dir, "src/template-compiler.zig" }),
+                .cwd_relative = self.b.pathJoin(&.{ local_dir, "src/template/struct-emit.zig" }),
             },
             .target = self.b.host,
         });

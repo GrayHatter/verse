@@ -736,7 +736,7 @@ test Page {
     try std.testing.expectEqual(56, page.iovecCountAll());
 }
 
-const makeFieldName = Templates.makeFieldName;
+const makeFieldName = @import("builtins.zig").makeFieldName;
 fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
     if (@typeInfo(T) != .Struct) return null;
     var local: [0xff]u8 = undefined;
