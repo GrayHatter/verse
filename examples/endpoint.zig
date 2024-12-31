@@ -1,20 +1,16 @@
+//! Quick start example using Verse Endpoints.
 const Endpoints = verse.Endpoints(.{
-    @import("endpoint/example.zig"),
+    @import("endpoint/index.zig"),
 });
 
 pub fn main() !void {
-    var endpoints = Endpoints.init();
-    endpoints.serve(std.heap.page_allocator, .{
+    var endpoints = Endpoints.init(std.heap.page_allocator);
+    endpoints.serve(.{
         .mode = .{ .http = .{ .port = 8084 } },
     }) catch |err| {
         std.log.err("Unable to serve endpoints! err: [{}]", .{err});
         @panic("endpoint error");
     };
-}
-
-fn index(frame: *verse.Frame) verse.Router.Error!void {
-    try frame.quickStart();
-    try frame.sendRawSlice("hello world");
 }
 
 const std = @import("std");

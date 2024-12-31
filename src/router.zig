@@ -2,6 +2,9 @@ routefn: RouteFn,
 builderfn: BuilderFn = defaultBuilder,
 routerfn: RouterFn = defaultRouter,
 
+/// TODO document
+const Router = @This();
+
 /// The default page generator, this is the function that will be called, and
 /// expected to write the page data back to the client.
 pub const BuildFn = *const fn (*Frame) Error!void;
@@ -21,9 +24,6 @@ pub const RouteFn = *const fn (*Frame) RoutingError!BuildFn;
 /// The provided RouteFn will be wrapped with a default error provider that will
 /// return a default BuildFn.
 pub const RouterFn = *const fn (*Frame, RouteFn) BuildFn;
-
-/// TODO document
-const Router = @This();
 
 /// The Verse router will scan through an array of Match structs looking for a
 /// given name. Verse doesn't assert that the given name will match a director
