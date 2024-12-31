@@ -5,7 +5,7 @@ downstream: union(Downstream) {
     zwsgi: Stream,
     http: Stream,
 },
-uri: UriIter,
+uri: Router.UriIterator,
 
 // TODO fix this unstable API
 auth: Auth.Provider,
@@ -71,7 +71,6 @@ pub const RouteData = struct {
 };
 
 pub fn init(a: Allocator, req: *const Request) !Frame {
-    std.debug.assert(req.uri[0] == '/');
     return .{
         .alloc = a,
         .request = req,
@@ -79,7 +78,7 @@ pub fn init(a: Allocator, req: *const Request) !Frame {
             .zwsgi => |z| .{ .zwsgi = z.*.conn.stream },
             .http => .{ .http = req.raw.http.server.connection.stream },
         },
-        .uri = splitScalar(u8, req.uri[1..], '/'),
+        .uri = try splitUri(req.uri),
         .auth = Auth.InvalidAuth.provider(),
         .headers = Headers.init(a),
         .cookie_jar = try Cookies.Jar.init(a),
@@ -355,7 +354,7 @@ const Request = @import("request.zig");
 const RequestData = @import("request_data.zig");
 const Template = @import("template.zig");
 const Router = @import("router.zig");
-const UriIter = Router.UriIter;
+const splitUri = Router.splitUri;
 
 const Headers = @import("headers.zig");
 const Auth = @import("auth.zig");

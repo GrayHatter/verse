@@ -26,7 +26,7 @@ pub const RouterFn = *const fn (*Frame, RouteFn) BuildFn;
 const Router = @This();
 
 /// TODO document
-pub const UriIter = std.mem.SplitIterator(u8, .scalar);
+pub const UriIterator = std.mem.SplitIterator(u8, .scalar);
 
 /// The Verse router will scan through an array of Match structs looking for a
 /// given name. Verse doesn't assert that the given name will match a director
@@ -342,6 +342,15 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
     };
 }
 
+pub fn splitUri(uri: []const u8) !UriIterator {
+    if (uri.len == 0 or uri[0] != '/') return error.InvalidUri;
+    return .{
+        .index = 0,
+        .buffer = uri[1..],
+        .delimiter = '/',
+    };
+}
+
 const root = [_]Match{
     ROUTE("", default),
 };
@@ -368,6 +377,25 @@ fn defaultRouterHtml(frame: *Frame, routefn: RouteFn) Error!void {
 
 pub fn testingRouter(frame: *Frame) RoutingError!BuildFn {
     return router(frame, &root);
+}
+
+test "uri" {
+    const uri_file = "/root/first/second/third";
+    const uri_dir = "/root/first/second/";
+
+    var itr = try splitUri(uri_file);
+    try std.testing.expectEqualStrings("root", itr.next().?);
+    try std.testing.expectEqualStrings("first", itr.next().?);
+    try std.testing.expectEqualStrings("second", itr.next().?);
+    try std.testing.expectEqualStrings("third", itr.next().?);
+    try std.testing.expectEqual(null, itr.next());
+
+    itr = try splitUri(uri_dir);
+    try std.testing.expectEqualStrings("root", itr.next().?);
+    try std.testing.expectEqualStrings("first", itr.next().?);
+    try std.testing.expectEqualStrings("second", itr.next().?);
+    try std.testing.expectEqualStrings("", itr.next().?);
+    try std.testing.expectEqual(null, itr.next());
 }
 
 const std = @import("std");
