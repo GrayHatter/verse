@@ -1,20 +1,3 @@
-const Frame = @This();
-
-const Server = @import("server.zig");
-const Request = @import("request.zig");
-const RequestData = @import("request_data.zig");
-const Template = @import("template.zig");
-const Router = @import("router.zig");
-const UriIter = Router.UriIter;
-
-const Headers = @import("headers.zig");
-const Auth = @import("auth.zig");
-const Cookies = @import("cookies.zig");
-const ContentType = @import("content-type.zig");
-
-const Error = @import("errors.zig").Error;
-const NetworkError = @import("errors.zig").NetworkError;
-
 alloc: Allocator,
 request: *const Request,
 downstream: union(Downstream) {
@@ -39,6 +22,8 @@ headers: Headers,
 content_type: ?ContentType = ContentType.default,
 cookie_jar: Cookies.Jar,
 status: ?std.http.Status = null,
+
+const Frame = @This();
 
 const SendError = error{
     WrongPhase,
@@ -364,3 +349,18 @@ const splitScalar = std.mem.splitScalar;
 const log = std.log.scoped(.Verse);
 const iovec = std.posix.iovec;
 const iovec_c = std.posix.iovec_const;
+
+const Server = @import("server.zig");
+const Request = @import("request.zig");
+const RequestData = @import("request_data.zig");
+const Template = @import("template.zig");
+const Router = @import("router.zig");
+const UriIter = Router.UriIter;
+
+const Headers = @import("headers.zig");
+const Auth = @import("auth.zig");
+const Cookies = @import("cookies.zig");
+const ContentType = @import("content-type.zig");
+
+const Error = @import("errors.zig").Error;
+const NetworkError = @import("errors.zig").NetworkError;
