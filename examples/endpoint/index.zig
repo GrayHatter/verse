@@ -10,7 +10,7 @@ pub const verse_routes = [_]Router.Match{
 
 /// This is commented out here, as it's included within the root endpoint,
 /// but because this endpoint will be flattened out into root directory;
-/// declaring it here, or there are equivalent.
+/// declaring it here, or there are equivalent options.
 pub const verse_endpoints = verse.Endpoints(.{
     //    @import("random.zig"),
 });
