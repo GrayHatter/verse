@@ -25,7 +25,7 @@ pub fn Endpoints(endpoints: anytype) type {
         pub const Self = @This();
         pub const Endpoints = endpoints;
 
-        pub const routes = buildRoutes(endpoints[0]);
+        pub const routes = collectRoutes(endpoints);
 
         pub fn init(a: Allocator) Self {
             return .{
@@ -52,28 +52,51 @@ fn validateEndpoint(EP: anytype) void {
         "Expected `pub const verse_name = .endpoint_name;` from: " ++ @typeName(EP));
 }
 
-fn routeCount(EP: type) usize {
+fn routeCount(endpoints: anytype) usize {
     var count: usize = 0;
-    for (@typeInfo(EP).Struct.decls) |decl| {
-        if (eql(u8, "index", decl.name)) count += 1;
-    }
-
-    if (@hasDecl(EP, "verse_routes")) for (EP.verse_routes) |route| {
-        if (route.name.len == 0) {
-            @compileError("route name omitted for: " ++ @typeName(EP) ++ ". To support a directory URI, define an index() instead");
+    for (endpoints, 0..) |ep, i| {
+        for (@typeInfo(ep).Struct.decls) |decl| {
+            if (eql(u8, "index", decl.name)) count += 1;
         }
-        count += 1;
-    };
 
-    if (@hasDecl(EP, "verse_endpoints")) {
-        count += EP.verse_endpoints.Endpoints.len;
+        if (@hasDecl(ep, "verse_routes")) for (ep.verse_routes) |route| {
+            if (route.name.len == 0) {
+                @compileError("route name omitted for: " ++ @typeName(ep) ++ ". To support a directory URI, define an index() instead");
+            }
+            count += 1;
+        };
+
+        if (@hasDecl(ep, "verse_endpoints")) {
+            count += ep.verse_endpoints.Endpoints.len;
+        }
+
+        if (i == 0 and ep.verse_name == .root) {
+            return count + endpoints.len - 1;
+        }
     }
-
     return count;
 }
 
-fn buildRoutes(EP: anytype) [routeCount(EP)]Router.Match {
-    var match: [routeCount(EP)]Router.Match = undefined;
+fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
+    var match: [routeCount(EPS)]Router.Match = undefined;
+    var idx: usize = 0;
+    for (EPS) |EP| {
+        // Only flatten when the endpoint name is root
+        if (EP.verse_name == .root) {
+            for (buildRoutes(EP)) |r| {
+                match[idx] = r;
+                idx += 1;
+            }
+        } else {
+            match[idx] = Router.ROUTE(@tagName(EP.verse_name), &buildRoutes(EP));
+            idx += 1;
+        }
+    }
+    return match;
+}
+
+fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
+    var match: [routeCount(.{EP})]Router.Match = undefined;
     var idx: usize = 0;
     for (@typeInfo(EP).Struct.decls) |decl| {
         if (eql(u8, "index", decl.name)) {
