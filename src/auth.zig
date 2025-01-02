@@ -10,18 +10,7 @@ pub const Error = error{
     UnknownUser,
 };
 
-/// Fails closed: the provider used may return an error which will be caught and
-/// returned as false.
-//pub fn valid(a: Auth) bool {
-//    return a.provider.valid() catch false;
-//}
-
-/// Unauthenticated is the only error this is able to return as the correct
-/// definition for an HTTP 401
-//pub fn requireValid(a: Auth) error{Unauthenticated}!void {
-//    if (a.current_user == null or !a.valid()) return error.Unauthenticated;
-//}
-
+/// TODO document
 pub const MTLS = struct {
     base: ?Provider = null,
 
