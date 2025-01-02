@@ -24,20 +24,26 @@ pub const VTable = struct {
 pub fn authenticate(self: *const Provider, headers: *const Headers) Auth.Error!Auth.User {
     if (self.vtable.authenticate) |func| {
         return try func(self.ctx, headers);
-    } else return error.NotProvided;
+    }
+
+    return error.NotProvided;
 }
 
 pub fn valid(self: *const Provider, user: *const User) bool {
     if (self.vtable.valid) |func| {
         return func(self.ctx, user);
-    } else false;
+    }
+
+    return false;
 }
 
 /// TODO document the implications of non consttime function
 pub fn lookupUser(self: *const Provider, user_id: []const u8) Auth.Error!Auth.User {
     if (self.vtable.lookup_user) |func| {
         return try func(self.ctx, user_id);
-    } else return error.NotProvided;
+    }
+
+    return error.NotProvided;
 }
 
 const Auth = @import("../auth.zig");
