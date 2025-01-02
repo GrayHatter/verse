@@ -14,15 +14,14 @@ pub const Error = error{
 pub const MTLS = struct {
     base: ?Provider = null,
 
-    pub fn authenticatePtr(ptr: *anyopaque, headers: *const Headers) Error!User {
-        const self: *MTLS = @ptrCast(@alignCast(ptr));
-        return self.authenticate(headers);
-    }
-
-    pub fn authenticate(mtls: *MTLS, headers: *const Headers) Error!User {
+    pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
+        const mtls: *MTLS = @ptrCast(@alignCast(ptr));
         var success: bool = false;
         if (headers.get("MTLS_ENABLED")) |enabled| {
             if (enabled.value_list.next) |_| return error.InvalidAuth;
+            // MTLS validation as currently supported here is done by the
+            // reverse proxy. Constant time compare would provide no security
+            // benefits here.
             if (std.mem.eql(u8, enabled.value_list.value, "SUCCESS")) {
                 success = true;
             }
@@ -32,6 +31,9 @@ pub const MTLS = struct {
 
         if (mtls.base) |base| {
             if (headers.get("MTLS_FINGERPRINT")) |enabled| {
+                // Verse does not specify an order for which is valid so it is
+                // an error if there is ever more than a single value for the
+                // mTLS fingerprint
                 if (enabled.value_list.next != null) return error.InvalidAuth;
                 return base.lookupUser(enabled.value_list.value);
             }
@@ -39,31 +41,25 @@ pub const MTLS = struct {
         return .{ .user_ptr = null };
     }
 
-    pub fn valid(_: *MTLS, _: *const User) bool {
+    fn valid(ptr: *anyopaque, user: *const User) bool {
+        const mtls: *MTLS = @ptrCast(@alignCast(ptr));
+        if (mtls.base) |base| return base.valid(user);
         return false;
     }
 
-    fn validPtr(ptr: *anyopaque, user: *const User) bool {
-        const self: *MTLS = @ptrCast(@alignCast(ptr));
-        return self.valid(user);
-    }
-
-    pub fn lookupUser(_: *MTLS, _: []const u8) Error!User {
+    pub fn lookupUser(ptr: *anyopaque, user_id: []const u8) Error!User {
+        const mtls: *MTLS = @ptrCast(@alignCast(ptr));
+        if (mtls.base) |base| return base.lookupUser(user_id);
         return error.UnknownUser;
-    }
-
-    pub fn lookupUserPtr(ptr: *anyopaque, user_id: []const u8) Error!User {
-        const self: *MTLS = @ptrCast(@alignCast(ptr));
-        return self.lookupUser(user_id);
     }
 
     pub fn provider(mtls: *MTLS) Provider {
         return Provider{
             .ctx = mtls,
             .vtable = .{
-                .authenticate = authenticatePtr,
-                .valid = validPtr,
-                .lookup_user = lookupUserPtr,
+                .authenticate = authenticate,
+                .valid = valid,
+                .lookup_user = lookupUser,
             },
         };
     }
@@ -163,6 +159,10 @@ test Provider {
     try std.testing.expectError(error.UnknownUser, erruser);
 }
 
+// Auth requires strong security guarantees so to prevent ambiguity do not
+// reduce the namespace for any stdlb functions. e.g. std.mem.eql is not a
+// constant time cmp function, and while not every cmp needs constant time it
+// should be explicit which is being used.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Headers = @import("headers.zig");
