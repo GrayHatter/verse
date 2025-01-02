@@ -14,7 +14,7 @@ pub const VTable = struct {
     pub const LookupUserFn = *const fn (*anyopaque, []const u8) Auth.Error!Auth.User;
     pub const ValidFn = *const fn (*anyopaque, *const User) bool;
 
-    pub const DefaultEmpty = .{
+    pub const Empty = .{
         .authenticate = null,
         .lookup_user = null,
         .valid = null,
