@@ -57,6 +57,19 @@ pub fn createSession(self: *const Provider, user: *User) Error!void {
     return error.NotProvided;
 }
 
+test "Provider" {
+    const std = @import("std");
+    const p = Provider{
+        .ctx = undefined,
+        .vtable = VTable.Empty,
+    };
+
+    try std.testing.expectError(error.NotProvided, p.authenticate(undefined));
+    try std.testing.expectEqual(false, p.valid(undefined));
+    try std.testing.expectError(error.NotProvided, p.lookupUser(undefined));
+    try std.testing.expectError(error.NotProvided, p.createSession(undefined));
+}
+
 const Auth = @import("../auth.zig");
 pub const Error = Auth.Error;
 const Headers = @import("../headers.zig");
