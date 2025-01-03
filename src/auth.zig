@@ -60,6 +60,7 @@ pub const MTLS = struct {
                 .authenticate = authenticate,
                 .valid = valid,
                 .lookup_user = lookupUser,
+                .create_session = null,
             },
         };
     }
@@ -100,6 +101,7 @@ pub const InvalidAuth = struct {
                 .authenticate = null, // TODO write invalid
                 .valid = valid,
                 .lookup_user = lookupUser,
+                .create_session = null,
             },
         };
     }
@@ -141,6 +143,7 @@ const TestingAuth = struct {
                 .authenticate = null,
                 .valid = null,
                 .lookup_user = lookupUserUntyped,
+                .create_session = null,
             },
         };
     }
