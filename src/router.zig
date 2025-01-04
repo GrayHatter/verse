@@ -303,6 +303,7 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
             error.OutOfMemory,
             => @panic("OOM"),
             error.BrokenPipe => log.warn("client disconnect", .{}),
+            error.IOWriteFailure => log.err("generic write error", .{}),
             error.Unrouteable => {
                 // Reaching an Unrouteable error here should be impossible as
                 // the router has decided the target endpoint is correct.

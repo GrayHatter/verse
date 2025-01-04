@@ -23,6 +23,7 @@ pub const NetworkError = error{
     /// Common and usually banal error when the client disconnects before the
     /// full response is delivered.
     BrokenPipe,
+    IOWriteFailure,
 };
 
 pub const Error = ServerError || ClientError || NetworkError;
