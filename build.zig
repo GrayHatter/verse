@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) !void {
         "cookies",
         "template",
         "endpoint",
+        "auth-cookie",
     };
     for (examples) |example| {
         const path = try std.fmt.allocPrint(b.allocator, "examples/{s}.zig", .{example});

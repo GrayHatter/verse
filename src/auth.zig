@@ -98,28 +98,26 @@ test MTLS {
 }
 
 /// Default CookieAuth Helper uses Sha256 as the HMAC primitive.
-pub const CookieAuth = cookieAuth(hmac.sha2.HmacSha256);
+pub const CookieAuth = cookieAuth(Hmac.sha2.HmacSha256);
 
 pub const cookie_auth = struct {
     /// Why are you using sha1?
-    pub const sha1 = cookieAuth(hmac.HmacSha1);
+    pub const sha1 = cookieAuth(Hmac.HmacSha1);
 
     pub const sha2 = struct {
-        pub const @"224" = cookieAuth(hmac.sha2.HmacSha224);
-        pub const @"256" = cookieAuth(hmac.sha2.HmacSha256);
-        pub const @"384" = cookieAuth(hmac.sha2.HmacSha384);
-        pub const @"512" = cookieAuth(hmac.sha2.HmacSha512);
+        pub const @"224" = cookieAuth(Hmac.sha2.HmacSha224);
+        pub const @"256" = cookieAuth(Hmac.sha2.HmacSha256);
+        pub const @"384" = cookieAuth(Hmac.sha2.HmacSha384);
+        pub const @"512" = cookieAuth(Hmac.sha2.HmacSha512);
     };
 };
 
 /// TODO document
-pub fn cookieAuth(Hmac: type) type {
+pub fn cookieAuth(HMAC: type) type {
     return struct {
-        hmac: ?Hmac,
         base: ?Provider,
-        // we don't currently store the key, but we may need to because it's not
-        // stored within hmac after init
-        //server_secret_key: []const u8,
+        // TODO key safety
+        server_secret_key: []const u8,
         /// Max age in seconds a session cookie is valid for.
         max_age: usize,
         cookie_name: []const u8 = "verse_session_secret",
@@ -127,21 +125,21 @@ pub fn cookieAuth(Hmac: type) type {
         /// this session buffer API is unstable and may be replaced
         session_buffer: [ibuf_size]u8 = [_]u8{0} ** ibuf_size,
         alloc: ?Allocator,
-        const ibuf_size = b64_enc.calcSize(Hmac.mac_length * 8);
+        const ibuf_size = b64_enc.calcSize(HMAC.mac_length * 8);
 
         pub const Self = @This();
 
         pub fn init(opts: struct {
+            server_secret_key: []const u8,
             alloc: ?Allocator = null,
             base: ?Provider = null,
-            server_secret_key: []const u8,
             max_age: usize = 86400 * 365,
         }) Self {
             return .{
-                .hmac = Hmac.init(opts.server_secret_key),
+                .server_secret_key = opts.server_secret_key,
+                .alloc = opts.alloc,
                 .base = opts.base,
                 .max_age = opts.max_age,
-                .alloc = opts.alloc,
             };
         }
 
@@ -172,7 +170,7 @@ pub fn cookieAuth(Hmac: type) type {
             return error.UnknownUser;
         }
 
-        pub fn mkToken(hm: *Hmac, token: []u8, user: *const User) Error!usize {
+        pub fn mkToken(hm: *HMAC, token: []u8, user: *const User) Error!usize {
             const time = toBytes(nativeToLittle(i64, std.time.timestamp()));
 
             var buffer: [Self.ibuf_size]u8 = [_]u8{0} ** Self.ibuf_size;
@@ -193,8 +191,8 @@ pub fn cookieAuth(Hmac: type) type {
                 b[ed.len] = ':';
                 b = b[ed.len + 1 ..];
             }
-            hm.final(b[0..Hmac.mac_length]);
-            b = b[Hmac.mac_length..];
+            hm.final(b[0..HMAC.mac_length]);
+            b = b[HMAC.mac_length..];
 
             const final = buffer[0 .. buffer.len - b.len];
             if (token.len < b64_enc.calcSize(final.len)) return error.NoSpaceLeft;
@@ -212,7 +210,8 @@ pub fn cookieAuth(Hmac: type) type {
                 return error.NoSpaceLeft;
             }
 
-            const len = try mkToken(&ca.hmac.?, ca.session_buffer[0..], user);
+            var hmac = HMAC.init(ca.server_secret_key);
+            const len = try mkToken(&hmac, ca.session_buffer[0..], user);
             user.session_next = ca.session_buffer[0..len];
         }
 
@@ -251,61 +250,60 @@ pub fn cookieAuth(Hmac: type) type {
 
 test CookieAuth {
     const a = std.testing.allocator;
-    {
-        var auth = CookieAuth.init(.{
-            .alloc = a,
-            .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
-        });
-        const provider = auth.provider();
+    var auth = CookieAuth.init(.{
+        .alloc = a,
+        .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
+    });
+    const provider = auth.provider();
 
-        var user = User{
-            .username = "testing user",
-        };
+    var user = User{
+        .username = "testing user",
+    };
 
-        try provider.createSession(&user);
+    try provider.createSession(&user);
 
-        try std.testing.expect(user.session_next != null);
-        const cookie = try provider.getCookie(user);
+    try std.testing.expect(user.session_next != null);
+    const cookie = try provider.getCookie(user);
 
-        try std.testing.expect(cookie != null);
-        try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
-        try std.testing.expectEqual(12 + 18 + 42, cookie.?.value.len);
-        try std.testing.expectStringStartsWith(cookie.?.value[8..], "AAB0ZXN0aW5nIHVzZXI6");
-        var dec_buf: [88]u8 = undefined;
-        const len = try b64_dec.calcSizeForSlice(cookie.?.value);
-        try b64_dec.decode(dec_buf[0..len], cookie.?.value);
-        const decoded = dec_buf[0..len];
-        try std.testing.expectStringStartsWith(decoded[8..], "testing user:");
-    }
+    try std.testing.expect(cookie != null);
+    try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
+    try std.testing.expectEqual(12 + 18 + 42, cookie.?.value.len);
+    try std.testing.expectStringStartsWith(cookie.?.value[8..], "AAB0ZXN0aW5nIHVzZXI6");
+    var dec_buf: [88]u8 = undefined;
+    const len = try b64_dec.calcSizeForSlice(cookie.?.value);
+    try b64_dec.decode(dec_buf[0..len], cookie.?.value);
+    const decoded = dec_buf[0..len];
+    try std.testing.expectStringStartsWith(decoded[8..], "testing user:");
+}
 
-    {
-        var auth = CookieAuth.init(.{
-            .alloc = a,
-            .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
-        });
-        const provider = auth.provider();
+test "CookieAuth ExtraData" {
+    const a = std.testing.allocator;
+    var auth = CookieAuth.init(.{
+        .alloc = a,
+        .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
+    });
+    const provider = auth.provider();
 
-        var user = User{
-            .username = "testing user",
-            .session_extra_data = "extra data",
-        };
+    var user = User{
+        .username = "testing user",
+        .session_extra_data = "extra data",
+    };
 
-        try provider.createSession(&user);
+    try provider.createSession(&user);
 
-        try std.testing.expect(user.session_next != null);
-        const cookie = try provider.getCookie(user);
+    try std.testing.expect(user.session_next != null);
+    const cookie = try provider.getCookie(user);
 
-        try std.testing.expect(cookie != null);
-        try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
-        try std.testing.expectEqual(12 + 18 + 16 + 42, cookie.?.value.len);
-        try std.testing.expectStringStartsWith(cookie.?.value[8..], "AAB0ZXN0aW5nIHVzZXI6ZXh0cmEgZGF0YT");
-        var dec_buf: [88]u8 = undefined;
-        const len = try b64_dec.calcSizeForSlice(cookie.?.value);
-        try b64_dec.decode(dec_buf[0..len], cookie.?.value);
-        const decoded = dec_buf[0..len];
-        try std.testing.expectStringStartsWith(decoded[8..], "testing user:");
-        try std.testing.expectStringStartsWith(decoded[21..], "extra data:");
-    }
+    try std.testing.expect(cookie != null);
+    try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
+    try std.testing.expectEqual(12 + 18 + 16 + 42, cookie.?.value.len);
+    try std.testing.expectStringStartsWith(cookie.?.value[8..], "AAB0ZXN0aW5nIHVzZXI6ZXh0cmEgZGF0YT");
+    var dec_buf: [88]u8 = undefined;
+    const len = try b64_dec.calcSizeForSlice(cookie.?.value);
+    try b64_dec.decode(dec_buf[0..len], cookie.?.value);
+    const decoded = dec_buf[0..len];
+    try std.testing.expectStringStartsWith(decoded[8..], "testing user:");
+    try std.testing.expectStringStartsWith(decoded[21..], "extra data:");
 }
 
 pub const InvalidAuth = struct {
@@ -387,7 +385,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const toBytes = std.mem.toBytes;
 const nativeToLittle = std.mem.nativeToLittle;
-const hmac = std.crypto.auth.hmac;
+const Hmac = std.crypto.auth.hmac;
 const b64_enc = std.base64.url_safe.Encoder;
 const b64_dec = std.base64.url_safe.Decoder;
 const Cookie = @import("cookies.zig").Cookie;
