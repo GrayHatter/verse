@@ -1,26 +1,30 @@
 //! Verse HTTP server
-const HTTP = @This();
-
-const MAX_HEADER_SIZE = 1 <<| 13;
 
 alloc: Allocator,
-listen_addr: std.net.Address,
 router: Router,
+auth: Auth.Provider,
+
+listen_addr: std.net.Address,
 max_request_size: usize = 0xffff,
 request_buffer: [0xffff]u8 = undefined,
 running: bool = true,
 alive: bool = false,
+
+const HTTP = @This();
+
+const MAX_HEADER_SIZE = 1 <<| 13;
 
 pub const Options = struct {
     host: []const u8 = "127.0.0.1",
     port: u16 = 8080,
 };
 
-pub fn init(a: Allocator, opts: Options, router: Router) !HTTP {
+pub fn init(a: Allocator, opts: Options, sopts: VServer.Options) !HTTP {
     return .{
         .alloc = a,
+        .router = sopts.router,
+        .auth = sopts.auth,
         .listen_addr = try std.net.Address.parseIp(opts.host, opts.port),
-        .router = router,
     };
 }
 
@@ -99,7 +103,7 @@ fn threadFn(server: *HTTP) void {
 
 test HTTP {
     const a = std.testing.allocator;
-    var server = try init(a, .{ .port = 9345 }, .{ .routefn = Router.testingRouter });
+    var server = try init(a, .{ .port = 9345 }, .{ .router = .{ .routefn = Router.testingRouter } });
     var thread = try std.Thread.spawn(.{}, threadFn, .{&server});
 
     var client = std.http.Client{ .allocator = a };
@@ -119,6 +123,8 @@ test HTTP {
     thread.join();
 }
 
+const Auth = @import("auth.zig");
+const VServer = @import("server.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Request = @import("request.zig");

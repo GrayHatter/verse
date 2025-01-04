@@ -1,32 +1,26 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-const log = std.log.scoped(.Verse);
-const net = std.net;
-const siginfo_t = std.posix.siginfo_t;
-const SIG = std.posix.SIG;
-const SA = std.posix.SA;
-
-const Frame = @import("frame.zig");
-const Request = @import("request.zig");
-const Router = @import("router.zig");
-
-const zWSGI = @This();
+//! Verse zwsgi server
+//! Speaks the uwsgi protocol
 
 alloc: Allocator,
-unix_file: []const u8,
-options: Options,
 router: Router,
+options: Options,
+auth: Auth.Provider,
+
+unix_file: []const u8,
+
+const zWSGI = @This();
 
 pub const Options = struct {
     file: []const u8 = "./zwsgi_file.sock",
     chmod: ?std.posix.mode_t = null,
 };
 
-pub fn init(a: Allocator, opts: Options, router: Router) zWSGI {
+pub fn init(a: Allocator, opts: Options, sopts: Server.Options) zWSGI {
     return .{
         .alloc = a,
         .unix_file = opts.file,
-        .router = router,
+        .router = sopts.router,
+        .auth = sopts.auth,
         .options = opts,
     };
 }
@@ -268,5 +262,19 @@ test init {
         }
     };
 
-    _ = init(a, .{}, .{ .routefn = R.route });
+    _ = init(a, .{}, .{ .router = .{ .routefn = R.route } });
 }
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.Verse);
+const net = std.net;
+const siginfo_t = std.posix.siginfo_t;
+const SIG = std.posix.SIG;
+const SA = std.posix.SA;
+
+const Server = @import("server.zig");
+const Frame = @import("frame.zig");
+const Request = @import("request.zig");
+const Router = @import("router.zig");
+const Auth = @import("auth.zig");

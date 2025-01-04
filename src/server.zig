@@ -33,8 +33,8 @@ pub fn init(a: Allocator, opts: Options) !Server {
         .alloc = a,
         .router = opts.router,
         .interface = switch (opts.mode) {
-            .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, z, opts.router) },
-            .http => |h| .{ .http = try Http.init(a, h, opts.router) },
+            .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, z, opts) },
+            .http => |h| .{ .http = try Http.init(a, h, opts) },
             .other => unreachable,
         },
     };
