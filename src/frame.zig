@@ -130,13 +130,20 @@ fn flush(vrs: Frame) !void {
     }
 }
 
-fn HTTPHeader(vrs: *Frame) ![:0]const u8 {
+fn HTTPHeader(vrs: *Frame) [:0]const u8 {
     if (vrs.status == null) vrs.status = .ok;
     return switch (vrs.status.?) {
         .ok => "HTTP/1.1 200 OK\r\n",
         .created => "HTTP/1.1 201 Created\r\n",
         .no_content => "HTTP/1.1 204 No Content\r\n",
+        .multiple_choice => "HTTP/1.1 300 Multiple Choices\r\n",
+        .moved_permanently => "HTTP/1.1 301 Moved Permanently \r\n",
         .found => "HTTP/1.1 302 Found\r\n",
+        .see_other => "HTTP/1.1 303 See Other\r\n",
+        .not_modified => "HTTP/1.1 304 Not Modified \r\n",
+        .use_proxy => "HTTP/1.1 305 Use Proxy \r\n",
+        .temporary_redirect => "HTTP/1.1 307 Temporary Redirect\r\n",
+        .permanent_redirect => "HTTP/1.1 308 Permanent Redirect \r\n",
         .bad_request => "HTTP/1.1 400 Bad Request\r\n",
         .unauthorized => "HTTP/1.1 401 Unauthorized\r\n",
         .forbidden => "HTTP/1.1 403 Forbidden\r\n",
@@ -145,17 +152,20 @@ fn HTTPHeader(vrs: *Frame) ![:0]const u8 {
         .conflict => "HTTP/1.1 409 Conflict\r\n",
         .payload_too_large => "HTTP/1.1 413 Content Too Large\r\n",
         .internal_server_error => "HTTP/1.1 500 Internal Server Error\r\n",
-        else => return SendError.UnknownStatus,
+        else => b: {
+            log.err("Status code not implemented {}", .{vrs.status.?});
+            break :b "HTTP/1.1 500 Internal Server Error\r\n";
+        },
     };
 }
 
-pub fn sendHeaders(vrs: *Frame) !void {
+pub fn sendHeaders(vrs: *Frame) NetworkError!void {
     switch (vrs.downstream) {
         .http, .zwsgi => |stream| {
             var vect: [HEADER_VEC_COUNT]iovec_c = undefined;
             var count: usize = 0;
 
-            const h_resp = try vrs.HTTPHeader();
+            const h_resp = vrs.HTTPHeader();
             vect[count] = .{ .base = h_resp.ptr, .len = h_resp.len };
             count += 1;
 
@@ -224,22 +234,33 @@ pub fn sendHeaders(vrs: *Frame) !void {
                 count += 1;
             }
 
-            try stream.writevAll(vect[0..count]);
+            stream.writevAll(vect[0..count]) catch return NetworkError.IOWriteFailure;
         },
         .buffer => unreachable,
     }
 }
 
-pub fn redirect(vrs: *Frame, loc: []const u8, see_other: bool) !void {
-    const code = if (see_other) "303 See Other\r\n" else "302 Found\r\n";
-    var vect = [5]iovec_c{
-        .{ .base = "HTTP/1.1 ".ptr, .len = 9 },
-        .{ .base = code.ptr, .len = code.len },
+pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
+    vrs.status = switch (scode) {
+        .multiple_choice,
+        .moved_permanently,
+        .found,
+        .see_other,
+        .not_modified,
+        .use_proxy,
+        .temporary_redirect,
+        .permanent_redirect,
+        => scode,
+        else => @compileError("redirect() can only be called with a 3xx redirection code"),
+    };
+    try vrs.sendHeaders();
+
+    var vect = [3]iovec_c{
         .{ .base = "Location: ".ptr, .len = 10 },
         .{ .base = loc.ptr, .len = loc.len },
         .{ .base = "\r\n\r\n".ptr, .len = 4 },
     };
-    try vrs.writevAll(vect[0..]);
+    vrs.writevAll(vect[0..]) catch return NetworkError.IOWriteFailure;
 }
 
 /// sendPage is the default way to respond in verse using the Template system.
