@@ -36,4 +36,4 @@ fn quote(frame: *Frame) !void {
 const std = @import("std");
 const verse = @import("verse");
 const Frame = verse.Frame;
-const Router = verse.Router;
+const Router = verse.routing.Router;

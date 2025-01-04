@@ -120,7 +120,7 @@ test HTTP {
 }
 
 const Frame = @import("frame.zig");
-const Router = @import("router.zig");
+const Router = @import("routing/router.zig");
 const Request = @import("request.zig");
 const RequestData = @import("request_data.zig");
 

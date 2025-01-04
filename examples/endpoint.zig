@@ -2,7 +2,7 @@
 
 /// `Endpoints` here is a constructed type that will do some validation, and
 /// statically and recursively construct the routes supplied.
-const Endpoints = verse.Endpoints(.{
+const Endpoints = verse.routing.Endpoints(.{
     // Note index.zig sets `verse_name = .root;` which will cause the routes it
     // lists to be flattened out. `/` will resolve to the function within
     // `index.zig` with the name `index`.

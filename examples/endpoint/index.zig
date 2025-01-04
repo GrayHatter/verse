@@ -11,7 +11,7 @@ pub const verse_routes = [_]Router.Match{
 /// This is commented out here, as it's included within the root endpoint,
 /// but because this endpoint will be flattened out into root directory;
 /// declaring it here, or there are equivalent options.
-pub const verse_endpoints = verse.Endpoints(.{
+pub const verse_endpoints = verse.routing.Endpoints(.{
     //    @import("random.zig"),
 });
 
@@ -27,4 +27,4 @@ fn hi(frame: *Frame) !void {
 
 const verse = @import("verse");
 const Frame = verse.Frame;
-const Router = verse.Router;
+const Router = verse.routing.Router;
