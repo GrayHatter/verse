@@ -435,8 +435,8 @@ const log = std.log.scoped(.Verse);
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 
-const Frame = @import("frame.zig");
-const Request = @import("request.zig");
+const Frame = @import("../frame.zig");
+const Request = @import("../request.zig");
 const StaticFile = @import("static-file.zig");
-pub const Errors = @import("errors.zig");
+pub const Errors = @import("../errors.zig");
 pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkError;

@@ -1,6 +1,6 @@
 const std = @import("std");
 const verse = @import("verse");
-const Router = verse.Router;
+const Router = verse.routing.Router;
 const BuildFn = Router.BuildFn;
 const print = std.fmt.bufPrint;
 

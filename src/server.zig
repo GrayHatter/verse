@@ -56,6 +56,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const Auth = @import("auth.zig");
-const Router = @import("router.zig");
+const Router = @import("routing/router.zig");
 pub const zWSGI = @import("zwsgi.zig");
 pub const Http = @import("http.zig");

@@ -121,7 +121,7 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
-const Frame = @import("frame.zig");
-const Auth = @import("auth.zig");
-const Server = @import("server.zig");
+const Frame = @import("../frame.zig");
+const Auth = @import("../auth.zig");
+const Server = @import("../server.zig");
 const Router = @import("router.zig");

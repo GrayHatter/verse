@@ -1,8 +1,8 @@
 const std = @import("std");
-const Frame = @import("frame.zig");
-const Route = @import("router.zig");
+const Frame = @import("../frame.zig");
+const Router = @import("router.zig");
 
-pub fn fileOnDisk(frame: *Frame) Route.Error!void {
+pub fn fileOnDisk(frame: *Frame) Router.Error!void {
     _ = frame.uri.next(); // clear /static
     const fname = frame.uri.next() orelse return error.Unrouteable;
     if (fname.len == 0) return error.Unrouteable;

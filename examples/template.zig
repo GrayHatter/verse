@@ -1,7 +1,7 @@
 const std = @import("std");
 const verse = @import("verse");
 const PageData = verse.template.PageData;
-const Router = verse.Router;
+const Router = verse.routing.Router;
 const BuildFn = Router.BuildFn;
 
 const routes = [_]Router.Match{

@@ -8,7 +8,7 @@ const SA = std.posix.SA;
 
 const Frame = @import("frame.zig");
 const Request = @import("request.zig");
-const Router = @import("router.zig");
+const Router = @import("routing/router.zig");
 
 const zWSGI = @This();
 

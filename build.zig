@@ -17,8 +17,8 @@ pub fn build(b: *std.Build) !void {
 
     var compiler = Compiler.init(b);
 
-    if (std.fs.cwd().access("src/fallback_html/index.html", .{})) {
-        compiler.addDir("src/fallback_html/");
+    if (std.fs.cwd().access("src/routing/fallback_html/index.html", .{})) {
+        compiler.addDir("src/routing/fallback_html/");
         compiler.addDir("examples/templates/");
         compiler.collect() catch unreachable;
         const comptime_templates = compiler.buildTemplates() catch unreachable;
