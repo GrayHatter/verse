@@ -83,7 +83,7 @@ pub fn serve(z: *zWSGI) !void {
         var zreq = try zWSGIRequest.init(a, &acpt);
         const request_data = try requestData(a, &zreq);
         const request = try Request.initZWSGI(a, &zreq, request_data);
-        var frame = try Frame.init(a, &request);
+        var frame = try Frame.init(a, &request, z.auth);
 
         defer {
             const vars = frame.request.raw.zwsgi.vars;

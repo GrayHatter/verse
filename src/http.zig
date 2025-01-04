@@ -54,7 +54,7 @@ pub fn once(http: *HTTP, srv: *net.Server) !void {
     const reqdata = try requestData(a, &hreq);
     const req = try Request.initHttp(a, &hreq, reqdata);
 
-    var frame = try Frame.init(a, &req);
+    var frame = try Frame.init(a, &req, http.auth);
 
     const callable = http.router.routerfn(&frame, http.router.routefn);
     http.router.builderfn(&frame, callable);

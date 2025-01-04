@@ -8,7 +8,7 @@ downstream: union(Downstream) {
 uri: Router.UriIterator,
 
 // TODO fix this unstable API
-auth: Auth.Provider,
+auth_provider: Auth.Provider,
 /// user is set to exactly what is provided directly by the active Auth.Provider.
 /// It's possible for an Auth.Provider to return a User that is invalid.
 /// Depending on the need for any given use, users should always verify the
@@ -70,7 +70,7 @@ pub const RouteData = struct {
     }
 };
 
-pub fn init(a: Allocator, req: *const Request) !Frame {
+pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
         .request = req,
@@ -79,7 +79,7 @@ pub fn init(a: Allocator, req: *const Request) !Frame {
             .http => .{ .http = req.raw.http.server.connection.stream },
         },
         .uri = try splitUri(req.uri),
-        .auth = Auth.InvalidAuth.provider(),
+        .auth_provider = auth,
         .headers = Headers.init(a),
         .cookie_jar = try Cookies.Jar.init(a),
         .route_data = .{ .items = std.ArrayList(RouteData.Pair).init(a) },
