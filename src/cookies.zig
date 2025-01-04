@@ -33,9 +33,9 @@ pub const Attributes = struct {
         if (a.max_age) |m|
             try w.print("; Max-Age={}", .{m});
         if (a.same_site) |s| try switch (s) {
-            .strict => w.writeAll("SameSite=Strict"),
-            .lax => w.writeAll("SameSite=Lax"),
-            .none => w.writeAll("SameSite=None"),
+            .strict => w.writeAll("; SameSite=Strict"),
+            .lax => w.writeAll("; SameSite=Lax"),
+            .none => w.writeAll("; SameSite=None"),
         };
         if (a.partitioned)
             try w.writeAll("; Partitioned");
