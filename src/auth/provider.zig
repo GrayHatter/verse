@@ -10,17 +10,20 @@ pub const VTable = struct {
     lookup_user: ?LookupUserFn,
     valid: ?ValidFn,
     create_session: ?CreateSessionFn,
+    get_cookie: ?GetCookieFn,
 
     pub const AuthenticateFn = *const fn (*anyopaque, *const Headers) Error!User;
     pub const LookupUserFn = *const fn (*anyopaque, []const u8) Error!User;
     pub const ValidFn = *const fn (*anyopaque, *const User) bool;
-    pub const CreateSessionFn = *const fn (*anyopaque, *const User) Error!void;
+    pub const CreateSessionFn = *const fn (*anyopaque, *User) Error!void;
+    pub const GetCookieFn = *const fn (*anyopaque, User) Error!?Cookie;
 
     pub const Empty = .{
         .authenticate = null,
         .lookup_user = null,
         .valid = null,
         .create_session = null,
+        .get_cookie = null,
     };
 };
 
@@ -57,6 +60,16 @@ pub fn createSession(self: *const Provider, user: *User) Error!void {
     return error.NotProvided;
 }
 
+/// Note getCookie will return `null` instead of an error when no function is
+/// provided.
+pub fn getCookie(self: *const Provider, user: User) Error!?Cookie {
+    if (self.vtable.get_cookie) |func| {
+        return try func(self.ctx, user);
+    }
+
+    return null;
+}
+
 test "Provider" {
     const std = @import("std");
     const p = Provider{
@@ -68,9 +81,11 @@ test "Provider" {
     try std.testing.expectEqual(false, p.valid(undefined));
     try std.testing.expectError(error.NotProvided, p.lookupUser(undefined));
     try std.testing.expectError(error.NotProvided, p.createSession(undefined));
+    try std.testing.expectEqual(null, p.getCookie(undefined));
 }
 
 const Auth = @import("../auth.zig");
 pub const Error = Auth.Error;
 const Headers = @import("../headers.zig");
+const Cookie = @import("../cookies.zig").Cookie;
 const User = @import("user.zig");

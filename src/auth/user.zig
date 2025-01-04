@@ -1,9 +1,28 @@
-//! This is a default User provided by Verse. This is almost certainly not what
-//! you want.
-user_ptr: ?*anyopaque,
+//! Auth.User is a thick user wrapper used within Auth.Provider and the other
+//! default authentication providers within Verse. Many of the fields here are
+//! provided here for convenience and aren't (currently) used within the
+//! Providers.
 
-/// deprecated do not use
-username: []const u8 = undefined,
+/// Reserved for callers. Never modified by any Verse Provider.
+user_ptr: ?*anyopaque = null,
+/// Reserved for callers.
+username: ?[]const u8 = null,
+
+// The following fields are used and modified by Verse Providers.
+
+/// The **currently* active session for the user. The session that was used to
+/// create the object. Often or likely included with the current user request.
+/// May be the same as session_next.
+/// See also: next_session
+session_current: ?[]const u8 = null,
+/// Newly created, and expected to be the session used with the next request
+/// (when possible).
+/// See also: session_current
+session_next: ?[]const u8 = null,
+
+/// session_extra_data is embedded within the session token which is returned in
+/// clear text back to client
+session_extra_data: ?[]const u8 = null,
 
 const User = @This();
 
