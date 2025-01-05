@@ -98,22 +98,22 @@ test MTLS {
 }
 
 /// Default CookieAuth Helper uses Sha256 as the HMAC primitive.
-pub const CookieAuth = cookieAuth(Hmac.sha2.HmacSha256);
+pub const Cookie = CookieAuth(Hmac.sha2.HmacSha256);
 
 pub const cookie_auth = struct {
     /// Why are you using sha1?
-    pub const sha1 = cookieAuth(Hmac.HmacSha1);
+    pub const sha1 = CookieAuth(Hmac.HmacSha1);
 
     pub const sha2 = struct {
-        pub const @"224" = cookieAuth(Hmac.sha2.HmacSha224);
-        pub const @"256" = cookieAuth(Hmac.sha2.HmacSha256);
-        pub const @"384" = cookieAuth(Hmac.sha2.HmacSha384);
-        pub const @"512" = cookieAuth(Hmac.sha2.HmacSha512);
+        pub const @"224" = CookieAuth(Hmac.sha2.HmacSha224);
+        pub const @"256" = CookieAuth(Hmac.sha2.HmacSha256);
+        pub const @"384" = CookieAuth(Hmac.sha2.HmacSha384);
+        pub const @"512" = CookieAuth(Hmac.sha2.HmacSha512);
     };
 };
 
 /// TODO document
-pub fn cookieAuth(HMAC: type) type {
+pub fn CookieAuth(HMAC: type) type {
     return struct {
         base: ?Provider,
         // TODO key safety
@@ -149,11 +149,11 @@ pub fn cookieAuth(HMAC: type) type {
             const decoded = buffer[0..len];
             b64_dec.decode(decoded, token) catch return error.InvalidAuth;
             const time = decoded[0..8];
-            if (std.mem.indexOfScalar(u8, decoded[8..], ':')) |i| {
+            if (indexOfScalar(u8, decoded[8..], ':')) |i| {
                 const username = decoded[8..][0..i];
                 var extra_data: ?[]const u8 = null;
                 var given_hash: []const u8 = decoded[8..][i + 1 ..][0..HMAC.mac_length];
-                if (std.mem.indexOfScalar(u8, decoded[8 + i + 1 ..], ':')) |ed| {
+                if (indexOfScalar(u8, decoded[8 + i + 1 ..], ':')) |ed| {
                     extra_data = decoded[8..][i + 1 ..][0..ed];
                     given_hash = decoded[8..][i + 1 ..][ed + 1 .. HMAC.mac_length];
                 }
@@ -165,7 +165,7 @@ pub fn cookieAuth(HMAC: type) type {
                 if (extra_data) |ed| hm.update(ed);
                 var our_hash: [HMAC.mac_length]u8 = undefined;
                 hm.final(our_hash[0..]);
-                if (std.crypto.utils.timingSafeEql([HMAC.mac_length]u8, given_hash[0..HMAC.mac_length].*, our_hash)) {
+                if (constTimeEql([HMAC.mac_length]u8, given_hash[0..HMAC.mac_length].*, our_hash)) {
                     return username;
                 }
 
@@ -188,7 +188,7 @@ pub fn cookieAuth(HMAC: type) type {
                     if (cookies.value_list.next != null) return error.InvalidAuth;
                     const cookie = cookies.value_list.value;
                     std.debug.print("cookie: {s} \n", .{cookie});
-                    var itr = std.mem.tokenizeSequence(u8, cookie, "; ");
+                    var itr = tokenizeSequence(u8, cookie, "; ");
                     while (itr.next()) |tkn| {
                         if (startsWith(u8, tkn, ca.cookie_name)) {
                             var un_buf: [64]u8 = undefined;
@@ -270,7 +270,7 @@ pub fn cookieAuth(HMAC: type) type {
             user.session_next = ca.session_buffer[0..len];
         }
 
-        pub fn getCookie(ptr: *anyopaque, user: User) Error!?Cookie {
+        pub fn getCookie(ptr: *anyopaque, user: User) Error!?ReqCookie {
             const ca: *Self = @ptrCast(@alignCast(ptr));
             if (ca.base) |base| if (base.vtable.get_cookie) |_| {
                 return base.getCookie(user);
@@ -305,9 +305,9 @@ pub fn cookieAuth(HMAC: type) type {
     };
 }
 
-test CookieAuth {
+test Cookie {
     const a = std.testing.allocator;
-    var auth = CookieAuth.init(.{
+    var auth = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
@@ -333,9 +333,9 @@ test CookieAuth {
     try std.testing.expectStringStartsWith(decoded[8..], "testing user:");
 }
 
-test "CookieAuth ExtraData" {
+test "Cookie ExtraData" {
     const a = std.testing.allocator;
-    var auth = CookieAuth.init(.{
+    var auth = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
@@ -363,9 +363,9 @@ test "CookieAuth ExtraData" {
     try std.testing.expectStringStartsWith(decoded[21..], "extra data:");
 }
 
-test "CookieAuth token" {
+test "Cookie token" {
     const a = std.testing.allocator;
-    var auth = CookieAuth.init(.{
+    var auth = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
@@ -383,7 +383,7 @@ test "CookieAuth token" {
 
     var username_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(auth.server_secret_key);
-    const valid = try CookieAuth.validateToken(&hm, cookie.?.value, username_buf[0..]);
+    const valid = try Cookie.validateToken(&hm, cookie.?.value, username_buf[0..]);
     try std.testing.expectEqualStrings(user.username.?, valid);
 }
 
@@ -458,17 +458,22 @@ test Provider {
     try std.testing.expectError(error.UnknownUser, erruser);
 }
 
-// Auth requires strong security guarantees so to prevent ambiguity do not
-// reduce the namespace for any stdlb functions. e.g. std.mem.eql is not a
-// constant time cmp function, and while not every cmp needs constant time it
-// should be explicit which is being used.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const toBytes = std.mem.toBytes;
 const startsWith = std.mem.startsWith;
 const nativeToLittle = std.mem.nativeToLittle;
+const indexOfScalar = std.mem.indexOfScalar;
+const tokenizeSequence = std.mem.tokenizeSequence;
 const Hmac = std.crypto.auth.hmac;
 const b64_enc = std.base64.url_safe.Encoder;
 const b64_dec = std.base64.url_safe.Decoder;
-const Cookie = @import("cookies.zig").Cookie;
+const ReqCookie = @import("cookies.zig").Cookie;
 const Headers = @import("headers.zig");
+// Verse.Auth attempts to provide strong security guarantees where reasonable
+// e.g. std.mem.eql faster, but doesn't work in constant time. In an effort to
+// avoid confusion, the two comparison functions are given possibly misleading
+// names to encourage closer inspection and annotation over which is being used,
+// and how it's safe to do so.
+const unsafeEql = std.mem.eql;
+const constTimeEql = std.crypto.utils.timingSafeEql;

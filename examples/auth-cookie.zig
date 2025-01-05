@@ -24,7 +24,7 @@ pub fn lookupUser(_: *anyopaque, username: []const u8) !verse.auth.User {
 }
 
 pub fn main() !void {
-    var cookie_auth = verse.auth.CookieAuth.init(.{
+    var cookie_auth = verse.auth.Cookie.init(.{
         .server_secret_key = "You must provide your own strong secret key here",
         .base = provider,
     });
