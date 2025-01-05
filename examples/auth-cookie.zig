@@ -3,16 +3,37 @@ const routes = [_]Router.Match{
     Router.GET("create", create),
 };
 
+const provider = verse.auth.Provider{
+    .ctx = undefined,
+    .vtable = .{
+        .authenticate = null,
+        .valid = null,
+        .create_session = null,
+        .get_cookie = null,
+        .lookup_user = lookupUser,
+    },
+};
+
+pub fn lookupUser(_: *anyopaque, username: []const u8) !verse.auth.User {
+    if (std.mem.eql(u8, "example_user", username)) {
+        return .{
+            .username = "example_user",
+        };
+    }
+    return error.UnknownUser;
+}
+
 pub fn main() !void {
     var cookie_auth = verse.auth.CookieAuth.init(.{
-        .server_secret_key = "You must provide your own strong key here",
+        .server_secret_key = "You must provide your own strong secret key here",
+        .base = provider,
     });
-    const provider = cookie_auth.provider();
+    const auth_provider = cookie_auth.provider();
 
     var server = try verse.Server.init(std.heap.page_allocator, .{
         .mode = .{ .http = .{ .port = 8089 } },
         .router = .{ .routefn = route },
-        .auth = provider,
+        .auth = auth_provider,
     });
 
     server.serve() catch |err| {
@@ -38,8 +59,32 @@ fn create(frame: *Frame) Router.Error!void {
 }
 
 fn index(frame: *Frame) Router.Error!void {
-    var buffer: [2048]u8 = undefined;
-    const found = try print(&buffer, "{} cookies found by the server\n", .{frame.request.cookie_jar.cookies.items.len});
+    var buffer: [0xffffff]u8 = undefined;
+    const html =
+        \\<!DOCTYPE html>
+        \\<head><title>Cookie Auth Example</title>
+        \\<style>
+        \\html {{ color-scheme: light dark; }}
+        \\body {{ width: 35em; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }}
+        \\</style>
+        \\</head>
+        \\<body>
+        \\<h1>Verse Cookie Auth Demo</h1>
+        \\<p>{} cookies found by the server.<br/></p>
+        \\<p>{s}{s}</p>
+        \\</body>
+        \\</html>
+        \\
+    ;
+
+    const user_str = if (frame.user) |_| "Found a valid cookie for user: " else "No User Found!";
+    const username = if (frame.user) |u| u.username.? else "";
+
+    const found = try print(&buffer, html, .{
+        frame.request.cookie_jar.cookies.items.len,
+        user_str,
+        username,
+    });
 
     try frame.quickStart();
     try frame.sendRawSlice(found);
