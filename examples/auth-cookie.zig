@@ -1,39 +1,64 @@
-const routes = [_]Router.Match{
-    Router.GET("", index),
-    Router.GET("create", create),
-};
+//! This cookie authentication example provides the simplest minimum pieces
+//! needed to set up cookie based authentication.
 
-const provider = verse.auth.Provider{
-    .ctx = undefined,
-    .vtable = .{
-        .authenticate = null,
-        .valid = null,
-        .create_session = null,
-        .get_cookie = null,
-        .lookup_user = lookupUser,
-    },
-};
-
-pub fn lookupUser(_: *anyopaque, username: []const u8) !verse.auth.User {
-    if (std.mem.eql(u8, "example_user", username)) {
+/// To use Cookie auth provider in verse, you only need to supply it a Provider
+/// that can do user lookups.
+const UserFinder = struct {
+    pub fn provider(self: *UserFinder) verse.auth.Provider {
         return .{
-            .username = "example_user",
+            .ctx = self,
+            .vtable = .{
+                .authenticate = null,
+                .valid = null,
+                .create_session = null,
+                .get_cookie = null,
+                .lookup_user = lookupUser,
+            },
         };
     }
-    return error.UnknownUser;
-}
+
+    /// The unique user identifier is named `username` here. But if usernames
+    /// are mutable, it may be better to use an identifier that doesn't change
+    /// for the entire life of the user. A database unique primary key in
+    /// another good option for the user identifier.
+    pub fn lookupUser(_: *anyopaque, username: []const u8) !verse.auth.User {
+        // Extra care should be taken to ensure a user lookup function doesn't
+        // leak any information about acceptable users. In this case because
+        // Cookie auth validates the token is valid before calling user lookup
+        // it's safe to simply compare the user names
+        if (std.mem.eql(u8, "example_user", username)) {
+            return .{
+                .username = "example_user",
+            };
+        }
+        return error.UnknownUser;
+    }
+};
 
 pub fn main() !void {
+    // Set up cookie user auth
+    // Step 0: Create a user lookup object. This example is stateless, but you
+    // could also have your user lookup provider connect to an external
+    // authentication server here as well.
+    var finder = UserFinder{};
+    // Step 1: Set up the Cookie auth provider.
     var cookie_auth = verse.auth.Cookie.init(.{
+        // This is the key used to generate and verify user tokens. Anyone who
+        // is able to learn or guess this secret key could generate tokens that
+        // could impersonate any user. It must be kept secure. Consider storing
+        // it outside of the source code.
         .server_secret_key = "You must provide your own strong secret key here",
-        .base = provider,
+        // The base auth provider. This one only does user lookups, but a more
+        // complicated version may replace the other default steps, e.g. a
+        // custom authentication function, or generate a different cookie.
+        .base = finder.provider(),
     });
-    const auth_provider = cookie_auth.provider();
 
+    // Step 2: Start a normal Verse Server with an authentication Provider
     var server = try verse.Server.init(std.heap.page_allocator, .{
         .mode = .{ .http = .{ .port = 8089 } },
         .router = .{ .routefn = route },
-        .auth = auth_provider,
+        .auth = cookie_auth.provider(),
     });
 
     server.serve() catch |err| {
@@ -42,22 +67,7 @@ pub fn main() !void {
     };
 }
 
-fn route(frame: *verse.Frame) !BuildFn {
-    return Router.router(frame, &routes);
-}
-
-fn create(frame: *Frame) Router.Error!void {
-    var user = verse.auth.User{
-        .username = "example_user",
-    };
-
-    frame.auth_provider.createSession(&user) catch return error.Unknown;
-    if (frame.auth_provider.getCookie(user) catch null) |cookie| {
-        try frame.cookie_jar.add(cookie);
-    }
-    try frame.redirect("/", .found);
-}
-
+/// The index page will provide some details about the cookie & auth state
 fn index(frame: *Frame) Router.Error!void {
     var buffer: [0xffffff]u8 = undefined;
     const html =
@@ -80,14 +90,40 @@ fn index(frame: *Frame) Router.Error!void {
     const user_str = if (frame.user) |_| "Found a valid cookie for user: " else "No User Found!";
     const username = if (frame.user) |u| u.username.? else "";
 
-    const found = try print(&buffer, html, .{
+    const page = try print(&buffer, html, .{
         frame.request.cookie_jar.cookies.items.len,
         user_str,
         username,
     });
 
     try frame.quickStart();
-    try frame.sendRawSlice(found);
+    try frame.sendRawSlice(page);
+}
+
+/// Sample "login" page. Just visiting `/create` will generate and give a valid
+/// user token back to the client. An redirect them back to `/`.
+///
+/// Generally, you'd want to authenticate the user before giving them a token.
+/// Validating a submitted username and password is the most common option.
+fn create(frame: *Frame) Router.Error!void {
+    var user = verse.auth.User{
+        .username = "example_user",
+    };
+
+    frame.auth_provider.createSession(&user) catch return error.Unknown;
+    if (frame.auth_provider.getCookie(user) catch null) |cookie| {
+        try frame.cookie_jar.add(cookie);
+    }
+    try frame.redirect("/", .found);
+}
+
+const routes = [_]Router.Match{
+    Router.GET("", index),
+    Router.GET("create", create),
+};
+
+fn route(frame: *verse.Frame) !BuildFn {
+    return Router.router(frame, &routes);
 }
 
 const std = @import("std");

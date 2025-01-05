@@ -120,7 +120,7 @@ pub fn CookieAuth(HMAC: type) type {
         server_secret_key: []const u8,
         /// Max age in seconds a session cookie is valid for.
         max_age: usize,
-        cookie_name: []const u8 = "verse_session_secret",
+        cookie_name: []const u8,
 
         /// this session buffer API is unstable and may be replaced
         session_buffer: [ibuf_size]u8 = [_]u8{0} ** ibuf_size,
@@ -134,12 +134,14 @@ pub fn CookieAuth(HMAC: type) type {
             alloc: ?Allocator = null,
             base: ?Provider = null,
             max_age: usize = 86400 * 365,
+            cookie_name: []const u8 = "verse_session_secret",
         }) Self {
             return .{
                 .server_secret_key = opts.server_secret_key,
                 .alloc = opts.alloc,
                 .base = opts.base,
                 .max_age = opts.max_age,
+                .cookie_name = opts.cookie_name,
             };
         }
 
