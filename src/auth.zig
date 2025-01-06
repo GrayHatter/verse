@@ -13,7 +13,14 @@ pub const Error = error{
     UnknownUser,
 };
 
-/// TODO document
+/// MTLS auth Provider. Implements mTLS authentication, with verification done by
+/// a rproxy (example configuration provided in contrib/), providing a higher
+/// level of security and authenticity than other, more common methods of
+/// authentication. If you need exceptionally high security, you may wish to
+/// combine this authentication system, with another such as a cookie based
+/// authentication to provide 2fa or password verification on top of mTLS.
+/// Allowing you to verify both the device using mTLS, the user via credentials,
+/// 2FA via any token based credential.
 pub const MTLS = struct {
     base: ?Provider = null,
 
@@ -113,11 +120,18 @@ pub const cookie_auth = struct {
     };
 };
 
-/// TODO document
+/// Default cookie based auth constructor. Turns the provided HMAC signature
+/// code into a session token to confirm a user's identity. Verification and
+/// authorization are not provided by this module, and are the responsibility of
+/// the caller. The most common usecase would be calling app would verify a
+/// user's identity using it's own user credential verification and then store
+/// that confirmed authentication as a cookie using this CookieAuth provider.
 pub fn CookieAuth(HMAC: type) type {
     return struct {
         base: ?Provider,
-        // TODO key safety
+        // TODO consider expanding key memory safety here. The costs associated
+        // with lock locking, or zeroing the memory seem high for the security
+        // improvements, but this may not always be the case.
         server_secret_key: []const u8,
         /// Max age in seconds a session cookie is valid for.
         max_age: i64,
@@ -141,7 +155,6 @@ pub fn CookieAuth(HMAC: type) type {
             pub const Version: i8 = 0;
 
             pub fn expired(t: Token, max_age: i64) bool {
-                // TODO verify alignment
                 const time = littleToNative(i64, @as(*const i64, @ptrCast(&t.time)).*);
                 if (time > std.time.timestamp() + max_age) return true;
                 return false;
