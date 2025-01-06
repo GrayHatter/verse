@@ -10,6 +10,8 @@ user_ptr: ?*anyopaque = null,
 /// identifier. In many cases if a username can never be altered by the user,
 /// unique_id can be set to the username. Verse will not do this on it's own
 /// because the security implications can be nuanced.
+/// unique_id may not contain a \0 char within the slice when used with Verse
+/// auth Providers or token modules.
 unique_id: ?[]const u8 = null,
 /// Reserved for callers.
 username: ?[]const u8 = null,

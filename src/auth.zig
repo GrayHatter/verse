@@ -177,12 +177,12 @@ pub fn CookieAuth(HMAC: type) type {
             const mac: [HMAC.mac_length]u8 = payload[payload.len - HMAC.mac_length ..][0..HMAC.mac_length].*;
             payload = payload[0 .. payload.len - HMAC.mac_length];
 
-            if (indexOfScalar(u8, payload, ':')) |i| {
+            if (indexOfScalar(u8, payload, 0x00)) |i| {
                 var t = Token{
                     .version = version,
                     .time = buffer[1..9].*,
                     .userid = payload[0..i],
-                    .extra_data = if (indexOfScalar(u8, payload[i + 1 ..], ':')) |ed| payload[1 + ed ..] else null,
+                    .extra_data = if (indexOfScalar(u8, payload[i + 1 ..], 0x00)) |ed| payload[1 + ed ..] else null,
                     .mac = mac,
                 };
 
@@ -262,7 +262,7 @@ pub fn CookieAuth(HMAC: type) type {
                 if (uid.len > b.len - HMAC.mac_length - 1) return error.NoSpaceLeft;
                 hm.update(uid);
                 @memcpy(b[0..uid.len], uid);
-                b[uid.len] = ':';
+                b[uid.len] = 0x00;
                 b = b[uid.len + 1 ..];
             } else return error.UnknownUser;
 
@@ -270,7 +270,7 @@ pub fn CookieAuth(HMAC: type) type {
                 if (ed.len > b.len - HMAC.mac_length - 1) return error.NoSpaceLeft;
                 hm.update(ed);
                 @memcpy(b[0..ed.len], ed);
-                b[ed.len] = ':';
+                b[ed.len] = 0x00;
                 b = b[ed.len + 1 ..];
             }
             hm.final(b[0..HMAC.mac_length]);
@@ -355,12 +355,12 @@ test Cookie {
     try std.testing.expect(cookie != null);
     try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
     try std.testing.expectEqual(12 + 18 + 42, cookie.?.value.len);
-    try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyO");
+    try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyA");
     var dec_buf: [88]u8 = undefined;
     const len = try b64_dec.calcSizeForSlice(cookie.?.value);
     try b64_dec.decode(dec_buf[0..len], cookie.?.value);
     const decoded = dec_buf[0..len];
-    try std.testing.expectStringStartsWith(decoded[9..], "testing user:");
+    try std.testing.expectStringStartsWith(decoded[9..], "testing user\x00");
 }
 
 test "Cookie ExtraData" {
@@ -384,14 +384,14 @@ test "Cookie ExtraData" {
     try std.testing.expect(cookie != null);
     try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
     try std.testing.expectEqual(12 + 18 + 16 + 42, cookie.?.value.len);
-    try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyOmV4dHJhIGRhdGE");
+    try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyAGV4dHJhIGRhdGE");
 
     var dec_buf: [89]u8 = undefined;
     const len = try b64_dec.calcSizeForSlice(cookie.?.value);
     try b64_dec.decode(dec_buf[0..len], cookie.?.value);
     const decoded = dec_buf[0..len];
-    try std.testing.expectStringStartsWith(decoded[9..], "testing user:");
-    try std.testing.expectStringStartsWith(decoded[22..], "extra data:");
+    try std.testing.expectStringStartsWith(decoded[9..], "testing user\x00");
+    try std.testing.expectStringStartsWith(decoded[22..], "extra data\x00");
 }
 
 test "Cookie token" {
@@ -410,7 +410,7 @@ test "Cookie token" {
     const cookie = try provider.getCookie(user);
 
     try std.testing.expect(cookie != null);
-    try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyO");
+    try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyA");
 
     var uid_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(auth.server_secret_key);
