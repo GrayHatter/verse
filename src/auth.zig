@@ -216,24 +216,21 @@ pub fn CookieAuth(HMAC: type) type {
                     // currently not implemented.
                     if (cookies.value_list.next != null) return error.InvalidAuth;
                     const cookie = cookies.value_list.value;
-                    std.debug.print("cookie: {s} \n", .{cookie});
                     var itr = tokenizeSequence(u8, cookie, "; ");
                     while (itr.next()) |tkn| {
                         if (startsWith(u8, tkn, ca.cookie_name)) {
                             var un_buf: [64]u8 = undefined;
                             var hmac = HMAC.init(ca.server_secret_key);
-                            const username = try validateToken(
+                            const user_id = try validateToken(
                                 &hmac,
                                 tkn[ca.cookie_name.len + 1 ..],
                                 un_buf[0..],
                                 ca.max_age,
                             );
 
-                            return base.lookupUser(username);
+                            return base.lookupUser(user_id);
                         }
                     }
-                } else {
-                    std.debug.print("no cookie\n{any}", .{headers});
                 }
             }
 
@@ -261,13 +258,13 @@ pub fn CookieAuth(HMAC: type) type {
             @memcpy(b[0..8], time[0..8]);
             b = b[8..];
 
-            if (user.username) |un| {
-                if (un.len > b.len - HMAC.mac_length - 1) return error.NoSpaceLeft;
-                hm.update(un);
-                @memcpy(b[0..un.len], un);
-                b[un.len] = ':';
-                b = b[un.len + 1 ..];
-            }
+            if (user.unique_id) |uid| {
+                if (uid.len > b.len - HMAC.mac_length - 1) return error.NoSpaceLeft;
+                hm.update(uid);
+                @memcpy(b[0..uid.len], uid);
+                b[uid.len] = ':';
+                b = b[uid.len + 1 ..];
+            } else return error.UnknownUser;
 
             if (user.session_extra_data) |ed| {
                 if (ed.len > b.len - HMAC.mac_length - 1) return error.NoSpaceLeft;
@@ -291,7 +288,7 @@ pub fn CookieAuth(HMAC: type) type {
                 else => return e,
             };
 
-            const prefix_len: usize = (if (user.username) |u| u.len + 1 else 0) +
+            const prefix_len: usize = (if (user.unique_id) |u| u.len + 1 else 0) +
                 if (user.session_extra_data) |ed| ed.len + 1 else 0;
             if (prefix_len > ca.session_buffer.len / 2) {
                 if (ca.alloc == null) return error.NoSpaceLeft;
@@ -347,7 +344,7 @@ test Cookie {
     const provider = auth.provider();
 
     var user = User{
-        .username = "testing user",
+        .unique_id = "testing user",
     };
 
     try provider.createSession(&user);
@@ -375,7 +372,7 @@ test "Cookie ExtraData" {
     const provider = auth.provider();
 
     var user = User{
-        .username = "testing user",
+        .unique_id = "testing user",
         .session_extra_data = "extra data",
     };
 
@@ -405,7 +402,7 @@ test "Cookie token" {
     });
     const provider = auth.provider();
 
-    var user = User{ .username = "testing user" };
+    var user = User{ .unique_id = "testing user" };
 
     try provider.createSession(&user);
 
@@ -415,13 +412,13 @@ test "Cookie token" {
     try std.testing.expect(cookie != null);
     try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyO");
 
-    var username_buf: [64]u8 = undefined;
+    var uid_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(auth.server_secret_key);
-    const valid = try Cookie.validateToken(&hm, cookie.?.value, username_buf[0..], 2);
-    try std.testing.expectEqualStrings(user.username.?, valid);
+    const valid = try Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], 2);
+    try std.testing.expectEqualStrings(user.unique_id.?, valid);
 
     hm = Hmac.sha2.HmacSha256.init(auth.server_secret_key);
-    const expired = Cookie.validateToken(&hm, cookie.?.value, username_buf[0..], -100);
+    const expired = Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], -100);
     try std.testing.expectError(error.TokenExpired, expired);
 }
 

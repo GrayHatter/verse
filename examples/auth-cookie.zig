@@ -28,6 +28,7 @@ const UserFinder = struct {
         // it's safe to simply compare the user names
         if (std.mem.eql(u8, "example_user", username)) {
             return .{
+                .unique_id = "example_user",
                 .username = "example_user",
             };
         }
@@ -107,6 +108,7 @@ fn index(frame: *Frame) Router.Error!void {
 /// Validating a submitted username and password is the most common option.
 fn create(frame: *Frame) Router.Error!void {
     var user = verse.auth.User{
+        .unique_id = "example_user",
         .username = "example_user",
     };
 

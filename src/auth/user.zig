@@ -6,6 +6,12 @@
 /// Reserved for callers. Never modified by any Verse Provider.
 user_ptr: ?*anyopaque = null,
 /// Reserved for callers.
+/// Verse auth Providers will use unique_id as the primary user lookup
+/// identifier. In many cases if a username can never be altered by the user,
+/// unique_id can be set to the username. Verse will not do this on it's own
+/// because the security implications can be nuanced.
+unique_id: ?[]const u8 = null,
+/// Reserved for callers.
 username: ?[]const u8 = null,
 
 // The following fields are used and modified by Verse Providers.
