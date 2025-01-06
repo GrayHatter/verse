@@ -5,11 +5,12 @@ pub const User = @import("auth/user.zig");
 
 pub const Error = error{
     InvalidAuth,
+    NoSpaceLeft,
     NotProvided,
+    OutOfMemory,
+    TokenExpired,
     Unauthenticated,
     UnknownUser,
-    NoSpaceLeft,
-    OutOfMemory,
 };
 
 /// TODO document
@@ -119,7 +120,7 @@ pub fn CookieAuth(HMAC: type) type {
         // TODO key safety
         server_secret_key: []const u8,
         /// Max age in seconds a session cookie is valid for.
-        max_age: usize,
+        max_age: i64,
         cookie_name: []const u8,
 
         /// this session buffer API is unstable and may be replaced
@@ -131,20 +132,27 @@ pub fn CookieAuth(HMAC: type) type {
 
         pub const Token = struct {
             version: i8,
-            time: [8]u8,
+            time: [8]u8 align(8),
             userid: []const u8,
             extra_data: ?[]const u8,
             mac: [HMAC.mac_length]u8,
 
             /// Negative version numbers are reserved for users
             pub const Version: i8 = 0;
+
+            pub fn expired(t: Token, max_age: i64) bool {
+                // TODO verify alignment
+                const time = littleToNative(i64, @as(*const i64, @ptrCast(&t.time)).*);
+                if (time > std.time.timestamp() + max_age) return true;
+                return false;
+            }
         };
 
         pub fn init(opts: struct {
             server_secret_key: []const u8,
             alloc: ?Allocator = null,
             base: ?Provider = null,
-            max_age: usize = 86400 * 365,
+            max_age: i64 = 86400 * 365,
             cookie_name: []const u8 = "verse_session_secret",
         }) Self {
             return .{
@@ -156,7 +164,7 @@ pub fn CookieAuth(HMAC: type) type {
             };
         }
 
-        pub fn validateToken(hm: *HMAC, b64data: []const u8, user_buffer: []u8) Error![]u8 {
+        pub fn validateToken(hm: *HMAC, b64data: []const u8, user_buffer: []u8, maxage: i64) Error![]u8 {
             var buffer: [ibuf_size]u8 = undefined;
             const len = b64_dec.calcSizeForSlice(b64data) catch return error.InvalidAuth;
             if (len > ibuf_size) return error.InvalidAuth;
@@ -184,6 +192,7 @@ pub fn CookieAuth(HMAC: type) type {
                 if (t.extra_data) |ed| hm.update(ed);
                 hm.final(our_hash[0..]);
                 if (constTimeEql([HMAC.mac_length]u8, t.mac, our_hash)) {
+                    if (t.expired(maxage)) return error.TokenExpired;
                     if (user_buffer.len < t.userid.len) return error.NoSpaceLeft;
                     @memcpy(user_buffer[0..t.userid.len], t.userid);
                     return user_buffer[0..t.userid.len];
@@ -217,6 +226,7 @@ pub fn CookieAuth(HMAC: type) type {
                                 &hmac,
                                 tkn[ca.cookie_name.len + 1 ..],
                                 un_buf[0..],
+                                ca.max_age,
                             );
 
                             return base.lookupUser(username);
@@ -407,8 +417,12 @@ test "Cookie token" {
 
     var username_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(auth.server_secret_key);
-    const valid = try Cookie.validateToken(&hm, cookie.?.value, username_buf[0..]);
+    const valid = try Cookie.validateToken(&hm, cookie.?.value, username_buf[0..], 2);
     try std.testing.expectEqualStrings(user.username.?, valid);
+
+    hm = Hmac.sha2.HmacSha256.init(auth.server_secret_key);
+    const expired = Cookie.validateToken(&hm, cookie.?.value, username_buf[0..], -100);
+    try std.testing.expectError(error.TokenExpired, expired);
 }
 
 pub const InvalidAuth = struct {
@@ -487,6 +501,7 @@ const Allocator = std.mem.Allocator;
 const toBytes = std.mem.toBytes;
 const startsWith = std.mem.startsWith;
 const nativeToLittle = std.mem.nativeToLittle;
+const littleToNative = std.mem.littleToNative;
 const indexOfScalar = std.mem.indexOfScalar;
 const tokenizeSequence = std.mem.tokenizeSequence;
 const Hmac = std.crypto.auth.hmac;
