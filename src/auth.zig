@@ -22,13 +22,24 @@ pub const InvalidAuth = struct {
         return Provider{
             .ctx = undefined,
             .vtable = .{
-                .authenticate = null, // TODO write invalid
+                .authenticate = authenticate,
                 .valid = valid,
                 .lookup_user = lookupUser,
-                .create_session = null,
-                .get_cookie = null,
+                .create_session = createSession,
+                .get_cookie = getCookie,
             },
         };
+    }
+
+    fn authenticate(_: *const anyopaque, _: *const Headers) Error!User {
+        return error.UnknownUser;
+    }
+
+    fn createSession(_: *const anyopaque, _: *const User) Error!void {
+        return error.Unauthenticated;
+    }
+    fn getCookie(_: *const anyopaque, _: User) Error!?RequestCookie {
+        return error.Unauthenticated;
     }
 
     fn valid(_: *const anyopaque, _: *const User) bool {
