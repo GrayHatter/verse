@@ -13,98 +13,6 @@ pub const Error = error{
     UnknownUser,
 };
 
-/// MTLS auth Provider. Implements mTLS authentication, with verification done by
-/// a rproxy (example configuration provided in contrib/), providing a higher
-/// level of security and authenticity than other, more common methods of
-/// authentication. If you need exceptionally high security, you may wish to
-/// combine this authentication system, with another such as a cookie based
-/// authentication to provide 2fa or password verification on top of mTLS.
-/// Allowing you to verify both the device using mTLS, the user via credentials,
-/// 2FA via any token based credential.
-pub const MTLS = struct {
-    base: ?Provider = null,
-
-    /// TODO document misuse of default without a base provider
-    pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
-        const mtls: *MTLS = @ptrCast(@alignCast(ptr));
-        var success: bool = false;
-        if (headers.get("MTLS_ENABLED")) |enabled| {
-            if (enabled.value_list.next) |_| return error.InvalidAuth;
-            // MTLS validation as currently supported here is done by the
-            // reverse proxy. Constant time compare would provide no security
-            // benefits here.
-            if (std.mem.eql(u8, enabled.value_list.value, "SUCCESS")) {
-                success = true;
-            }
-        }
-
-        if (!success) return error.UnknownUser;
-
-        if (mtls.base) |base| {
-            if (headers.get("MTLS_FINGERPRINT")) |enabled| {
-                // Verse does not specify an order for which is valid so it is
-                // an error if there is ever more than a single value for the
-                // mTLS fingerprint
-                if (enabled.value_list.next != null) return error.InvalidAuth;
-                return base.lookupUser(enabled.value_list.value);
-            }
-        }
-        return .{ .user_ptr = null };
-    }
-
-    fn valid(ptr: *anyopaque, user: *const User) bool {
-        const mtls: *MTLS = @ptrCast(@alignCast(ptr));
-        if (mtls.base) |base| return base.valid(user);
-        return false;
-    }
-
-    pub fn lookupUser(ptr: *anyopaque, user_id: []const u8) Error!User {
-        const mtls: *MTLS = @ptrCast(@alignCast(ptr));
-        if (mtls.base) |base| return base.lookupUser(user_id);
-        return error.UnknownUser;
-    }
-
-    pub fn provider(mtls: *MTLS) Provider {
-        return Provider{
-            .ctx = mtls,
-            .vtable = .{
-                .authenticate = authenticate,
-                .valid = valid,
-                .lookup_user = lookupUser,
-                .create_session = null,
-                .get_cookie = null,
-            },
-        };
-    }
-};
-
-test MTLS {
-    const a = std.testing.allocator;
-    var mtls = MTLS{};
-    var provider = mtls.provider();
-
-    var headers = Headers.init(a);
-    defer headers.raze();
-    try headers.add("MTLS_ENABLED", "SUCCESS");
-    try headers.add("MTLS_FINGERPRINT", "LOLTOTALLYVALID");
-
-    const user = try provider.authenticate(&headers);
-
-    try std.testing.expectEqual(null, user.user_ptr);
-
-    try headers.add("MTLS_ENABLED", "SUCCESS");
-    const err = provider.authenticate(&headers);
-    try std.testing.expectError(error.InvalidAuth, err);
-
-    headers.raze();
-    headers = Headers.init(a);
-
-    try headers.add("MTLS_ENABLED", "FAILURE!");
-    const err2 = provider.authenticate(&headers);
-    try std.testing.expectError(error.UnknownUser, err2);
-    // TODO there's likely a few more error states we should validate;
-}
-
 /// Default CookieAuth Helper uses Sha256 as the HMAC primitive.
 pub const Cookie = CookieAuth(Hmac.sha2.HmacSha256);
 
@@ -506,6 +414,10 @@ test Provider {
     try std.testing.expectError(error.UnknownUser, erruser);
 }
 
+test {
+    _ = std.testing.refAllDecls(MTLS);
+}
+
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const toBytes = std.mem.toBytes;
@@ -517,8 +429,12 @@ const tokenizeSequence = std.mem.tokenizeSequence;
 const Hmac = std.crypto.auth.hmac;
 const b64_enc = std.base64.url_safe.Encoder;
 const b64_dec = std.base64.url_safe.Decoder;
+
 const ReqCookie = @import("cookies.zig").Cookie;
 const Headers = @import("headers.zig");
+
+pub const MTLS = @import("auth/mtls.zig");
+
 // Verse.Auth attempts to provide strong security guarantees where reasonable
 // e.g. std.mem.eql faster, but doesn't work in constant time. In an effort to
 // avoid confusion, the two comparison functions are given possibly misleading
