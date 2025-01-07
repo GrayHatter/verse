@@ -1,5 +1,8 @@
 //! Verse Authentication Provider
-//! TODO document!
+//! Similar to the Allocator interface Provider exposes a consistent API that
+//! can be reused across all the verse authentication modules. Any object that
+//! exposes a Provider, can be plugged into Verse and used to provide
+//! authentication or authorization. E.g. providing user lookup.
 ctx: *anyopaque,
 vtable: VTable,
 
