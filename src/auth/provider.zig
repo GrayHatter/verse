@@ -16,7 +16,7 @@ pub const VTable = struct {
     pub const LookupUserFn = *const fn (*anyopaque, []const u8) Error!User;
     pub const ValidFn = *const fn (*anyopaque, *const User) bool;
     pub const CreateSessionFn = *const fn (*anyopaque, *User) Error!void;
-    pub const GetCookieFn = *const fn (*anyopaque, User) Error!?Cookie;
+    pub const GetCookieFn = *const fn (*anyopaque, User) Error!?RequestCookie;
 
     pub const Empty = .{
         .authenticate = null,
@@ -62,7 +62,7 @@ pub fn createSession(self: *const Provider, user: *User) Error!void {
 
 /// Note getCookie will return `null` instead of an error when no function is
 /// provided.
-pub fn getCookie(self: *const Provider, user: User) Error!?Cookie {
+pub fn getCookie(self: *const Provider, user: User) Error!?RequestCookie {
     if (self.vtable.get_cookie) |func| {
         return try func(self.ctx, user);
     }
@@ -87,5 +87,5 @@ test "Provider" {
 const Auth = @import("../auth.zig");
 pub const Error = Auth.Error;
 const Headers = @import("../headers.zig");
-const Cookie = @import("../cookies.zig").Cookie;
+const RequestCookie = @import("../cookies.zig").Cookie;
 const User = @import("user.zig");
