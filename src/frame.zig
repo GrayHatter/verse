@@ -128,6 +128,32 @@ pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
     };
 }
 
+/// Takes a any object, that can be represented by json, converts it into a
+/// json string, and sends to the client.
+pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) !void {
+    if (code == .no_content) {
+        @compileError("Sending JSON is not supported with status code no content");
+    }
+
+    vrs.status = code;
+    vrs.content_type = .{
+        .base = .{ .application = .json },
+        .parameter = .@"utf-8",
+    };
+
+    try vrs.quickStart();
+    const data = std.json.stringifyAlloc(vrs.alloc, json, .{
+        .emit_null_optional_fields = false,
+    }) catch |err| {
+        log.err("Error trying to print json {}", .{err});
+        return error.Unknown;
+    };
+    vrs.writeAll(data) catch |err| switch (err) {
+        error.BrokenPipe => |e| return e,
+        else => unreachable,
+    };
+}
+
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
@@ -325,32 +351,6 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
 /// Helper function to return a default error page for a given http status code.
 pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
     return Router.defaultResponse(code)(vrs);
-}
-
-/// Takes a any object, that can be represented by json, converts it into a
-/// json string, and sends to the client.
-pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) !void {
-    if (code == .no_content) {
-        @compileError("Sending JSON is not supported with status code no content");
-    }
-
-    vrs.status = code;
-    vrs.content_type = .{
-        .base = .{ .application = .json },
-        .parameter = .@"utf-8",
-    };
-
-    try vrs.quickStart();
-    const data = std.json.stringifyAlloc(vrs.alloc, json, .{
-        .emit_null_optional_fields = false,
-    }) catch |err| {
-        log.err("Error trying to print json {}", .{err});
-        return error.Unknown;
-    };
-    vrs.writeAll(data) catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => unreachable,
-    };
 }
 
 /// This function may be removed in the future
