@@ -87,6 +87,47 @@ pub const RouteData = struct {
     }
 };
 
+/// sendPage is the default way to respond in verse using the Template system.
+/// sendPage will flush headers to the client before sending Page data
+pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
+    try vrs.quickStart();
+
+    switch (vrs.downstream) {
+        .http, .zwsgi => |stream| {
+            var vec_s = [_]std.posix.iovec_const{undefined} ** 2048;
+            var vecs: []std.posix.iovec_const = vec_s[0..];
+            const required = page.iovecCountAll();
+            if (required > 2048) {
+                vecs = vrs.alloc.alloc(std.posix.iovec_const, required) catch @panic("OOM");
+            }
+            const vec = page.ioVec(vecs, vrs.alloc) catch |iovec_err| {
+                log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
+                const w = stream.writer();
+                page.format("{}", .{}, w) catch |err| switch (err) {
+                    else => log.err("Page Build Error {}", .{err}),
+                };
+                return;
+            };
+            stream.writevAll(vec) catch |err| switch (err) {
+                else => log.err("iovec write error Error {}", .{err}),
+            };
+            if (required > 2048) vrs.alloc.free(vecs);
+        },
+        else => unreachable,
+    }
+}
+
+/// sendRawSlice will allow you to send data directly to the client. It will not
+/// verify the current state, and will allow you to inject data into the HTTP
+/// headers. If you only want to send response body data, call quickStart() to
+/// send all headers to the client
+pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
+    vrs.writeAll(slice) catch |err| switch (err) {
+        error.BrokenPipe => |e| return e,
+        else => unreachable,
+    };
+}
+
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
@@ -279,47 +320,6 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
         .{ .base = "\r\n\r\n".ptr, .len = 4 },
     };
     vrs.writevAll(vect[0..]) catch return NetworkError.IOWriteFailure;
-}
-
-/// sendPage is the default way to respond in verse using the Template system.
-/// sendPage will flush headers to the client before sending Page data
-pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
-    try vrs.quickStart();
-
-    switch (vrs.downstream) {
-        .http, .zwsgi => |stream| {
-            var vec_s = [_]std.posix.iovec_const{undefined} ** 2048;
-            var vecs: []std.posix.iovec_const = vec_s[0..];
-            const required = page.iovecCountAll();
-            if (required > 2048) {
-                vecs = vrs.alloc.alloc(std.posix.iovec_const, required) catch @panic("OOM");
-            }
-            const vec = page.ioVec(vecs, vrs.alloc) catch |iovec_err| {
-                log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
-                const w = stream.writer();
-                page.format("{}", .{}, w) catch |err| switch (err) {
-                    else => log.err("Page Build Error {}", .{err}),
-                };
-                return;
-            };
-            stream.writevAll(vec) catch |err| switch (err) {
-                else => log.err("iovec write error Error {}", .{err}),
-            };
-            if (required > 2048) vrs.alloc.free(vecs);
-        },
-        else => unreachable,
-    }
-}
-
-/// sendRawSlice will allow you to send data directly to the client. It will not
-/// verify the current state, and will allow you to inject data into the HTTP
-/// headers. If you only want to send response body data, call quickStart() to
-/// send all headers to the client
-pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
-    vrs.writeAll(slice) catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => unreachable,
-    };
 }
 
 /// Helper function to return a default error page for a given http status code.
