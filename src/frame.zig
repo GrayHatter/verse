@@ -42,26 +42,12 @@ status: ?std.http.Status = null,
 
 const Frame = @This();
 
-const SendError = error{
+pub const SendError = error{
     WrongPhase,
     HeadersFinished,
     ResponseClosed,
     UnknownStatus,
 } || NetworkError;
-
-const ONESHOT_SIZE = 14720;
-const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
-
-const Downstream = enum {
-    buffer,
-    zwsgi,
-    http,
-};
-
-const VarPair = struct {
-    []const u8,
-    []const u8,
-};
 
 /// Warning leaks like a sieve while I ponder the API
 pub const RouteData = struct {
@@ -174,6 +160,22 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
 pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {
     try vrs.headers.add(name, value);
 }
+
+const ONESHOT_SIZE = 14720;
+const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
+
+const Downstream = enum {
+    buffer,
+    zwsgi,
+    http,
+};
+
+const VarPair = struct {
+    []const u8,
+    []const u8,
+};
+
+// The remaining functions are internal
 
 fn writeChunk(vrs: Frame, data: []const u8) !void {
     comptime unreachable;
