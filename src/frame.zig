@@ -1,26 +1,43 @@
+//! Instead of a basic Request/Response object; Verse provides a `*Frame`.
+//! The `*Frame` object is wrapper around the Request from the client, the
+//! response expected to be generated from a given build function, and also
+//! exposes a number of other functions. e.g. Page/Template generation,
+//! Authentication and session management, a websocket connection API, etc.
+
+/// The Allocator provided by `alloc` is a per request Array Allocator that can
+/// be used by endpoints, where allocated memory will exist until after the
+/// build function returns to the server handling the request.
 alloc: Allocator,
+/// Base Request object from the client.
 request: *const Request,
+/// downsteam writer based on which ever server accepted the client request and
+/// created this Frame
 downstream: union(Downstream) {
     buffer: std.io.BufferedWriter(ONESHOT_SIZE, Stream.Writer),
     zwsgi: Stream,
     http: Stream,
 },
+/// Request URI as received by Verse
 uri: Router.UriIterator,
 
 // TODO fix this unstable API
 auth_provider: Auth.Provider,
-/// user is set to exactly what is provided directly by the active Auth.Provider.
-/// It's possible for an Auth.Provider to return a User that is invalid.
-/// Depending on the need for any given use, users should always verify the
-/// validity in addition to the existence of this user field.
+/// user is set to exactly what is provided directly by the active
+/// Auth.Provider. It's possible for an Auth.Provider to return a User that is
+/// invalid. Depending on the need for any given use, users should always verify
+/// the validity in addition to the existence of this user field.
 user: ?Auth.User = null,
 /// The RouteData API is currently unstable, use with caution
 route_data: RouteData,
 
 // Raw move from response.zig
+
+/// Response headers; instead of modifying these headers directly prefer calling
+/// `headersAdd`
 headers: Headers,
-content_type: ?ContentType = ContentType.default,
 cookie_jar: Cookies.Jar,
+// TODO document content_type
+content_type: ?ContentType = ContentType.default,
 status: ?std.http.Status = null,
 
 const Frame = @This();
