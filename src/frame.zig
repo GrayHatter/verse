@@ -140,6 +140,29 @@ pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) !voi
     };
 }
 
+pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
+    vrs.status = switch (scode) {
+        .multiple_choice,
+        .moved_permanently,
+        .found,
+        .see_other,
+        .not_modified,
+        .use_proxy,
+        .temporary_redirect,
+        .permanent_redirect,
+        => scode,
+        else => @compileError("redirect() can only be called with a 3xx redirection code"),
+    };
+    try vrs.sendHeaders();
+
+    var vect = [3]iovec_c{
+        .{ .base = "Location: ".ptr, .len = 10 },
+        .{ .base = loc.ptr, .len = loc.len },
+        .{ .base = "\r\n\r\n".ptr, .len = 4 },
+    };
+    vrs.writevAll(vect[0..]) catch return NetworkError.IOWriteFailure;
+}
+
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
@@ -155,6 +178,111 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
         .cookie_jar = try Cookies.Jar.init(a),
         .route_data = .{ .items = std.ArrayList(RouteData.Pair).init(a) },
     };
+}
+
+pub fn sendHeaders(vrs: *Frame) NetworkError!void {
+    switch (vrs.downstream) {
+        .http, .zwsgi => |stream| {
+            var vect: [HEADER_VEC_COUNT]iovec_c = undefined;
+            var count: usize = 0;
+
+            const h_resp = vrs.HTTPHeader();
+            vect[count] = .{ .base = h_resp.ptr, .len = h_resp.len };
+            count += 1;
+
+            // Default headers
+            const s_name = "Server: verse/0.0.0-dev\r\n";
+            vect[count] = .{ .base = s_name.ptr, .len = s_name.len };
+            count += 1;
+
+            if (vrs.content_type) |ct| {
+                vect[count] = .{ .base = "Content-Type: ".ptr, .len = "Content-Type: ".len };
+                count += 1;
+                switch (ct.base) {
+                    inline else => |tag, name| {
+                        vect[count] = .{
+                            .base = @tagName(name).ptr,
+                            .len = @tagName(name).len,
+                        };
+                        count += 1;
+                        vect[count] = .{ .base = "/".ptr, .len = "/".len };
+                        count += 1;
+                        vect[count] = .{
+                            .base = @tagName(tag).ptr,
+                            .len = @tagName(tag).len,
+                        };
+                        count += 1;
+                    },
+                }
+                if (ct.parameter) |param| {
+                    const pre = "; charset=";
+                    vect[count] = .{ .base = pre.ptr, .len = pre.len };
+                    count += 1;
+                    const tag = @tagName(param);
+                    vect[count] = .{ .base = tag.ptr, .len = tag.len };
+                    count += 1;
+                }
+
+                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
+                count += 1;
+
+                //"text/html; charset=utf-8"); // Firefox is trash
+            }
+
+            var itr = vrs.headers.iterator();
+            while (itr.next()) |header| {
+                vect[count] = .{ .base = header.name.ptr, .len = header.name.len };
+                count += 1;
+                vect[count] = .{ .base = ": ".ptr, .len = ": ".len };
+                count += 1;
+                vect[count] = .{ .base = header.value.ptr, .len = header.value.len };
+                count += 1;
+                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
+                count += 1;
+            }
+
+            for (vrs.cookie_jar.cookies.items) |cookie| {
+                vect[count] = .{ .base = "Set-Cookie: ".ptr, .len = "Set-Cookie: ".len };
+                count += 1;
+                // TODO remove this alloc
+                const cookie_str = allocPrint(vrs.alloc, "{}", .{cookie}) catch unreachable;
+                vect[count] = .{
+                    .base = cookie_str.ptr,
+                    .len = cookie_str.len,
+                };
+                count += 1;
+                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
+                count += 1;
+            }
+
+            stream.writevAll(vect[0..count]) catch return NetworkError.IOWriteFailure;
+        },
+        .buffer => unreachable,
+    }
+}
+
+/// Helper function to return a default error page for a given http status code.
+pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
+    return Router.defaultResponse(code)(vrs);
+}
+
+/// This function may be removed in the future
+pub fn quickStart(vrs: *Frame) NetworkError!void {
+    if (vrs.status == null) vrs.status = .ok;
+    switch (vrs.downstream) {
+        .http, .zwsgi => |_| {
+            vrs.sendHeaders() catch |err| switch (err) {
+                error.BrokenPipe => |e| return e,
+                else => unreachable,
+            };
+
+            vrs.writeAll("\r\n") catch |err| switch (err) {
+                error.BrokenPipe => |e| return e,
+                else => unreachable,
+            };
+        },
+        else => unreachable,
+    }
 }
 
 pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {
@@ -244,134 +372,6 @@ fn HTTPHeader(vrs: *Frame) [:0]const u8 {
             break :b "HTTP/1.1 500 Internal Server Error\r\n";
         },
     };
-}
-
-pub fn sendHeaders(vrs: *Frame) NetworkError!void {
-    switch (vrs.downstream) {
-        .http, .zwsgi => |stream| {
-            var vect: [HEADER_VEC_COUNT]iovec_c = undefined;
-            var count: usize = 0;
-
-            const h_resp = vrs.HTTPHeader();
-            vect[count] = .{ .base = h_resp.ptr, .len = h_resp.len };
-            count += 1;
-
-            // Default headers
-            const s_name = "Server: verse/0.0.0-dev\r\n";
-            vect[count] = .{ .base = s_name.ptr, .len = s_name.len };
-            count += 1;
-
-            if (vrs.content_type) |ct| {
-                vect[count] = .{ .base = "Content-Type: ".ptr, .len = "Content-Type: ".len };
-                count += 1;
-                switch (ct.base) {
-                    inline else => |tag, name| {
-                        vect[count] = .{
-                            .base = @tagName(name).ptr,
-                            .len = @tagName(name).len,
-                        };
-                        count += 1;
-                        vect[count] = .{ .base = "/".ptr, .len = "/".len };
-                        count += 1;
-                        vect[count] = .{
-                            .base = @tagName(tag).ptr,
-                            .len = @tagName(tag).len,
-                        };
-                        count += 1;
-                    },
-                }
-                if (ct.parameter) |param| {
-                    const pre = "; charset=";
-                    vect[count] = .{ .base = pre.ptr, .len = pre.len };
-                    count += 1;
-                    const tag = @tagName(param);
-                    vect[count] = .{ .base = tag.ptr, .len = tag.len };
-                    count += 1;
-                }
-
-                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
-                count += 1;
-
-                //"text/html; charset=utf-8"); // Firefox is trash
-            }
-
-            var itr = vrs.headers.iterator();
-            while (itr.next()) |header| {
-                vect[count] = .{ .base = header.name.ptr, .len = header.name.len };
-                count += 1;
-                vect[count] = .{ .base = ": ".ptr, .len = ": ".len };
-                count += 1;
-                vect[count] = .{ .base = header.value.ptr, .len = header.value.len };
-                count += 1;
-                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
-                count += 1;
-            }
-
-            for (vrs.cookie_jar.cookies.items) |cookie| {
-                vect[count] = .{ .base = "Set-Cookie: ".ptr, .len = "Set-Cookie: ".len };
-                count += 1;
-                // TODO remove this alloc
-                const cookie_str = allocPrint(vrs.alloc, "{}", .{cookie}) catch unreachable;
-                vect[count] = .{
-                    .base = cookie_str.ptr,
-                    .len = cookie_str.len,
-                };
-                count += 1;
-                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
-                count += 1;
-            }
-
-            stream.writevAll(vect[0..count]) catch return NetworkError.IOWriteFailure;
-        },
-        .buffer => unreachable,
-    }
-}
-
-pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
-    vrs.status = switch (scode) {
-        .multiple_choice,
-        .moved_permanently,
-        .found,
-        .see_other,
-        .not_modified,
-        .use_proxy,
-        .temporary_redirect,
-        .permanent_redirect,
-        => scode,
-        else => @compileError("redirect() can only be called with a 3xx redirection code"),
-    };
-    try vrs.sendHeaders();
-
-    var vect = [3]iovec_c{
-        .{ .base = "Location: ".ptr, .len = 10 },
-        .{ .base = loc.ptr, .len = loc.len },
-        .{ .base = "\r\n\r\n".ptr, .len = 4 },
-    };
-    vrs.writevAll(vect[0..]) catch return NetworkError.IOWriteFailure;
-}
-
-/// Helper function to return a default error page for a given http status code.
-pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
-    return Router.defaultResponse(code)(vrs);
-}
-
-/// This function may be removed in the future
-pub fn quickStart(vrs: *Frame) NetworkError!void {
-    if (vrs.status == null) vrs.status = .ok;
-    switch (vrs.downstream) {
-        .http, .zwsgi => |_| {
-            vrs.sendHeaders() catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-
-            vrs.writeAll("\r\n") catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-        },
-        else => unreachable,
-    }
 }
 
 test "Verse" {
