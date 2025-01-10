@@ -97,19 +97,19 @@ const Root = struct {
 
     const page_html =
         \\<!DOCTYPE html>
+        \\<html>
         \\<head>
-        \\<title>Verse User Data Example</title>
-        \\<style>
-        \\html {{ color-scheme: light dark; }}
-        \\body {{ width: 35em; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }}
-        \\</style>
+        \\  <title>Verse User Data Example</title>
+        \\  <style>
+        \\    html {{ color-scheme: light dark; }}
+        \\    body {{ width: 35em; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }}
+        \\  </style>
         \\</head>
         \\<body>
         \\<h1>Sometimes it's useful to accept user data.</h1>
         \\<p>
         \\{s}
         \\</p>
-        \\<p></p>
         \\</body>
         \\</html>
         \\
