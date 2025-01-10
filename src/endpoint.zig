@@ -47,16 +47,37 @@ pub fn Endpoints(endpoints: anytype) type {
     };
 }
 
-fn validateEndpoint(EP: anytype) void {
-    if (!@hasDecl(EP, "verse_name")) @compileError("Verse: provided endpoint is missing name decl.\n" ++
-        "Expected `pub const verse_name = .endpoint_name;` from: " ++ @typeName(EP));
+pub fn validateEndpoint(EP: anytype) void {
+    if (!@hasDecl(EP, "verse_name")) {
+        @compileError("Verse: provided endpoint is missing name decl.\n" ++
+            "Expected `pub const verse_name = .endpoint_name;` from: " ++ @typeName(EP));
+    }
+
+    if (@hasDecl(EP, "verse_endpoints")) {
+        if (!@hasDecl(EP.verse_endpoints, "Endpoints")) {
+            @compileError("the `verse_endpoints` decl is reserved for verse, and must " ++
+                "be a constructed \"Endpoint\" type");
+        }
+    }
+
+    if (@hasDecl(EP, "verse_routes")) {
+        inline for (EP.verse_routes, 0..) |route, i| {
+            if (@TypeOf(route) != Router.Match) {
+                @compileError("the `verse_routes` decl is reserved for a list of pre-constructed " ++
+                    "`Match` targets. " ++ @typeName(route) ++ " at position " ++ i ++ " is invalid.");
+            }
+        }
+    }
 }
 
 fn routeCount(endpoints: anytype) usize {
     var count: usize = 0;
+    if (endpoints.len == 0) @compileError("Zero is not a countable number");
     for (endpoints, 0..) |ep, i| {
         for (@typeInfo(ep).Struct.decls) |decl| {
-            if (eql(u8, "index", decl.name)) count += 1;
+            if (eql(u8, "index", decl.name) and @typeInfo(@TypeOf(ep.index)) == .Fn) {
+                count += 1;
+            }
         }
 
         if (@hasDecl(ep, "verse_routes")) for (ep.verse_routes) |route| {
@@ -71,10 +92,63 @@ fn routeCount(endpoints: anytype) usize {
         }
 
         if (i == 0 and ep.verse_name == .root) {
+            // .root is a special case endpoint that gets automagically
+            // flattened out
             return count + endpoints.len - 1;
         }
     }
     return count;
+}
+
+test routeCount {
+    comptime {
+        try std.testing.expectEqual(
+            0,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                },
+            }),
+        );
+        try std.testing.expectEqual(
+            1,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                    pub fn index() void {}
+                },
+            }),
+        );
+        try std.testing.expectEqual(
+            2,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                    const verse_endpoints = Endpoints(.{
+                        struct {
+                            pub const verse_name = .sub_testing;
+                            pub fn index() void {}
+                        },
+                    });
+                    pub fn index() void {}
+                },
+            }),
+        );
+        try std.testing.expectEqual(
+            3,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                    const verse_routes = .{
+                        Router.ROUTE("first", empty),
+                        Router.ROUTE("second", empty),
+                        Router.ROUTE("third", empty),
+                    };
+                    pub fn empty(_: *Frame) Router.Error!void {}
+                },
+            }),
+        );
+    }
 }
 
 fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
