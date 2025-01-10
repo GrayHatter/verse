@@ -301,7 +301,7 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
         switch (err) {
             error.NoSpaceLeft,
             error.OutOfMemory,
-            => @panic("OOM"),
+            => @panic("Verse default builder: Page hit unhandled OOM error."),
             error.BrokenPipe => log.warn("client disconnect", .{}),
             error.IOWriteFailure => log.err("generic write error", .{}),
             error.Unrouteable => {
