@@ -92,8 +92,7 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
 
 /// sendRawSlice will allow you to send data directly to the client. It will not
 /// verify the current state, and will allow you to inject data into the HTTP
-/// headers. If you only want to send response body data, call sendHeaders() to
-/// send all headers to the client.
+/// headers. If you only want to send response body data, use sendHTML instead.
 pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
     vrs.writeAll(slice) catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
