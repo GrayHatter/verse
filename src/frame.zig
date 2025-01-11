@@ -60,7 +60,7 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
 
     vrs.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => {},
+        else => unreachable,
     };
 
     try vrs.sendRawSlice("\r\n");
@@ -115,7 +115,7 @@ pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) Netw
 
     vrs.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => {},
+        else => unreachable,
     };
 
     try vrs.sendRawSlice("\r\n");
@@ -141,7 +141,7 @@ pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8)
 
     frame.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => {},
+        else => unreachable,
     };
 
     try frame.sendRawSlice("\r\n");
@@ -164,7 +164,7 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
 
     vrs.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => {},
+        else => unreachable,
     };
 
     var vect = [3]iovec_c{
