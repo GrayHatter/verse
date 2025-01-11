@@ -59,8 +59,8 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
     vrs.status = .ok;
 
     vrs.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => unreachable,
+        error.BrokenPipe => |e| return e,
+        else => return error.IOWriteFailure,
     };
 
     try vrs.sendRawSlice("\r\n");
@@ -86,7 +86,7 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
             };
             if (required > 2048) vrs.alloc.free(vecs);
         },
-        else => unreachable,
+        .buffer => @panic("not implemented"),
     }
 }
 
@@ -96,7 +96,7 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
 pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
     vrs.writeAll(slice) catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
-        else => unreachable,
+        else => return error.IOWriteFailure,
     };
 }
 
@@ -114,8 +114,8 @@ pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) Netw
     };
 
     vrs.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => unreachable,
+        error.BrokenPipe => |e| return e,
+        else => error.IOWriteFailure,
     };
 
     try vrs.sendRawSlice("\r\n");
@@ -128,7 +128,7 @@ pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) Netw
     };
     vrs.writeAll(data) catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
-        else => unreachable,
+        else => error.IOWriteFailure,
     };
 }
 
@@ -140,8 +140,8 @@ pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8)
     };
 
     frame.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => unreachable,
+        error.BrokenPipe => |e| return e,
+        else => return error.IOWriteFailure,
     };
 
     try frame.sendRawSlice("\r\n");
@@ -163,8 +163,8 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
     };
 
     vrs.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe, error.IOWriteFailure => |e| return e,
-        else => unreachable,
+        error.BrokenPipe => |e| return e,
+        else => return error.IOWriteFailure,
     };
 
     var vect = [3]iovec_c{
@@ -174,7 +174,7 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
     };
     vrs.writevAll(vect[0..]) catch |err| switch (err) {
         error.BrokenPipe => return error.BrokenPipe,
-        else => return NetworkError.IOWriteFailure,
+        else => return error.IOWriteFailure,
     };
 }
 
@@ -264,7 +264,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
                 vect[count] = .{ .base = "Set-Cookie: ".ptr, .len = "Set-Cookie: ".len };
                 count += 1;
                 // TODO remove this alloc
-                const cookie_str = allocPrint(vrs.alloc, "{}", .{cookie}) catch unreachable;
+                const cookie_str = allocPrint(vrs.alloc, "{}", .{cookie}) catch @panic("OOM");
                 vect[count] = .{
                     .base = cookie_str.ptr,
                     .len = cookie_str.len,
@@ -274,9 +274,9 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
                 count += 1;
             }
 
-            stream.writevAll(vect[0..count]) catch return NetworkError.IOWriteFailure;
+            stream.writevAll(vect[0..count]) catch return error.IOWriteFailure;
         },
-        .buffer => unreachable,
+        .buffer => @panic("not implemented"),
     }
 
     vrs.wrote_headers = true;
@@ -307,15 +307,6 @@ const VarPair = struct {
 
 // The remaining functions are internal
 
-fn writeChunk(vrs: Frame, data: []const u8) !void {
-    comptime unreachable;
-    var size: [19]u8 = undefined;
-    const chunk = try bufPrint(&size, "{x}\r\n", .{data.len});
-    try vrs.writeAll(chunk);
-    try vrs.writeAll(data);
-    try vrs.writeAll("\r\n");
-}
-
 fn writeAll(vrs: Frame, data: []const u8) !void {
     var index: usize = 0;
     while (index < data.len) {
@@ -326,7 +317,7 @@ fn writeAll(vrs: Frame, data: []const u8) !void {
 fn writevAll(vrs: Frame, vect: []iovec_c) !void {
     switch (vrs.downstream) {
         .zwsgi, .http => |stream| try stream.writevAll(vect),
-        else => unreachable,
+        .buffer => @panic("not implemented"),
     }
 }
 
@@ -343,7 +334,7 @@ fn flush(vrs: Frame) !void {
     switch (vrs.downstream) {
         .buffer => |*w| try w.flush(),
         .http => |*h| h.flush(),
-        else => {},
+        .zwsgi => {},
     }
 }
 
