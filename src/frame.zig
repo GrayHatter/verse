@@ -27,8 +27,13 @@ auth_provider: Auth.Provider,
 /// invalid. Depending on the need for any given use, users should always verify
 /// the validity in addition to the existence of this user field.
 user: ?Auth.User = null,
-/// The RouteData API is currently unstable, use with caution
-route_data: RouteData,
+
+/// The ResponseData API is currently unstable, and may change in the future.
+/// response_data saving any type to be fetched at any time later in the
+/// request. An example use case is when it makes more sense to generate some
+/// page data at a different phase, e.g. when constructing the route, and then
+/// reading it later. Use with caution, as may leak if misused.
+response_data: ResponseData,
 
 // Raw move from response.zig
 
@@ -48,30 +53,6 @@ pub const SendError = error{
     ResponseClosed,
     UnknownStatus,
 } || NetworkError;
-
-/// Warning leaks like a sieve while I ponder the API
-pub const RouteData = struct {
-    items: std.ArrayList(Pair),
-
-    pub const Pair = struct {
-        name: []const u8,
-        data: *const anyopaque,
-    };
-
-    pub fn add(self: *RouteData, comptime name: []const u8, data: *const anyopaque) !void {
-        for (self.items.items) |each| {
-            if (eql(u8, each.name, name)) return error.Exists;
-        }
-
-        try self.items.append(.{ .name = name, .data = data });
-    }
-
-    pub fn get(self: RouteData, comptime name: []const u8, T: type) !T {
-        for (self.items.items) |each| {
-            if (eql(u8, each.name, name)) return @as(T, @ptrCast(@alignCast(each.data)));
-        } else return error.NotFound;
-    }
-};
 
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
@@ -160,7 +141,10 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
         .{ .base = loc.ptr, .len = loc.len },
         .{ .base = "\r\n\r\n".ptr, .len = 4 },
     };
-    vrs.writevAll(vect[0..]) catch return NetworkError.IOWriteFailure;
+    vrs.writevAll(vect[0..]) catch |err| switch (err) {
+        error.BrokenPipe => return error.BrokenPipe,
+        else => return NetworkError.IOWriteFailure,
+    };
 }
 
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
@@ -176,7 +160,7 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
         .headers = Headers.init(a),
         .user = auth.authenticate(&req.headers) catch null,
         .cookie_jar = try Cookies.Jar.init(a),
-        .route_data = .{ .items = std.ArrayList(RouteData.Pair).init(a) },
+        .response_data = ResponseData.init(a),
     };
 }
 
@@ -401,6 +385,7 @@ const Headers = @import("headers.zig");
 const Auth = @import("auth.zig");
 const Cookies = @import("cookies.zig");
 const ContentType = @import("content-type.zig");
+const ResponseData = @import("response-data.zig");
 
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;
