@@ -301,16 +301,6 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
 
 /// Helper function to return a default error page for a given http status code.
 pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
-    vrs.status = code;
-
-    vrs.sendHeaders() catch |err| {
-        if (err != error.HeadersFinished) {
-            return @errorCast(err);
-        }
-    };
-
-    try vrs.sendRawSlice("\r\n");
-
     return Router.defaultResponse(code)(vrs);
 }
 
