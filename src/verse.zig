@@ -29,4 +29,5 @@ pub const auth = @import("auth.zig");
 
 test "verse" {
     @import("std").testing.refAllDecls(@This());
+    @import("std").testing.refAllDecls(Frame);
 }

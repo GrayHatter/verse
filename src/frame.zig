@@ -100,9 +100,11 @@ pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
     };
 }
 
+pub const NetworkJsonError = NetworkError || error{OutOfMemory};
+
 /// Takes a any object, that can be represented by json, converts it into a
 /// json string, and sends to the client.
-pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) NetworkError!void {
+pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) NetworkJsonError!void {
     if (code == .no_content) {
         @compileError("Sending JSON is not supported with status code no content");
     }
@@ -115,7 +117,7 @@ pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) Netw
 
     vrs.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
-        else => error.IOWriteFailure,
+        else => return error.IOWriteFailure,
     };
 
     try vrs.sendRawSlice("\r\n");
@@ -124,11 +126,11 @@ pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) Netw
         .emit_null_optional_fields = false,
     }) catch |err| {
         log.err("Error trying to print json {}", .{err});
-        return error.Unknown;
+        return error.OutOfMemory;
     };
     vrs.writeAll(data) catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
-        else => error.IOWriteFailure,
+        else => return error.IOWriteFailure,
     };
 }
 
