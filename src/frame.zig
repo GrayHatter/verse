@@ -210,7 +210,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
             count += 1;
 
             // Default headers
-            const s_name = "Server: verse/0.0.0-dev\r\n";
+            const s_name = "Server: verse/" ++ build_version ++ "\r\n";
             vect[count] = .{ .base = s_name.ptr, .len = s_name.len };
             count += 1;
 
@@ -398,3 +398,6 @@ const ResponseData = @import("response-data.zig");
 
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;
+
+const build_options = @import("build_options");
+const build_version = build_options.version;

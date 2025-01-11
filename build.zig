@@ -3,17 +3,25 @@ const std = @import("std");
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const ver = version(b);
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", ver);
+
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),
         .target = target,
         .optimize = optimize,
     });
 
+    verse_lib.addOptions("build_options", options);
+
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/verse.zig"),
         .target = target,
         .optimize = optimize,
     });
+    lib_unit_tests.root_module.addOptions("build_options", options);
 
     var compiler = Compiler.init(b);
 
@@ -184,3 +192,34 @@ pub const Compiler = struct {
         }
     }
 };
+
+fn version(b: *std.Build) []const u8 {
+    if (!std.process.can_spawn) {
+        std.debug.print("Can't get a version number\n", .{});
+        std.process.exit(1);
+    }
+
+    var code: u8 = undefined;
+    const git_wide = b.runAllowFail(
+        &[_][]const u8{ "git", "describe", "--dirty", "--always" },
+        &code,
+        .Ignore,
+    ) catch {
+        std.process.exit(2);
+    };
+
+    var git = std.mem.trim(u8, git_wide, " \r\n");
+    if (git[0] == 'v') git = git[1..];
+    //std.debug.print("version {s}\n", .{git});
+
+    // semver is really dumb, so we need to increment this internally
+    var ver = std.SemanticVersion.parse(git) catch return "v0.0.0-dev";
+    if (ver.pre != null) {
+        ver.minor += 1;
+        ver.pre = std.fmt.allocPrint(b.allocator, "pre-{s}", .{ver.pre.?}) catch @panic("OOM");
+    }
+
+    const final = std.fmt.allocPrint(b.allocator, "{}", .{ver}) catch @panic("OOM");
+    //std.debug.print("version {s}\n", .{final});
+    return final;
+}
