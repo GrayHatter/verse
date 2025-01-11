@@ -102,7 +102,7 @@ pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
 
 /// Takes a any object, that can be represented by json, converts it into a
 /// json string, and sends to the client.
-pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) NetworkError!void {
+pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) NetworkError!void {
     if (code == .no_content) {
         @compileError("Sending JSON is not supported with status code no content");
     }
