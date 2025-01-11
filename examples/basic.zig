@@ -28,5 +28,5 @@ fn route(frame: *verse.Frame) !BuildFn {
 }
 
 fn index(frame: *verse.Frame) Router.Error!void {
-    try frame.sendHTML("hello world", .ok);
+    try frame.sendHTML(.ok, "hello world");
 }

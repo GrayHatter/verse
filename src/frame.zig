@@ -152,7 +152,7 @@ pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) Netw
     };
 }
 
-pub fn sendHTML(frame: *Frame, html: []const u8, comptime code: std.http.Status) NetworkError!void {
+pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
     frame.status = code;
     frame.content_type = .{
         .base = .{ .text = .html },

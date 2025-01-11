@@ -26,7 +26,7 @@ const Root = struct {
                 // If post_data.validate is unable to translate the received
                 // user data into the given type, it will return an error.
                 page = try print(&buffer, page_html, .{"Invalid data submitted!"});
-                return try frame.sendHTML(page, .ok);
+                return try frame.sendHTML(.ok, page);
             };
 
             // Because neither fields in RequiredData is optional; they
@@ -35,10 +35,10 @@ const Root = struct {
             // still required.
             if (required_data.username.len == 0) {
                 page = try print(&buffer, page_html, .{"Username must not be empty!"});
-                return try frame.sendHTML(page, .ok);
+                return try frame.sendHTML(.ok, page);
             } else if (required_data.email.len == 0) {
                 page = try print(&buffer, page_html, .{"email must not be empty!"});
-                return try frame.sendHTML(page, .ok);
+                return try frame.sendHTML(.ok, page);
             }
 
             // As with all user data, you must be **extremely** careful using
@@ -74,7 +74,7 @@ const Root = struct {
             });
         }
 
-        try frame.sendHTML(page, .ok);
+        try frame.sendHTML(.ok, page);
     }
 
     pub fn index(frame: *verse.Frame) !void {
@@ -90,7 +90,7 @@ const Root = struct {
 
         const page = try print(&buffer, page_html, .{form});
 
-        try frame.sendHTML(page, .ok);
+        try frame.sendHTML(.ok, page);
     }
 
     const page_html =

@@ -19,5 +19,5 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
         error.BrokenPipe, error.IOWriteFailure => |e| return e,
         else => unreachable,
     };
-    try frame.sendHTML(fdata, .ok);
+    try frame.sendHTML(.ok, fdata);
 }
