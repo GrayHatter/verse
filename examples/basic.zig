@@ -28,6 +28,5 @@ fn route(frame: *verse.Frame) !BuildFn {
 }
 
 fn index(frame: *verse.Frame) Router.Error!void {
-    try frame.quickStart();
-    try frame.sendRawSlice("hello world");
+    try frame.sendHTML(.ok, "hello world");
 }

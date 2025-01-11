@@ -45,19 +45,25 @@ cookie_jar: Cookies.Jar,
 content_type: ?ContentType = ContentType.default,
 status: ?std.http.Status = null,
 
+wrote_headers: bool = false,
+
 const Frame = @This();
 
 pub const SendError = error{
-    WrongPhase,
     HeadersFinished,
-    ResponseClosed,
-    UnknownStatus,
 } || NetworkError;
 
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
 pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
-    try vrs.quickStart();
+    vrs.status = .ok;
+
+    vrs.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        else => {},
+    };
+
+    try vrs.sendRawSlice("\r\n");
 
     switch (vrs.downstream) {
         .http, .zwsgi => |stream| {
@@ -86,8 +92,8 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
 
 /// sendRawSlice will allow you to send data directly to the client. It will not
 /// verify the current state, and will allow you to inject data into the HTTP
-/// headers. If you only want to send response body data, call quickStart() to
-/// send all headers to the client
+/// headers. If you only want to send response body data, call sendHeaders() to
+/// send all headers to the client.
 pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
     vrs.writeAll(slice) catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
@@ -97,7 +103,7 @@ pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
 
 /// Takes a any object, that can be represented by json, converts it into a
 /// json string, and sends to the client.
-pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) !void {
+pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) NetworkError!void {
     if (code == .no_content) {
         @compileError("Sending JSON is not supported with status code no content");
     }
@@ -108,7 +114,13 @@ pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) !voi
         .parameter = .@"utf-8",
     };
 
-    try vrs.quickStart();
+    vrs.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        else => {},
+    };
+
+    try vrs.sendRawSlice("\r\n");
+
     const data = std.json.stringifyAlloc(vrs.alloc, json, .{
         .emit_null_optional_fields = false,
     }) catch |err| {
@@ -119,6 +131,22 @@ pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) !voi
         error.BrokenPipe => |e| return e,
         else => unreachable,
     };
+}
+
+pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
+    frame.status = code;
+    frame.content_type = .{
+        .base = .{ .text = .html },
+        .parameter = .@"utf-8",
+    };
+
+    frame.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        else => {},
+    };
+
+    try frame.sendRawSlice("\r\n");
+    try frame.sendRawSlice(html);
 }
 
 pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
@@ -134,7 +162,11 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
         => scode,
         else => @compileError("redirect() can only be called with a 3xx redirection code"),
     };
-    try vrs.sendHeaders();
+
+    vrs.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        else => {},
+    };
 
     var vect = [3]iovec_c{
         .{ .base = "Location: ".ptr, .len = 10 },
@@ -164,7 +196,11 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     };
 }
 
-pub fn sendHeaders(vrs: *Frame) NetworkError!void {
+pub fn sendHeaders(vrs: *Frame) SendError!void {
+    if (vrs.wrote_headers) {
+        return SendError.HeadersFinished;
+    }
+
     switch (vrs.downstream) {
         .http, .zwsgi => |stream| {
             var vect: [HEADER_VEC_COUNT]iovec_c = undefined;
@@ -243,30 +279,13 @@ pub fn sendHeaders(vrs: *Frame) NetworkError!void {
         },
         .buffer => unreachable,
     }
+
+    vrs.wrote_headers = true;
 }
 
 /// Helper function to return a default error page for a given http status code.
 pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
     return Router.defaultResponse(code)(vrs);
-}
-
-/// This function may be removed in the future
-pub fn quickStart(vrs: *Frame) NetworkError!void {
-    if (vrs.status == null) vrs.status = .ok;
-    switch (vrs.downstream) {
-        .http, .zwsgi => |_| {
-            vrs.sendHeaders() catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-
-            vrs.writeAll("\r\n") catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-        },
-        else => unreachable,
-    }
 }
 
 pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {
