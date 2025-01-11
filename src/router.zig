@@ -212,29 +212,22 @@ pub fn defaultResponse(comptime code: std.http.Status) BuildFn {
 }
 
 fn notFound(frame: *Frame) Error!void {
-    frame.status = .not_found;
     const E404 = @embedFile("fallback_html/404.html");
-    try frame.quickStart();
     return frame.sendRawSlice(E404);
 }
 
 fn internalServerError(vrs: *Frame) Error!void {
-    vrs.status = .internal_server_error;
     const E500 = @embedFile("fallback_html/500.html");
-    try vrs.quickStart();
     return vrs.sendRawSlice(E500);
 }
 
 fn methodNotAllowed(frame: *Frame) Error!void {
-    frame.status = .method_not_allowed;
     const E405 = @embedFile("fallback_html/405.html");
-    try frame.quickStart();
     return frame.sendRawSlice(E405);
 }
 
 fn default(frame: *Frame) Error!void {
     const index = @embedFile("fallback_html/index.html");
-    try frame.quickStart();
     return frame.sendRawSlice(index);
 }
 

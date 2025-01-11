@@ -15,6 +15,10 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
     const static = std.fs.cwd().openDir("static", .{}) catch return error.Unrouteable;
     const fdata = static.readFileAlloc(frame.alloc, fname, 0xFFFFFF) catch return error.Unknown;
 
-    try frame.quickStart();
+    frame.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        else => unreachable,
+    };
+    try frame.sendRawSlice("\r\n");
     try frame.sendRawSlice(fdata);
 }
