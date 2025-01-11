@@ -267,7 +267,7 @@ pub fn router(frame: *Frame, comptime routes: []const Match) RoutingError!BuildF
                             .route => |route| {
                                 return route(frame) catch |err| switch (err) {
                                     error.Unrouteable => return notFound,
-                                    else => unreachable,
+                                    else => return err,
                                 };
                             },
                             inline .simple => |simple| {
@@ -308,13 +308,11 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
                 }
                 @panic("Unroutable");
             },
-            error.NotImplemented,
-            error.Unknown,
-            => unreachable,
             // This is an implementation error by the page. So we crash. If
             // you've reached this, something is wrong with your site.
-            error.InvalidURI,
-            => log.err("Unexpected error '{}'\n", .{err}),
+            error.NotImplemented => @panic("Not Implemented Error"),
+            error.Unknown => @panic("Unreachable Error"),
+            error.InvalidURI => log.err("Unexpected error '{}'\n", .{err}),
             error.Abusive,
             error.Unauthenticated,
             error.BadData,
