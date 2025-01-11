@@ -222,7 +222,7 @@ pub fn RequestData(comptime T: type) type {
                 .Float => try parseFloat(FieldType, (try valid.require(name)).value),
                 .Enum => return stringToEnum(FieldType, (try valid.require(name)).value) orelse error.InvalidEnumMember,
                 .Pointer => (try valid.require(name)).value,
-                else => comptime unreachable,
+                else => comptime unreachable, // Not yet implemented
             };
         }
 
@@ -262,9 +262,9 @@ pub fn RequestData(comptime T: type) type {
                             }
                             break :arr map;
                         },
-                        else => comptime unreachable,
+                        else => comptime unreachable, // Not yet implemented
                     },
-                    else => unreachable,
+                    else => comptime unreachable, // Not yet implemented
                 };
             }
             return req;
@@ -403,7 +403,7 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]Da
         .@"x-www-form-urlencoded" => try normWwwFormUrlEncoded(a, data),
         // Git just uses the raw data instead, no need to preprocess
         .@"x-git-upload-pack-request" => &[0]DataItem{},
-        .@"octet-stream" => unreachable, // Not implemented
+        .@"octet-stream" => @panic("not implemented"),
         .json => try normJson(a, data),
     };
 }
