@@ -152,6 +152,22 @@ pub fn sendJSON(vrs: *Frame, json: anytype, comptime code: std.http.Status) Netw
     };
 }
 
+pub fn sendHTML(frame: *Frame, html: []const u8, comptime code: std.http.Status) NetworkError!void {
+    frame.status = code;
+    frame.content_type = .{
+        .base = .{ .text = .html },
+        .parameter = .@"utf-8",
+    };
+
+    frame.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        else => {},
+    };
+
+    try frame.sendRawSlice("\r\n");
+    try frame.sendRawSlice(html);
+}
+
 pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
     vrs.status = switch (scode) {
         .multiple_choice,
@@ -296,25 +312,6 @@ pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
     try vrs.sendRawSlice("\r\n");
 
     return Router.defaultResponse(code)(vrs);
-}
-
-/// This function may be removed in the future
-pub fn quickStart(vrs: *Frame) NetworkError!void {
-    if (vrs.status == null) vrs.status = .ok;
-    switch (vrs.downstream) {
-        .http, .zwsgi => |_| {
-            vrs.sendHeaders() catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-
-            vrs.writeAll("\r\n") catch |err| switch (err) {
-                error.BrokenPipe => |e| return e,
-                else => unreachable,
-            };
-        },
-        else => unreachable,
-    }
 }
 
 pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {

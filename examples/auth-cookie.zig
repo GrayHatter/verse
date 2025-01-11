@@ -97,8 +97,7 @@ fn index(frame: *Frame) Router.Error!void {
         username,
     });
 
-    try frame.quickStart();
-    try frame.sendRawSlice(page);
+    try frame.sendHTML(page, .ok);
 }
 
 /// Sample "login" page. Just visiting `/create` will generate and give a valid

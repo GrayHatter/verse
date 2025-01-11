@@ -16,13 +16,11 @@ pub const verse_endpoints = verse.Endpoints(.{
 });
 
 pub fn index(frame: *Frame) !void {
-    try frame.quickStart();
-    try frame.sendRawSlice("hello world");
+    try frame.sendHTML("hello world", .ok);
 }
 
 fn hi(frame: *Frame) !void {
-    try frame.quickStart();
-    try frame.sendRawSlice("hi, mom!");
+    try frame.sendHTML("hi, mom!", .ok);
 }
 
 const verse = @import("verse");

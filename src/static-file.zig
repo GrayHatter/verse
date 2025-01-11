@@ -19,6 +19,5 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
         error.BrokenPipe, error.IOWriteFailure => |e| return e,
         else => unreachable,
     };
-    try frame.sendRawSlice("\r\n");
-    try frame.sendRawSlice(fdata);
+    try frame.sendHTML(fdata, .ok);
 }

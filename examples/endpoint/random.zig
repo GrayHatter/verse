@@ -9,9 +9,8 @@ pub const verse_routes = [_]Router.Match{
 };
 
 fn number(frame: *Frame) !void {
-    try frame.quickStart();
     var buffer: [0xff]u8 = undefined;
-    try frame.sendRawSlice(try std.fmt.bufPrint(&buffer, "{}", .{random.int(usize)}));
+    try frame.sendHTML(try std.fmt.bufPrint(&buffer, "{}", .{random.int(usize)}), .ok);
 }
 
 const quotes = enum {
@@ -26,11 +25,9 @@ const quotes = enum {
 };
 
 fn quote(frame: *Frame) !void {
-    try frame.quickStart();
+    var buffer: [0xff]u8 = undefined;
     const rand_quote = @tagName(random.enumValue(quotes));
-    try frame.sendRawSlice("<p>");
-    try frame.sendRawSlice(rand_quote);
-    try frame.sendRawSlice("</p>");
+    try frame.sendHTML(try std.fmt.bufPrint(&buffer, "<p>{s}</p>", .{rand_quote}), .ok);
 }
 
 const std = @import("std");

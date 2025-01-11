@@ -48,6 +48,5 @@ fn index(frame: *verse.Frame) Router.Error!void {
         .name = "best-flavor",
         .value = random_cookie,
     });
-    try frame.quickStart();
-    try frame.sendRawSlice(found);
+    try frame.sendHTML(found, .ok);
 }

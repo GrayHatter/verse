@@ -18,7 +18,6 @@ const Root = struct {
     };
 
     fn post(frame: *verse.Frame) verse.Router.Error!void {
-        try frame.quickStart();
         var buffer: [0xffffff]u8 = undefined;
         var page = try print(&buffer, page_html, .{"page never generated"});
 
@@ -27,7 +26,7 @@ const Root = struct {
                 // If post_data.validate is unable to translate the received
                 // user data into the given type, it will return an error.
                 page = try print(&buffer, page_html, .{"Invalid data submitted!"});
-                return try frame.sendRawSlice(page);
+                return try frame.sendHTML(page, .ok);
             };
 
             // Because neither fields in RequiredData is optional; they
@@ -36,10 +35,10 @@ const Root = struct {
             // still required.
             if (required_data.username.len == 0) {
                 page = try print(&buffer, page_html, .{"Username must not be empty!"});
-                return try frame.sendRawSlice(page);
+                return try frame.sendHTML(page, .ok);
             } else if (required_data.email.len == 0) {
                 page = try print(&buffer, page_html, .{"email must not be empty!"});
-                return try frame.sendRawSlice(page);
+                return try frame.sendHTML(page, .ok);
             }
 
             // As with all user data, you must be **extremely** careful using
@@ -75,7 +74,7 @@ const Root = struct {
             });
         }
 
-        try frame.sendRawSlice(page);
+        try frame.sendHTML(page, .ok);
     }
 
     pub fn index(frame: *verse.Frame) !void {
@@ -91,8 +90,7 @@ const Root = struct {
 
         const page = try print(&buffer, page_html, .{form});
 
-        try frame.quickStart();
-        try frame.sendRawSlice(page);
+        try frame.sendHTML(page, .ok);
     }
 
     const page_html =
