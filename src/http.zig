@@ -128,7 +128,7 @@ const VServer = @import("server.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Request = @import("request.zig");
-const RequestData = @import("request_data.zig");
+const RequestData = @import("request-data.zig");
 
 const std = @import("std");
 const net = std.net;

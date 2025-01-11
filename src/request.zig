@@ -1,6 +1,6 @@
 const Request = @This();
 
-pub const Data = @import("request_data.zig");
+pub const Data = @import("request-data.zig");
 
 /// Unstable API; likely to exist in some form, but might be changed
 remote_addr: RemoteAddr,

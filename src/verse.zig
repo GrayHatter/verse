@@ -1,6 +1,6 @@
 //! Verse: The framework.
 //!
-pub const RequestData = @import("request_data.zig");
+pub const RequestData = @import("request-data.zig");
 const cookies = @import("cookies.zig");
 pub const template = @import("template.zig");
 const errors = @import("errors.zig");
