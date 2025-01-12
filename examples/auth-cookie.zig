@@ -19,8 +19,8 @@ const UserFinder = struct {
 
     /// The unique user identifier is named `username` here. But if usernames
     /// are mutable, it may be better to use an identifier that doesn't change
-    /// for the entire life of the user. A database unique primary key in
-    /// another good option for the user identifier.
+    /// for the entire life of the user. A database unique primary key is
+    /// another common option for the user identifier.
     pub fn lookupUser(_: *anyopaque, username: []const u8) !verse.auth.User {
         // Extra care should be taken to ensure a user lookup function doesn't
         // leak any information about acceptable users. In this case because
