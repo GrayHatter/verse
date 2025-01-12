@@ -201,12 +201,17 @@ fn version(b: *std.Build) []const u8 {
 
     var code: u8 = undefined;
     const git_wide = b.runAllowFail(
-        &[_][]const u8{ "git", "describe", "--dirty", "--always" },
+        &[_][]const u8{
+            "git",
+            "-C",
+            b.build_root.path orelse ".",
+            "describe",
+            "--dirty",
+            "--always",
+        },
         &code,
         .Ignore,
-    ) catch {
-        std.process.exit(2);
-    };
+    ) catch @panic("git is having a bad day");
 
     var git = std.mem.trim(u8, git_wide, " \r\n");
     if (git[0] == 'v') git = git[1..];
