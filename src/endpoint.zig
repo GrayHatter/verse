@@ -4,10 +4,7 @@ pub const Target = struct {
     name: []const u8,
 };
 
-pub const Options = struct {
-    mode: Server.RunMode = .{ .http = .{} },
-    auth: Auth.Provider = Auth.InvalidAuth.provider(),
-};
+pub const Options = Server.Options;
 
 /// `endpoints` can be a tuple of any number of supported containers. The only
 /// supported container is a struct that includes the minimum set of definitions
@@ -43,9 +40,7 @@ pub fn Endpoints(endpoints: anytype) type {
         }
 
         pub fn serve(self: *Self, options: Options) !void {
-            var server = try Server.init(self.alloc, router, .{
-                .mode = options.mode,
-            });
+            var server = try Server.init(self.alloc, router, options);
             try server.serve();
         }
     };
