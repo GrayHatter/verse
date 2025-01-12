@@ -26,6 +26,15 @@ pub fn Endpoints(endpoints: anytype) type {
         pub const Endpoints = endpoints;
 
         pub const routes = collectRoutes(endpoints);
+        pub const router = brk: {
+            var rtr = Router.Routes(&routes);
+            // TODO expand route constructor to find the correct builder for
+            // every route
+            if (@hasDecl(endpoints[0], "verse_builder")) {
+                rtr.builderfn = endpoints[0].verse_builder;
+            }
+            break :brk rtr;
+        };
 
         pub fn init(a: Allocator) Self {
             return .{
@@ -34,7 +43,7 @@ pub fn Endpoints(endpoints: anytype) type {
         }
 
         pub fn serve(self: *Self, options: Options) !void {
-            var server = try Server.init(self.alloc, Router.Routes(&routes), .{
+            var server = try Server.init(self.alloc, router, .{
                 .mode = options.mode,
             });
             try server.serve();
@@ -63,21 +72,27 @@ pub fn validateEndpoint(EP: anytype) void {
             }
         }
     }
+
+    if (@hasDecl(EP, "verse_builder")) {
+        if (@TypeOf(EP.verse_builder) != Router.BuilderFn) {
+            // TODO support `fn ...` in addition to `*const fn ...`
+            @compileError("The `verse_builder` decl must be a Router.BuilderFn. Instead it was " ++
+                @typeName(@TypeOf(EP.verse_builder)));
+        }
+    }
 }
 
 fn routeCount(endpoints: anytype) usize {
     var count: usize = 0;
     if (endpoints.len == 0) @compileError("Zero is not a countable number");
     for (endpoints, 0..) |ep, i| {
-        for (@typeInfo(ep).Struct.decls) |decl| {
-            if (eql(u8, "index", decl.name) and @typeInfo(@TypeOf(ep.index)) == .Fn) {
-                count += 1;
-            }
+        if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .Fn) {
+            count += 1;
         }
 
         if (@hasDecl(ep, "verse_routes")) for (ep.verse_routes) |route| {
             if (route.name.len == 0) {
-                @compileError("route name omitted for: " ++ @typeName(ep) ++ ". To support a directory URI, define an index() instead");
+                @compileError("Empty route name for: " ++ @typeName(ep) ++ ". To support a directory URI, define an index() instead");
             }
             count += 1;
         };
@@ -167,11 +182,9 @@ fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
 fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
     var match: [routeCount(.{EP})]Router.Match = undefined;
     var idx: usize = 0;
-    for (@typeInfo(EP).Struct.decls) |decl| {
-        if (eql(u8, "index", decl.name)) {
-            match[idx] = Router.ANY("", EP.index);
-            idx += 1;
-        }
+    if (@hasDecl(EP, "index")) {
+        match[idx] = Router.ALL("", EP.index);
+        idx += 1;
     }
 
     if (@hasDecl(EP, "verse_routes")) for (EP.verse_routes) |route| {
@@ -183,6 +196,8 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
         match[idx] = Router.ROUTE(@tagName(endpoint.verse_name), &EP.verse_endpoints.routes);
         idx += 1;
     };
+
+    if (idx == 0) @compileError("Unable to build routes for " ++ @typeName(EP) ++ " No valid routes found");
 
     return match;
 }
