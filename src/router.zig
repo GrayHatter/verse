@@ -1,6 +1,6 @@
 routefn: RouteFn,
-builderfn: BuilderFn = defaultBuilder,
-routerfn: RouterFn = defaultRouter,
+builderfn: BuilderFn,
+routerfn: RouterFn,
 
 /// TODO document
 const Router = @This();
@@ -81,8 +81,19 @@ pub const Target = union(enum) {
     simple: []const Match,
 };
 
-/// Translation function to convert a tuple of Match objects into
-pub fn ROUTER() void {}
+/// Builds a default router given an array of matches.
+pub fn Routes(comptime routes: []const Match) Router {
+    const routefn = struct {
+        pub fn r(f: *Frame) RoutingError!BuildFn {
+            return router(f, routes);
+        }
+    };
+    return .{
+        .routefn = routefn.r,
+        .builderfn = defaultBuilder,
+        .routerfn = defaultRouter,
+    };
+}
 
 /// Default route building helper.
 pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
@@ -377,9 +388,7 @@ fn defaultRouterHtml(frame: *Frame, routefn: RouteFn) Error!void {
     return internalServerError;
 }
 
-pub fn testingRouter(frame: *Frame) RoutingError!BuildFn {
-    return router(frame, &root);
-}
+pub const TestingRouter: Router = Routes(&root);
 
 test "uri" {
     const uri_file = "/root/first/second/third";

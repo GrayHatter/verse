@@ -22,12 +22,12 @@ fn index(frame: *Frame) !void {
     try frame.sendPage(&page);
 }
 
-const routes = []Match{
+const routes = Routes(&[_]Match{
     GET("index.html", index),
-};
+});
 
 pub fn main() !void {
-    var srv = Server.init(default_allocator, .{ .mode = .{ .zwsgi = .{} });
+    var srv = Server.init(default_allocator, routes, .{ .mode = .{ .zwsgi = .{} });
     srv.serve() catch |err| switch (err) {
         else => std.debug.print("Server Error: {}\n", .{err});
     };

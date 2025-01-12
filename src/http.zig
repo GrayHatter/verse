@@ -19,10 +19,10 @@ pub const Options = struct {
     port: u16 = 8080,
 };
 
-pub fn init(a: Allocator, opts: Options, sopts: VServer.Options) !HTTP {
+pub fn init(a: Allocator, router: Router, opts: Options, sopts: VServer.Options) !HTTP {
     return .{
         .alloc = a,
-        .router = sopts.router,
+        .router = router,
         .auth = sopts.auth,
         .listen_addr = try std.net.Address.parseIp(opts.host, opts.port),
     };
@@ -103,7 +103,8 @@ fn threadFn(server: *HTTP) void {
 
 test HTTP {
     const a = std.testing.allocator;
-    var server = try init(a, .{ .port = 9345 }, .{ .router = .{ .routefn = Router.testingRouter } });
+
+    var server = try init(a, Router.TestingRouter, .{ .port = 9345 }, .{});
     var thread = try std.Thread.spawn(.{}, threadFn, .{&server});
 
     var client = std.http.Client{ .allocator = a };

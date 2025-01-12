@@ -15,11 +15,11 @@ pub const Options = struct {
     chmod: ?std.posix.mode_t = null,
 };
 
-pub fn init(a: Allocator, opts: Options, sopts: Server.Options) zWSGI {
+pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) zWSGI {
     return .{
         .alloc = a,
         .unix_file = opts.file,
-        .router = sopts.router,
+        .router = router,
         .auth = sopts.auth,
         .options = opts,
     };
@@ -256,13 +256,9 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
 test init {
     const a = std.testing.allocator;
 
-    const R = struct {
-        fn route(frame: *Frame) Router.RoutingError!Router.BuildFn {
-            return Router.router(frame, &.{});
-        }
-    };
+    const router = Router.Routes(&.{});
 
-    _ = init(a, .{}, .{ .router = .{ .routefn = R.route } });
+    _ = init(a, router, .{}, .{});
 }
 
 const std = @import("std");

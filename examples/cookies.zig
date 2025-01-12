@@ -8,28 +8,23 @@ const Cookie = verse.Cookie;
 var Random = std.Random.DefaultPrng.init(1337);
 var random = Random.random();
 
-const routes = [_]Router.Match{
+const routes = Router.Routes(&[_]Router.Match{
     Router.GET("", index),
-};
+});
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var server = try verse.Server.init(alloc, .{
+    var server = try verse.Server.init(alloc, routes, .{
         .mode = .{ .http = .{ .port = 8081 } },
-        .router = .{ .routefn = route },
     });
 
     server.serve() catch |err| {
         std.debug.print("error: {any}", .{err});
         std.posix.exit(1);
     };
-}
-
-fn route(frame: *verse.Frame) !BuildFn {
-    return Router.router(frame, &routes);
 }
 
 fn index(frame: *verse.Frame) Router.Error!void {

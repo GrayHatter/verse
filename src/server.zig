@@ -24,17 +24,16 @@ pub const Interface = union(RunModes) {
 
 pub const Options = struct {
     mode: RunMode = .{ .http = .{} },
-    router: Router,
     auth: Auth.Provider = Auth.InvalidAuth.provider(),
 };
 
-pub fn init(a: Allocator, opts: Options) !Server {
+pub fn init(a: Allocator, router: Router, opts: Options) !Server {
     return .{
         .alloc = a,
-        .router = opts.router,
+        .router = router,
         .interface = switch (opts.mode) {
-            .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, z, opts) },
-            .http => |h| .{ .http = try Http.init(a, h, opts) },
+            .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, router, z, opts) },
+            .http => |h| .{ .http = try Http.init(a, router, h, opts) },
             .other => unreachable,
         },
     };
@@ -50,6 +49,9 @@ pub fn serve(srv: *Server) !void {
 
 test Server {
     std.testing.refAllDecls(@This());
+
+    const srv = try init(std.testing.allocator, Router.Routes(&.{}), .{});
+    _ = srv;
 }
 
 const std = @import("std");

@@ -56,9 +56,8 @@ pub fn main() !void {
     });
 
     // Step 2: Start a normal Verse Server with an authentication Provider
-    var server = try verse.Server.init(std.heap.page_allocator, .{
+    var server = try verse.Server.init(std.heap.page_allocator, routes, .{
         .mode = .{ .http = .{ .port = 8089 } },
-        .router = .{ .routefn = route },
         .auth = cookie_auth.provider(),
     });
 
@@ -118,14 +117,10 @@ fn create(frame: *Frame) Router.Error!void {
     try frame.redirect("/", .found);
 }
 
-const routes = [_]Router.Match{
+const routes = Router.Routes(&[_]Router.Match{
     Router.GET("", index),
     Router.GET("create", create),
-};
-
-fn route(frame: *verse.Frame) !BuildFn {
-    return Router.router(frame, &routes);
-}
+});
 
 const std = @import("std");
 const verse = @import("verse");

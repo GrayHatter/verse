@@ -34,15 +34,10 @@ pub fn Endpoints(endpoints: anytype) type {
         }
 
         pub fn serve(self: *Self, options: Options) !void {
-            var server = try Server.init(self.alloc, .{
+            var server = try Server.init(self.alloc, Router.Routes(&routes), .{
                 .mode = options.mode,
-                .router = .{ .routefn = route },
             });
             try server.serve();
-        }
-
-        pub fn route(frame: *Frame) Router.RoutingError!Router.BuildFn {
-            return Router.router(frame, &routes);
         }
     };
 }
