@@ -228,6 +228,35 @@ fn wrap(comptime kind: type, val: anytype) !ContentType {
     };
 }
 
+pub fn fromFileExtension(extension: []const u8) ContentType {
+    var ext = extension;
+    if (ext[0] == '.') {
+        ext = ext[1..];
+    }
+
+    if (eql(u8, ext, "html") or eql(u8, extension, "htm")) {
+        return .{ .base = .{ .text = .html } };
+    }
+
+    if (eql(u8, ext, "css")) {
+        return .{ .base = .{ .text = .css } };
+    }
+
+    if (eql(u8, ext, "js")) {
+        return .{ .base = .{ .text = .javascript } };
+    }
+
+    if (eql(u8, ext, "png")) {
+        return .{ .base = .{ .image = .png } };
+    }
+
+    if (eql(u8, ext, "jpg") or eql(u8, extension, "jpeg")) {
+        return .{ .base = .{ .image = .jpeg } };
+    }
+
+    return default;
+}
+
 test ContentType {
     std.testing.refAllDecls(@This());
 }
@@ -235,3 +264,4 @@ test ContentType {
 const std = @import("std");
 const startsWith = std.mem.startsWith;
 const indexOf = std.mem.indexOf;
+const eql = std.mem.eql;
