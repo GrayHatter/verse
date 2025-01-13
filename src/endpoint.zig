@@ -122,10 +122,6 @@ fn routeCount(endpoints: anytype) usize {
             }
             return count + endpoints.len - 1 + alias_count;
         }
-
-        if (@hasDecl(ep, "verse_alias")) {
-            count += ep.verse_alias.len;
-        }
     }
     return count;
 }
@@ -201,8 +197,9 @@ test routeCount {
         );
         // TODO test verse_router doesn't include verse_endpoints
         try std.testing.expectEqual(
-            2,
+            1,
             routeCount(.{
+                // TODO expand this test in include a root struct
                 struct {
                     const verse_name = .testing;
                     const verse_alias = .{
