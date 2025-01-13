@@ -59,6 +59,14 @@ pub fn validateEndpoint(EP: anytype) void {
         }
     }
 
+    if (@hasDecl(EP, "verse_router")) {
+        if (@TypeOf(EP.verse_router) != Router.RouteFn) {
+            // TODO support `fn ...` in addition to `*const fn ...`
+            @compileError("The `verse_router` decl must be a Router.RouteFn. Instead it was " ++
+                @typeName(@TypeOf(EP.verse_router)));
+        }
+    }
+
     if (@hasDecl(EP, "verse_routes")) {
         inline for (EP.verse_routes, 0..) |route, i| {
             if (@TypeOf(route) != Router.Match) {
@@ -81,21 +89,24 @@ fn routeCount(endpoints: anytype) usize {
     var count: usize = 0;
     if (endpoints.len == 0) @compileError("Zero is not a countable number");
     for (endpoints, 0..) |ep, i| {
-        if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .Fn) {
+        if (@hasDecl(ep, "verse_router")) {
             count += 1;
-        }
-
-        if (@hasDecl(ep, "verse_routes")) for (ep.verse_routes) |route| {
-            if (route.name.len == 0) {
-                @compileError("Empty route name for: " ++ @typeName(ep) ++ ". To support a directory URI, define an index() instead");
+        } else {
+            if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .Fn) {
+                count += 1;
             }
-            count += 1;
-        };
 
-        if (@hasDecl(ep, "verse_endpoints")) {
-            count += ep.verse_endpoints.Endpoints.len;
+            if (@hasDecl(ep, "verse_routes")) for (ep.verse_routes) |route| {
+                if (route.name.len == 0) {
+                    @compileError("Empty route name for: " ++ @typeName(ep) ++ ". To support a directory URI, define an index() instead");
+                }
+                count += 1;
+            };
+
+            if (@hasDecl(ep, "verse_endpoints")) {
+                count += ep.verse_endpoints.Endpoints.len;
+            }
         }
-
         if (i == 0 and ep.verse_name == .root) {
             // .root is a special case endpoint that gets automagically
             // flattened out
@@ -153,6 +164,28 @@ test routeCount {
                 },
             }),
         );
+        try std.testing.expectEqual(
+            1,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                    const verse_router = &router;
+                    pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
+                },
+            }),
+        );
+        try std.testing.expectEqual(
+            1,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                    const verse_router = &router;
+                    pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
+                    pub fn index() void {}
+                },
+            }),
+        );
+        // TODO test verse_router doesn't include verse_endpoints
     }
 }
 
@@ -166,6 +199,9 @@ fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
                 match[idx] = r;
                 idx += 1;
             }
+        } else if (@hasDecl(EP, "verse_router")) {
+            match[idx] = Router.ROUTE(@tagName(EP.verse_name), EP.verse_router);
+            idx += 1;
         } else {
             match[idx] = Router.ROUTE(@tagName(EP.verse_name), &buildRoutes(EP));
             idx += 1;
@@ -177,23 +213,27 @@ fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
 fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
     var match: [routeCount(.{EP})]Router.Match = undefined;
     var idx: usize = 0;
-    if (@hasDecl(EP, "index")) {
-        match[idx] = Router.ALL("", EP.index);
+    if (@hasDecl(EP, "verse_router")) {
+        match[idx] = Router.ROUTE(@tagName(EP.verse_name), EP.verse_router);
         idx += 1;
+    } else {
+        if (@hasDecl(EP, "index")) {
+            match[idx] = Router.ALL("", EP.index);
+            idx += 1;
+        }
+
+        if (@hasDecl(EP, "verse_routes")) for (EP.verse_routes) |route| {
+            match[idx] = route;
+            idx += 1;
+        };
+
+        if (@hasDecl(EP, "verse_endpoints")) for (EP.verse_endpoints.Endpoints) |endpoint| {
+            match[idx] = Router.ROUTE(@tagName(endpoint.verse_name), &EP.verse_endpoints.routes);
+            idx += 1;
+        };
     }
 
-    if (@hasDecl(EP, "verse_routes")) for (EP.verse_routes) |route| {
-        match[idx] = route;
-        idx += 1;
-    };
-
-    if (@hasDecl(EP, "verse_endpoints")) for (EP.verse_endpoints.Endpoints) |endpoint| {
-        match[idx] = Router.ROUTE(@tagName(endpoint.verse_name), &EP.verse_endpoints.routes);
-        idx += 1;
-    };
-
     if (idx == 0) @compileError("Unable to build routes for " ++ @typeName(EP) ++ " No valid routes found");
-
     return match;
 }
 
