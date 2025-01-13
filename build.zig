@@ -55,11 +55,10 @@ pub fn build(b: *std.Build) !void {
         "request-userdata",
         "api",
     };
-    for (examples) |example| {
-        const path = try std.fmt.allocPrint(b.allocator, "examples/{s}.zig", .{example});
+    inline for (examples) |example| {
         const example_exe = b.addExecutable(.{
             .name = example,
-            .root_source_file = b.path(path),
+            .root_source_file = b.path("examples/" ++ example ++ ".zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -75,8 +74,8 @@ pub fn build(b: *std.Build) !void {
             run_example.addArgs(args);
         }
 
-        const run_name = try std.fmt.allocPrint(b.allocator, "run-{s}", .{example});
-        const run_description = try std.fmt.allocPrint(b.allocator, "Run example: {s}", .{example});
+        const run_name = "run-" ++ example;
+        const run_description = "Run example: " ++ example;
         const run_step = b.step(run_name, run_description);
         run_step.dependOn(&run_example.step);
     }
