@@ -25,16 +25,22 @@ pub fn build(b: *std.Build) !void {
 
     var compiler = Compiler.init(b);
 
+    var comptime_structs: ?*std.Build.Module = null;
+    var comptime_templates: ?*std.Build.Module = null;
+
     if (std.fs.cwd().access("src/fallback_html/index.html", .{})) {
         compiler.addDir("src/fallback_html/");
         compiler.addDir("examples/templates/");
         compiler.collect() catch unreachable;
-        const comptime_templates = compiler.buildTemplates() catch unreachable;
+        comptime_templates = compiler.buildTemplates() catch unreachable;
         // Zig build time doesn't expose it's state in a way I know how to check...
         // so we yolo it like python :D
-        lib_unit_tests.root_module.addImport("comptime_templates", comptime_templates);
-        const comptime_structs = compiler.buildStructs() catch unreachable;
-        lib_unit_tests.root_module.addImport("comptime_structs", comptime_structs);
+        lib_unit_tests.root_module.addImport("comptime_templates", comptime_templates orelse unreachable);
+        comptime_structs = compiler.buildStructs() catch unreachable;
+        lib_unit_tests.root_module.addImport("comptime_structs", comptime_structs orelse unreachable);
+
+        verse_lib.addImport("comptime_structs", comptime_structs orelse @panic("structs missing"));
+        verse_lib.addImport("comptime_templates", comptime_templates orelse @panic("structs missing"));
     } else |_| {}
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
     const test_step = b.step("test", "Run unit tests");
@@ -61,11 +67,6 @@ pub fn build(b: *std.Build) !void {
         test_step.dependOn(&example_exe.step);
 
         example_exe.root_module.addImport("verse", verse_lib);
-
-        const comptime_structs = compiler.buildStructs() catch unreachable;
-        verse_lib.addImport("comptime_structs", comptime_structs);
-        const comptime_templates = compiler.buildTemplates() catch unreachable;
-        verse_lib.addImport("comptime_templates", comptime_templates);
 
         const run_example = b.addRunArtifact(example_exe);
         run_example.step.dependOn(b.getInstallStep());
