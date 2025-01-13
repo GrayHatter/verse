@@ -83,6 +83,10 @@ pub fn validateEndpoint(EP: anytype) void {
                 @typeName(@TypeOf(EP.verse_builder)));
         }
     }
+
+    if (@hasDecl(EP, "verse_alias")) {
+        // TODO write validation code for alias
+    }
 }
 
 fn routeCount(endpoints: anytype) usize {
@@ -110,7 +114,17 @@ fn routeCount(endpoints: anytype) usize {
         if (i == 0 and ep.verse_name == .root) {
             // .root is a special case endpoint that gets automagically
             // flattened out
-            return count + endpoints.len - 1;
+            var alias_count: usize = 0;
+            if (endpoints.len > 1) {
+                for (endpoints) |ep_alias| if (@hasDecl(ep_alias, "verse_alias")) {
+                    alias_count += ep_alias.verse_alias.len;
+                };
+            }
+            return count + endpoints.len - 1 + alias_count;
+        }
+
+        if (@hasDecl(ep, "verse_alias")) {
+            count += ep.verse_alias.len;
         }
     }
     return count;
@@ -186,6 +200,20 @@ test routeCount {
             }),
         );
         // TODO test verse_router doesn't include verse_endpoints
+        try std.testing.expectEqual(
+            2,
+            routeCount(.{
+                struct {
+                    const verse_name = .testing;
+                    const verse_alias = .{
+                        // everyone has testing infra, we're not lucky enough to
+                        // have dedicated infra reserved for prod
+                        .prod,
+                    };
+                    pub fn index() void {}
+                },
+            }),
+        );
     }
 }
 
@@ -202,9 +230,18 @@ fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
         } else if (@hasDecl(EP, "verse_router")) {
             match[idx] = Router.ROUTE(@tagName(EP.verse_name), EP.verse_router);
             idx += 1;
+            if (@hasDecl(EP, "verse_alias")) for (EP.verse_alias) |alias| {
+                match[idx] = Router.ROUTE(@tagName(alias), EP.verse_router);
+                idx += 1;
+            };
         } else {
-            match[idx] = Router.ROUTE(@tagName(EP.verse_name), &buildRoutes(EP));
+            const routes = buildRoutes(EP);
+            match[idx] = Router.ROUTE(@tagName(EP.verse_name), &routes);
             idx += 1;
+            if (@hasDecl(EP, "verse_alias")) for (EP.verse_alias) |alias| {
+                match[idx] = Router.ROUTE(@tagName(alias), &routes);
+                idx += 1;
+            };
         }
     }
     return match;
