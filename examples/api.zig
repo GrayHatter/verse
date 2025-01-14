@@ -1,12 +1,8 @@
 //! Provides a basic example of a rest api using verse.
 
-const std = @import("std");
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
-const verse = @import("verse");
-const Router = verse.Router;
-const RouteMap = verse.Router.RouteMap;
-const BuildFn = Router.BuildFn;
-
+/// The Verse router can support more complex routing patterns and can
+/// route different request methods to separate functions so you can easily
+/// expose a custom REST interface/API.
 const routes = Router.Routes(&[_]Router.Match{
     Router.Match{
         .name = "users",
@@ -125,3 +121,8 @@ pub fn main() !void {
         std.posix.exit(1);
     };
 }
+
+const std = @import("std");
+const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const verse = @import("verse");
+const Router = verse.Router;
