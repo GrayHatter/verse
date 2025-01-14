@@ -1,6 +1,10 @@
+//! Reading and validating user input
+//! Uses the verse endpoint API creating the struct inline instead of importing
+//! this as external endpoint.zig file
+
+/// The verse endpoint API is documented in examples/endpoint.zig
 const Root = struct {
     pub const verse_name = .root;
-
     pub const verse_routes = .{
         // Using verse.Endpoints will include index() for you
         verse.Router.POST("post", post),
@@ -114,12 +118,12 @@ const Root = struct {
     ;
 };
 
-const Endpoints = verse.Endpoints(.{
-    Root,
-});
-
 pub fn main() !void {
+    const Endpoints = verse.Endpoints(.{
+        Root,
+    });
     var endpoints = Endpoints.init(std.heap.page_allocator);
+
     endpoints.serve(.{
         .mode = .{ .http = .{ .port = 8084 } },
     }) catch |err| {
