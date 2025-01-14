@@ -1,29 +1,6 @@
-const std = @import("std");
-const verse = @import("verse");
-const PageData = verse.template.PageData;
-const Router = verse.Router;
-const BuildFn = Router.BuildFn;
+//! Example of a basic comptime template.
 
-const routes = Router.Routes(&[_]Router.Match{
-    Router.GET("", index),
-});
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
-
-    var server = try verse.Server.init(alloc, routes, .{
-        .mode = .{ .http = .{ .port = 8082 } },
-    });
-
-    server.serve() catch |err| {
-        std.debug.print("error: {any}", .{err});
-        std.posix.exit(1);
-    };
-}
-
-// This page template is compiled/prepared at comptime.
+///This page template is compiled/prepared at comptime.
 const ExamplePage = PageData("templates/example.html");
 
 fn index(frame: *verse.Frame) Router.Error!void {
@@ -74,3 +51,27 @@ fn index(frame: *verse.Frame) Router.Error!void {
 
     try frame.sendPage(&page);
 }
+
+const routes = Router.Routes(&[_]Router.Match{
+    Router.GET("", index),
+});
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
+
+    var server = try verse.Server.init(alloc, routes, .{
+        .mode = .{ .http = .{ .port = 8082 } },
+    });
+
+    server.serve() catch |err| {
+        std.debug.print("error: {any}", .{err});
+        std.posix.exit(1);
+    };
+}
+const std = @import("std");
+
+const verse = @import("verse");
+const PageData = verse.template.PageData;
+const Router = verse.Router;
