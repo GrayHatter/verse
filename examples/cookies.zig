@@ -1,12 +1,27 @@
-const std = @import("std");
-const verse = @import("verse");
-const Router = verse.Router;
-const BuildFn = Router.BuildFn;
-const print = std.fmt.bufPrint;
+//! Setting and reading a cookie.
 
-const Cookie = verse.Cookie;
-var Random = std.Random.DefaultPrng.init(1337);
-var random = Random.random();
+fn index(frame: *Frame) Router.Error!void {
+    var buffer: [2048]u8 = undefined;
+    const found = try print(
+        &buffer,
+        "{} cookies found by the server\n",
+        .{frame.request.cookie_jar.cookies.items.len},
+    );
+
+    const random_cookie = @tagName(random.enumValue(enum {
+        chocolate_chip,
+        sugar,
+        oatmeal,
+        peanut_butter,
+        ginger_snap,
+    }));
+
+    try frame.cookie_jar.add(Cookie{
+        .name = "best-flavor",
+        .value = random_cookie,
+    });
+    try frame.sendHTML(.ok, found);
+}
 
 const routes = Router.Routes(&[_]Router.Match{
     Router.GET("", index),
@@ -27,21 +42,12 @@ pub fn main() !void {
     };
 }
 
-fn index(frame: *verse.Frame) Router.Error!void {
-    var buffer: [2048]u8 = undefined;
-    const found = try print(&buffer, "{} cookies found by the server\n", .{frame.request.cookie_jar.cookies.items.len});
+const std = @import("std");
+const verse = @import("verse");
+const Frame = verse.Frame;
+const Router = verse.Router;
+const Cookie = verse.Cookie;
+const print = std.fmt.bufPrint;
 
-    const random_cookie = @tagName(random.enumValue(enum {
-        chocolate_chip,
-        sugar,
-        oatmeal,
-        peanut_butter,
-        ginger_snap,
-    }));
-
-    try frame.cookie_jar.add(Cookie{
-        .name = "best-flavor",
-        .value = random_cookie,
-    });
-    try frame.sendHTML(.ok, found);
-}
+var Random = std.Random.DefaultPrng.init(1337);
+var random = Random.random();
