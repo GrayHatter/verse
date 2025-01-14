@@ -56,3 +56,31 @@ and your HTML, looks like HTML
   </body>
 </html>
 ```
+
+## Features
+  * uWSGI Protocol
+  * HTTP
+  * Compiles complete site to a completely self contained binary
+  * Built in comptime Template library
+  * Zero dependencies
+
+
+## Goals
+  * Write Software You Can Love
+  * Follow the Zig Zen
+
+## How do I ...
+There are a number of [demos/sites in examples/](examples/) that can get you
+started quickly. But there are a number of intentionally omitted features. Most
+notably is any middleware API. Verse follows Zig Zen and has no hidden control
+flow. All middleware patterns break this rule. Even without it, Verse still
+**does** support all the important "pre-flight" or request setup steps. If your
+application needs a more complex request setup step, you can use a custom
+response builder. That builder has full control over both the request frame, and
+the call to the endpoint. If you absolutely need to inspect, or alter the
+response before it's returned to the client, and understand the downsides of
+doing so, You could implement your own middleware by replacing the `Frame`
+downstream writer with a local buffer, The called endpoint would write to that
+buffer.
+
+
