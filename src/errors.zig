@@ -24,6 +24,7 @@ pub const NetworkError = error{
     /// full response is delivered.
     BrokenPipe,
     IOWriteFailure,
+    NoSpaceLeft,
 };
 
 pub const Error = ServerError || ClientError || NetworkError;

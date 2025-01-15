@@ -25,24 +25,62 @@ pub const Attributes = struct {
         none,
     };
 
+    /// vec must be large enough for the largest cookie (10)
+    pub fn writeVec(a: Attributes, vec: []std.posix.iovec_const) !usize {
+        var used: usize = 0;
+        if (a.domain) |d| {
+            vec[used] = .{ .base = "; Domain=", .len = 9 };
+            used += 1;
+            vec[used] = .{ .base = d.ptr, .len = d.len };
+            used += 1;
+        }
+        if (a.path) |p| {
+            vec[used] = .{ .base = "; Path=", .len = 7 };
+            used += 1;
+            vec[used] = .{ .base = p.ptr, .len = p.len };
+            used += 1;
+        }
+        if (a.max_age) |_| {
+            @panic("not implemented");
+            //vec[used] = .[ .base = "; Max-Age={}", .{m});
+            //vec[used] = .{ .base = m.ptr, .len = m.len};
+        }
+        if (a.same_site) |s| {
+            vec[used] = switch (s) {
+                .strict => .{ .base = "; SameSite=Strict", .len = 17 },
+                .lax => .{ .base = "; SameSite=Lax", .len = 14 },
+                .none => .{ .base = "; SameSite=None", .len = 15 },
+            };
+            used += 1;
+        }
+        if (a.partitioned) {
+            vec[used] = .{ .base = "; Partitioned", .len = 13 };
+            used += 1;
+        }
+        if (a.secure) {
+            vec[used] = .{ .base = "; Secure", .len = 8 };
+            used += 1;
+        }
+        if (a.httponly) {
+            vec[used] = .{ .base = "; HttpOnly", .len = 10 };
+            used += 1;
+        }
+
+        return used;
+    }
+
     pub fn format(a: Attributes, comptime _: []const u8, _: fmt.FormatOptions, w: anytype) !void {
-        if (a.domain) |d|
-            try w.print("; Domain={s}", .{d});
-        if (a.path) |p|
-            try w.print("; Path={s}", .{p});
-        if (a.max_age) |m|
-            try w.print("; Max-Age={}", .{m});
+        if (a.domain) |d| try w.print("; Domain={s}", .{d});
+        if (a.path) |p| try w.print("; Path={s}", .{p});
+        if (a.max_age) |m| try w.print("; Max-Age={}", .{m});
         if (a.same_site) |s| try switch (s) {
             .strict => w.writeAll("; SameSite=Strict"),
             .lax => w.writeAll("; SameSite=Lax"),
             .none => w.writeAll("; SameSite=None"),
         };
-        if (a.partitioned)
-            try w.writeAll("; Partitioned");
-        if (a.secure)
-            try w.writeAll("; Secure");
-        if (a.httponly)
-            try w.writeAll("; HttpOnly");
+        if (a.partitioned) try w.writeAll("; Partitioned");
+        if (a.secure) try w.writeAll("; Secure");
+        if (a.httponly) try w.writeAll("; HttpOnly");
     }
 };
 
@@ -61,6 +99,23 @@ pub const Cookie = struct {
             .source = .client,
             .attr = .{},
         };
+    }
+
+    /// vec must be large enough for the largest cookie (4 + attributes)
+    pub fn writeVec(c: Cookie, vec: []std.posix.iovec_const) !usize {
+        if (vec.len < 12) return error.NoSpaceLeft;
+        var used: usize = 0;
+        vec[used] = .{ .base = "Set-Cookie: ".ptr, .len = 12 };
+        used += 1;
+        vec[used] = .{ .base = c.name.ptr, .len = c.name.len };
+        used += 1;
+        vec[used] = .{ .base = "=".ptr, .len = 1 };
+        used += 1;
+        vec[used] = .{ .base = c.value.ptr, .len = c.value.len };
+        used += 1;
+        used += try c.attr.writeVec(vec[4..]);
+
+        return used;
     }
 
     pub fn format(c: Cookie, comptime fstr: []const u8, _: fmt.FormatOptions, w: anytype) !void {
@@ -92,6 +147,18 @@ test Cookie {
         const res = try fmt.bufPrint(&buffer, "{header}", .{cookie});
         try std.testing.expectEqualStrings(expect, res);
     }
+
+    const v_expct = [4]std.posix.iovec_const{
+        .{ .base = "Set-Cookie: ", .len = 12 },
+        .{ .base = "name", .len = 4 },
+        .{ .base = "=", .len = 1 },
+        .{ .base = "value", .len = 5 },
+    };
+
+    var v_buf: [14]std.posix.iovec_const = undefined;
+    const used = try cookies[0].writeVec(v_buf[0..]);
+    try std.testing.expectEqual(4, used);
+    try std.testing.expectEqualDeep(v_expct[0..4], v_buf[0..4]);
 }
 
 pub const Jar = struct {

@@ -197,6 +197,27 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     };
 }
 
+fn VecList(comptime SIZE: usize) type {
+    return struct {
+        pub const capacity = SIZE;
+        vect: [SIZE]iovec_c = undefined,
+        length: usize = 0,
+
+        pub fn init() @This() {
+            return .{};
+        }
+
+        pub fn append(self: *@This(), str: []const u8) !void {
+            if (self.length >= capacity) return error.NoSpaceLeft;
+            self.vect[self.length] = .{
+                .base = str.ptr,
+                .len = str.len,
+            };
+            self.length += 1;
+        }
+    };
+}
+
 pub fn sendHeaders(vrs: *Frame) SendError!void {
     if (vrs.wrote_headers) {
         return SendError.HeadersFinished;
@@ -204,79 +225,49 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
 
     switch (vrs.downstream) {
         .http, .zwsgi => |stream| {
-            var vect: [HEADER_VEC_COUNT]iovec_c = undefined;
-            var count: usize = 0;
+            var vect = VecList(HEADER_VEC_COUNT).init();
 
             const h_resp = vrs.HTTPHeader();
-            vect[count] = .{ .base = h_resp.ptr, .len = h_resp.len };
-            count += 1;
+            try vect.append(h_resp);
 
             // Default headers
             const s_name = "Server: verse/" ++ build_version ++ "\r\n";
-            vect[count] = .{ .base = s_name.ptr, .len = s_name.len };
-            count += 1;
+            try vect.append(s_name);
 
             if (vrs.content_type) |ct| {
-                vect[count] = .{ .base = "Content-Type: ".ptr, .len = "Content-Type: ".len };
-                count += 1;
+                try vect.append("Content-Type: ");
                 switch (ct.base) {
                     inline else => |tag, name| {
-                        vect[count] = .{
-                            .base = @tagName(name).ptr,
-                            .len = @tagName(name).len,
-                        };
-                        count += 1;
-                        vect[count] = .{ .base = "/".ptr, .len = "/".len };
-                        count += 1;
-                        vect[count] = .{
-                            .base = @tagName(tag).ptr,
-                            .len = @tagName(tag).len,
-                        };
-                        count += 1;
+                        try vect.append(@tagName(name));
+                        try vect.append("/");
+                        try vect.append(@tagName(tag));
                     },
                 }
                 if (ct.parameter) |param| {
                     const pre = "; charset=";
-                    vect[count] = .{ .base = pre.ptr, .len = pre.len };
-                    count += 1;
+                    try vect.append(pre);
                     const tag = @tagName(param);
-                    vect[count] = .{ .base = tag.ptr, .len = tag.len };
-                    count += 1;
+                    try vect.append(tag);
                 }
-
-                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
-                count += 1;
-
+                try vect.append("\r\n");
                 //"text/html; charset=utf-8"); // Firefox is trash
             }
 
             var itr = vrs.headers.iterator();
             while (itr.next()) |header| {
-                vect[count] = .{ .base = header.name.ptr, .len = header.name.len };
-                count += 1;
-                vect[count] = .{ .base = ": ".ptr, .len = ": ".len };
-                count += 1;
-                vect[count] = .{ .base = header.value.ptr, .len = header.value.len };
-                count += 1;
-                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
-                count += 1;
+                try vect.append(header.name);
+                try vect.append(": ");
+                try vect.append(header.value);
+                try vect.append("\r\n");
             }
 
             for (vrs.cookie_jar.cookies.items) |cookie| {
-                vect[count] = .{ .base = "Set-Cookie: ".ptr, .len = "Set-Cookie: ".len };
-                count += 1;
-                // TODO remove this alloc
-                const cookie_str = allocPrint(vrs.alloc, "{}", .{cookie}) catch @panic("OOM");
-                vect[count] = .{
-                    .base = cookie_str.ptr,
-                    .len = cookie_str.len,
-                };
-                count += 1;
-                vect[count] = .{ .base = "\r\n".ptr, .len = "\r\n".len };
-                count += 1;
+                const used = try cookie.writeVec(vect.vect[vect.length..]);
+                vect.length += used;
+                try vect.append("\r\n");
             }
 
-            stream.writevAll(vect[0..count]) catch return error.IOWriteFailure;
+            stream.writevAll(vect.vect[0..vect.length]) catch return error.IOWriteFailure;
         },
         .buffer => @panic("not implemented"),
     }
