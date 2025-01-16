@@ -14,7 +14,7 @@ pub const MTLS = @This();
 pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
     const mtls: *MTLS = @ptrCast(@alignCast(ptr));
     var success: bool = false;
-    if (headers.get("MTLS_ENABLED")) |enabled| {
+    if (headers.getCustom("MTLS_ENABLED")) |enabled| {
         if (enabled.value_list.next) |_| return error.InvalidAuth;
         // MTLS validation as currently supported here is done by the
         // reverse proxy. Constant time compare would provide no security
@@ -27,7 +27,7 @@ pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
     if (!success) return error.UnknownUser;
 
     if (mtls.base) |base| {
-        if (headers.get("MTLS_FINGERPRINT")) |enabled| {
+        if (headers.getCustom("MTLS_FINGERPRINT")) |enabled| {
             // Verse does not specify an order for which is valid so it is
             // an error if there is ever more than a single value for the
             // mTLS fingerprint
@@ -70,21 +70,21 @@ test MTLS {
 
     var headers = Headers.init(a);
     defer headers.raze();
-    try headers.add("MTLS_ENABLED", "SUCCESS");
-    try headers.add("MTLS_FINGERPRINT", "LOLTOTALLYVALID");
+    try headers.addCustom("MTLS_ENABLED", "SUCCESS");
+    try headers.addCustom("MTLS_FINGERPRINT", "LOLTOTALLYVALID");
 
     const user = try provider_.authenticate(&headers);
 
     try std.testing.expectEqual(null, user.user_ptr);
 
-    try headers.add("MTLS_ENABLED", "SUCCESS");
+    try headers.addCustom("MTLS_ENABLED", "SUCCESS");
     const err = provider_.authenticate(&headers);
     try std.testing.expectError(error.InvalidAuth, err);
 
     headers.raze();
     headers = Headers.init(a);
 
-    try headers.add("MTLS_ENABLED", "FAILURE!");
+    try headers.addCustom("MTLS_ENABLED", "FAILURE!");
     const err2 = provider_.authenticate(&headers);
     try std.testing.expectError(error.UnknownUser, err2);
     // TODO there's likely a few more error states we should validate;

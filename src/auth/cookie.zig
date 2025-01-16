@@ -117,7 +117,7 @@ pub fn CookieAuth(HMAC: type) type {
                     return base.authenticate(headers);
                 }
 
-                if (headers.get("Cookie")) |cookies| {
+                if (headers.getCustom("Cookie")) |cookies| {
                     // This actually isn't technically invalid, it's only
                     // currently not implemented.
                     if (cookies.value_list.next != null) return error.InvalidAuth;

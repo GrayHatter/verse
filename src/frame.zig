@@ -281,7 +281,7 @@ pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
 }
 
 pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {
-    try vrs.headers.add(name, value);
+    try vrs.headers.addCustom(name, value);
 }
 
 const ONESHOT_SIZE = 14720;

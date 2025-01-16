@@ -6,12 +6,12 @@ pub const Data = @import("request-data.zig");
 remote_addr: RemoteAddr,
 method: Methods,
 uri: []const u8,
-host: ?[]const u8,
+host: ?Host,
 user_agent: ?UserAgent,
-referer: ?[]const u8,
+referer: ?Referer,
 accept: ?Accept,
 accept_encoding: Encoding = Encoding.default,
-authorization: ?[]const u8,
+authorization: ?Authorization,
 
 headers: Headers,
 /// Default API, still unstable, but unlike to drastically change
@@ -84,10 +84,43 @@ pub const Methods = enum(u8) {
     }
 };
 
+fn initCommon(
+    a: Allocator,
+    remote_addr: RemoteAddr,
+    method: Methods,
+    uri: []const u8,
+    host: ?Host,
+    agent: ?UserAgent,
+    referer: ?Referer,
+    accept: ?Accept,
+    accept_encoding: Encoding,
+    authorization: ?Authorization,
+    headers: Headers,
+    cookies: ?[]const u8,
+    data: Data,
+    raw: RawReq,
+) !Request {
+    return .{
+        .accept = accept,
+        .accept_encoding = accept_encoding,
+        .authorization = authorization,
+        .cookie_jar = if (cookies) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
+        .data = data,
+        .headers = headers,
+        .host = host,
+        .method = method,
+        .raw = raw,
+        .referer = referer,
+        .remote_addr = remote_addr,
+        .uri = uri,
+        .user_agent = agent,
+    };
+}
+
 pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var uri: ?[]const u8 = null;
-    var method: Methods = Methods.GET;
-    var remote_addr: RemoteAddr = undefined;
+    var method: ?Methods = null;
+    var remote_addr: ?RemoteAddr = null;
     var headers = Headers.init(a);
     var accept: ?Accept = null;
     var host: ?Host = null;
@@ -98,11 +131,14 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var cookie_header: ?[]const u8 = null;
 
     for (zwsgi.vars) |v| {
-        try headers.add(v.key, v.val);
+        try headers.addCustom(v.key, v.val);
         if (eql(u8, v.key, "PATH_INFO")) {
             uri = v.val;
         } else if (eql(u8, v.key, "REQUEST_METHOD")) {
-            method = Methods.fromStr(v.val) catch Methods.GET;
+            method = Methods.fromStr(v.val) catch {
+                std.debug.print("Unsupported Method seen '{any}'", .{v.val});
+                return error.InvalidRequest;
+            };
         } else if (eql(u8, v.key, "REMOTE_ADDR")) {
             remote_addr = v.val;
         } else if (eqlIgnoreCase("HTTP_ACCEPT", v.key)) {
@@ -121,20 +157,23 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
             cookie_header = v.val;
         }
     }
-    return .{
-        .remote_addr = remote_addr,
-        .host = host,
-        .user_agent = uagent,
-        .accept = accept,
-        .authorization = authorization,
-        .referer = referer,
-        .method = Methods.GET,
-        .uri = uri orelse return error.InvalidRequest,
-        .headers = headers,
-        .cookie_jar = if (cookie_header) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
-        .data = data,
-        .raw = .{ .zwsgi = zwsgi },
-    };
+
+    return initCommon(
+        a,
+        remote_addr orelse return error.InvalidRequest,
+        method orelse return error.InvalidRequest,
+        uri orelse return error.InvalidRequest,
+        host,
+        uagent,
+        referer,
+        accept,
+        encoding,
+        authorization,
+        headers,
+        cookie_header,
+        data,
+        .{ .zwsgi = zwsgi },
+    );
 }
 
 pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Request {
@@ -150,7 +189,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
     var cookie_header: ?[]const u8 = null;
 
     while (itr.next()) |head| {
-        try headers.add(head.name, head.value);
+        try headers.addCustom(head.name, head.value);
         if (eqlIgnoreCase("accept", head.name)) {
             accept = head.value;
         } else if (eqlIgnoreCase("host", head.name)) {
@@ -169,27 +208,29 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
     }
 
     var remote_addr: RemoteAddr = undefined;
-    const ipport = try allocPrint(a, "{}", .{http.server.connection.address});
-    if (indexOfScalar(u8, ipport, ':')) |i| {
-        remote_addr = ipport[0..i];
-        try headers.add("REMOTE_ADDR", remote_addr);
-        try headers.add("REMOTE_PORT", ipport[i + 1 ..]);
+    var ipbuf: [48]u8 = undefined;
+    const ipport = try bufPrint(&ipbuf, "{}", .{http.server.connection.address});
+    if (lastIndexOfScalar(u8, ipport, ':')) |i| {
+        // TODO lower this to remove the a.dupe
+        remote_addr = try a.dupe(u8, ipport[0..i]);
     } else @panic("invalid address from http server");
 
-    return .{
-        .remote_addr = remote_addr,
-        .host = host,
-        .user_agent = uagent,
-        .accept = accept,
-        .authorization = authorization,
-        .referer = referer,
-        .method = translateStdHttp(http.head.method),
-        .uri = http.head.target,
-        .headers = headers,
-        .cookie_jar = if (cookie_header) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
-        .data = data,
-        .raw = .{ .http = http },
-    };
+    return initCommon(
+        a,
+        remote_addr,
+        translateStdHttp(http.head.method),
+        http.head.target,
+        host,
+        uagent,
+        referer,
+        accept,
+        encoding,
+        authorization,
+        headers,
+        cookie_header,
+        data,
+        .{ .http = http },
+    );
 }
 
 fn translateStdHttp(m: std.http.Method) Methods {
@@ -223,7 +264,8 @@ const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const indexOf = std.mem.indexOf;
-const indexOfScalar = std.mem.indexOfScalar;
+const lastIndexOfScalar = std.mem.lastIndexOfScalar;
 const eql = std.mem.eql;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 const allocPrint = std.fmt.allocPrint;
+const bufPrint = std.fmt.bufPrint;
