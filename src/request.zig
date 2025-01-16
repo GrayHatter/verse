@@ -64,7 +64,7 @@ pub const Encoding = packed struct(usize) {
     };
 };
 
-pub const Methods = enum(u8) {
+pub const Methods = enum(u9) {
     GET = 1,
     HEAD = 2,
     POST = 4,
@@ -73,6 +73,7 @@ pub const Methods = enum(u8) {
     CONNECT = 32,
     OPTIONS = 64,
     TRACE = 128,
+    WEBSOCKET = 256,
 
     pub fn fromStr(s: []const u8) !Methods {
         inline for (std.meta.fields(Methods)) |field| {
@@ -87,7 +88,7 @@ pub const Methods = enum(u8) {
 fn initCommon(
     a: Allocator,
     remote_addr: RemoteAddr,
-    method: Methods,
+    _method: Methods,
     uri: []const u8,
     host: ?Host,
     agent: ?UserAgent,
@@ -100,6 +101,12 @@ fn initCommon(
     data: Data,
     raw: RawReq,
 ) !Request {
+    var method = _method;
+    if (headers.getCustom("Upgrade")) |val| {
+        std.debug.print("Upgrade: {s}\n", .{val.value_list.value});
+        method = Methods.WEBSOCKET;
+    }
+
     return .{
         .accept = accept,
         .accept_encoding = accept_encoding,

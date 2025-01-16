@@ -64,7 +64,6 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
     var itr_headers = req.iterateHeaders();
     while (itr_headers.next()) |header| {
         log.debug("http header => {s} -> {s}", .{ header.name, header.value });
-        log.debug("{}", .{header});
     }
     var post_data: ?RequestData.PostData = null;
 

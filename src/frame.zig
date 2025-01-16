@@ -180,6 +180,35 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
     };
 }
 
+pub fn acceptWebsocket(frame: *Frame) !Websocket {
+    frame.status = .switching_protocols;
+    frame.content_type = null;
+
+    const key = if (frame.request.headers.getCustom("Sec-WebSocket-Key")) |key|
+        key.value_list.value
+    else
+        return error.InvalidWebsocketRequest;
+
+    var sha1 = std.crypto.hash.Sha1.init(.{});
+    sha1.update(key);
+    sha1.update("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+    var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
+    sha1.final(&digest);
+    var base64_digest: [28]u8 = undefined;
+    _ = std.base64.standard.Encoder.encode(&base64_digest, &digest);
+
+    frame.headersAdd("Upgrade", "websocket") catch unreachable;
+    frame.headersAdd("Connection", "Upgrade") catch unreachable;
+    frame.headersAdd("Sec-WebSocket-Accept", base64_digest[0..]) catch unreachable;
+    frame.sendHeaders() catch |err| switch (err) {
+        error.BrokenPipe => |e| return e,
+        else => return error.IOWriteFailure,
+    };
+    try frame.sendRawSlice("\r\n");
+
+    return Websocket{ .frame = frame };
+}
+
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
@@ -334,6 +363,7 @@ fn flush(vrs: Frame) !void {
 fn HTTPHeader(vrs: *Frame) [:0]const u8 {
     if (vrs.status == null) vrs.status = .ok;
     return switch (vrs.status.?) {
+        .switching_protocols => "HTTP/1.1 101 Switching Protocols\r\n",
         .ok => "HTTP/1.1 200 OK\r\n",
         .created => "HTTP/1.1 201 Created\r\n",
         .no_content => "HTTP/1.1 204 No Content\r\n",
@@ -388,6 +418,7 @@ const Auth = @import("auth.zig");
 const Cookies = @import("cookies.zig");
 const ContentType = @import("content-type.zig");
 const ResponseData = @import("response-data.zig");
+const Websocket = @import("websocket.zig");
 
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;

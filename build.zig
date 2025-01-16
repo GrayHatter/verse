@@ -47,13 +47,8 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&run_lib_unit_tests.step);
 
     const examples = [_][]const u8{
-        "basic",
-        "cookies",
-        "template",
-        "endpoint",
-        "auth-cookie",
-        "request-userdata",
-        "api",
+        "basic",            "cookies", "template",  "endpoint", "auth-cookie",
+        "request-userdata", "api",     "websocket",
     };
     inline for (examples) |example| {
         const example_exe = b.addExecutable(.{
