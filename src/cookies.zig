@@ -15,9 +15,12 @@ pub const Attributes = struct {
     httponly: bool = false,
     secure: bool = false,
     partitioned: bool = false,
-    max_age: ?i64 = null,
     expires: ?i64 = null,
     same_site: ?SameSite = null,
+
+    // TODO come up with a better hack than this one
+    max_age_str: ?[]const u8 = null,
+    //max_age: ?i64 = null,
 
     pub const SameSite = enum {
         strict,
@@ -40,11 +43,13 @@ pub const Attributes = struct {
             vec[used] = .{ .base = p.ptr, .len = p.len };
             used += 1;
         }
-        if (a.max_age) |_| {
-            @panic("not implemented");
-            //vec[used] = .[ .base = "; Max-Age={}", .{m});
-            //vec[used] = .{ .base = m.ptr, .len = m.len};
+        if (a.max_age_str) |str| {
+            vec[used] = .{ .base = "; Max-Age=".ptr, .len = 10 };
+            used += 1;
+            vec[used] = .{ .base = str.ptr, .len = str.len };
+            used += 1;
         }
+
         if (a.same_site) |s| {
             vec[used] = switch (s) {
                 .strict => .{ .base = "; SameSite=Strict", .len = 17 },
@@ -65,14 +70,14 @@ pub const Attributes = struct {
             vec[used] = .{ .base = "; HttpOnly", .len = 10 };
             used += 1;
         }
-
+        std.debug.assert(used <= 10);
         return used;
     }
 
     pub fn format(a: Attributes, comptime _: []const u8, _: fmt.FormatOptions, w: anytype) !void {
         if (a.domain) |d| try w.print("; Domain={s}", .{d});
         if (a.path) |p| try w.print("; Path={s}", .{p});
-        if (a.max_age) |m| try w.print("; Max-Age={}", .{m});
+        if (a.max_age_str) |m| try w.print("; Max-Age={s}", .{m});
         if (a.same_site) |s| try switch (s) {
             .strict => w.writeAll("; SameSite=Strict"),
             .lax => w.writeAll("; SameSite=Lax"),
@@ -113,6 +118,7 @@ pub const Cookie = struct {
         used += 1;
         vec[used] = .{ .base = c.value.ptr, .len = c.value.len };
         used += 1;
+        std.debug.assert(used <= 4);
         used += try c.attr.writeVec(vec[4..]);
 
         return used;
@@ -132,8 +138,8 @@ test Cookie {
     const cookies = [_]Cookie{
         .{ .name = "name", .value = "value" },
         .{ .name = "name", .value = "value", .attr = .{ .secure = true } },
-        .{ .name = "name", .value = "value", .attr = .{ .max_age = 10000 } },
-        .{ .name = "name", .value = "value", .attr = .{ .max_age = 10000, .secure = true } },
+        .{ .name = "name", .value = "value", .attr = .{ .max_age_str = "10000" } },
+        .{ .name = "name", .value = "value", .attr = .{ .max_age_str = "10000", .secure = true } },
     };
 
     const expected = [_][]const u8{
