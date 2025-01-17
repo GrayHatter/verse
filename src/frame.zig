@@ -181,32 +181,7 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
 }
 
 pub fn acceptWebsocket(frame: *Frame) !Websocket {
-    frame.status = .switching_protocols;
-    frame.content_type = null;
-
-    const key = if (frame.request.headers.getCustom("Sec-WebSocket-Key")) |key|
-        key.value_list.value
-    else
-        return error.InvalidWebsocketRequest;
-
-    var sha1 = std.crypto.hash.Sha1.init(.{});
-    sha1.update(key);
-    sha1.update("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-    var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
-    sha1.final(&digest);
-    var base64_digest: [28]u8 = undefined;
-    _ = std.base64.standard.Encoder.encode(&base64_digest, &digest);
-
-    frame.headersAdd("Upgrade", "websocket") catch unreachable;
-    frame.headersAdd("Connection", "Upgrade") catch unreachable;
-    frame.headersAdd("Sec-WebSocket-Accept", base64_digest[0..]) catch unreachable;
-    frame.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
-    try frame.sendRawSlice("\r\n");
-
-    return Websocket{ .frame = frame };
+    return Websocket.accept(frame);
 }
 
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
