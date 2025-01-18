@@ -180,6 +180,10 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
     };
 }
 
+pub fn acceptWebsocket(frame: *Frame) !Websocket {
+    return Websocket.accept(frame);
+}
+
 pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
@@ -281,7 +285,7 @@ pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
 }
 
 pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {
-    try vrs.headers.add(name, value);
+    try vrs.headers.addCustom(name, value);
 }
 
 const ONESHOT_SIZE = 14720;
@@ -334,6 +338,7 @@ fn flush(vrs: Frame) !void {
 fn HTTPHeader(vrs: *Frame) [:0]const u8 {
     if (vrs.status == null) vrs.status = .ok;
     return switch (vrs.status.?) {
+        .switching_protocols => "HTTP/1.1 101 Switching Protocols\r\n",
         .ok => "HTTP/1.1 200 OK\r\n",
         .created => "HTTP/1.1 201 Created\r\n",
         .no_content => "HTTP/1.1 204 No Content\r\n",
@@ -388,6 +393,7 @@ const Auth = @import("auth.zig");
 const Cookies = @import("cookies.zig");
 const ContentType = @import("content-type.zig");
 const ResponseData = @import("response-data.zig");
+const Websocket = @import("websocket.zig");
 
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;

@@ -50,6 +50,7 @@ pub const Match = struct {
         POST: ?Target = null,
         PUT: ?Target = null,
         TRACE: ?Target = null,
+        WEBSOCKET: ?Target = null,
     };
 
     pub fn target(comptime self: Match, comptime req: Request.Methods) ?Target {
@@ -62,6 +63,7 @@ pub const Match = struct {
             .POST => self.methods.POST,
             .PUT => self.methods.PUT,
             .TRACE => self.methods.TRACE,
+            .WEBSOCKET => self.methods.WEBSOCKET,
         };
     }
 };
@@ -111,6 +113,7 @@ pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
                 .POST = target,
                 .PUT = target,
                 .TRACE = target,
+                .WEBSOCKET = target,
             },
         },
     };
@@ -195,6 +198,16 @@ pub fn DELETE(comptime name: []const u8, comptime match: BuildFn) Match {
         .name = name,
         .methods = .{
             .DELETE = buildTarget(match),
+        },
+    };
+}
+
+pub fn WEBSOCKET(comptime name: []const u8, comptime match: BuildFn) Match {
+    return .{
+        .name = name,
+        .methods = .{
+            // TODO .GET?
+            .WEBSOCKET = buildTarget(match),
         },
     };
 }
