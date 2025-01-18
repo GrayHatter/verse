@@ -16,12 +16,15 @@ const Root = struct {
     }
 
     fn socket(frame: *verse.Frame) verse.Router.Error!void {
-        const ws = frame.acceptWebsocket() catch unreachable;
+        var ws = frame.acceptWebsocket() catch unreachable;
 
         for (0..10) |i| {
             var buffer: [0xff]u8 = undefined;
             ws.send(print(&buffer, "Iteration {}\n", .{i}) catch unreachable) catch unreachable;
             std.time.sleep(1_000_000_000);
+            var read_buffer: [0x4000]u8 = undefined;
+            const msg = ws.recieve(&read_buffer) catch unreachable;
+            std.debug.print("msg: {} -- {s}\n", .{ msg.header, msg.msg });
         }
         std.debug.print("Socket Example Done\n", .{});
     }
@@ -36,6 +39,7 @@ const Root = struct {
         \\    body {{ width: 35em; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }}
         \\  </style>
         \\  <script>
+        \\  var socket;
         \\  function retry() {{
         \\    socket =  new WebSocket("ws://localhost:8088/socket");
         \\    socket.onmessage = (event) => {{
@@ -43,12 +47,17 @@ const Root = struct {
         \\    }};
         \\  }}
         \\  retry();
+        \\  function send() {{
+        \\    socket.send(document.getElementById("text").value);
+        \\  }}
         \\</script>
         \\</head>
         \\<body>
         \\<h1>Title</h1>
         \\<p>
         \\  {s}
+        \\  <input type="text" id="text" />
+        \\  <button onclick="send()"> Send</button>
         \\  <button onclick="retry()"> Connect</button>
         \\</p>
         \\</body>

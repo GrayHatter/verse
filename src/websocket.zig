@@ -40,14 +40,24 @@ pub fn send(ws: Websocket, msg: []const u8) !void {
     };
 }
 
+pub fn recieve(ws: *Websocket, buffer: []u8) !Message {
+    var reader = switch (ws.frame.downstream) {
+        .zwsgi, .http => |stream| stream.reader(),
+        else => unreachable,
+    };
+    var any = reader.any();
+    return try Message.read(&any, buffer);
+}
+
 pub const Message = struct {
     header: Header,
     length: union(enum) {
-        tiny: void,
+        tiny: u7,
         small: u16,
         large: u64,
     },
-    msg: []const u8,
+    mask: [4]u8 = undefined,
+    msg: []u8,
 
     pub const Header = if (endian == .big)
         packed struct(u16) {
@@ -77,14 +87,47 @@ pub const Message = struct {
                 },
             },
             .length = switch (msg.len) {
-                0...125 => .{ .tiny = {} },
+                0...125 => .{ .tiny = @truncate(msg.len) },
                 126...0xffff => |len| .{ .small = nativeToBig(u16, @truncate(len)) },
                 else => |len| .{ .large = nativeToBig(u64, len) },
             },
-            .msg = msg,
+            .msg = @constCast(msg),
         };
 
         return message;
+    }
+
+    pub fn read(r: *AnyReader, buffer: []u8) !Message {
+        var m: Message = undefined;
+
+        if (try r.read(@as(*[2]u8, @ptrCast(&m.header))) != 2) return error.InvalidRead;
+        if (m.header.final == false) return error.FragmentNotSupported;
+        if (m.header.extlen == 127) {
+            m.length = .{ .large = try r.readInt(u64, .big) };
+        } else if (m.header.extlen == 126) {
+            m.length = .{ .small = try r.readInt(u16, .big) };
+        } else {
+            m.length = .{ .tiny = m.header.extlen };
+        }
+
+        const length: usize = switch (m.length) {
+            inline else => |l| l,
+        };
+
+        if (length > buffer.len) return error.NoSpaceLeft;
+
+        if (m.header.mask) {
+            _ = try r.read(&m.mask);
+        }
+        const size = try r.read(buffer[0..length]);
+        if (size != length) {
+            std.debug.print("read error: {} vs {}\n", .{ size, length });
+            std.debug.print("read error: {} \n", .{m.header});
+            return error.InvalidRead;
+        }
+        m.msg = buffer[0..size];
+        for (m.msg, 0..) |*msg, i| msg.* ^= m.mask[i % 4];
+        return m;
     }
 
     pub fn toVec(m: *const Message) [3]std.posix.iovec_const {
@@ -137,3 +180,4 @@ const Frame = @import("frame.zig");
 const Hash = std.crypto.hash.Sha1;
 const base64 = std.base64.standard.Encoder;
 const nativeToBig = std.mem.nativeToBig;
+const AnyReader = std.io.AnyReader;
