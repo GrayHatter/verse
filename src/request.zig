@@ -128,7 +128,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         .accept = accept,
         .authorization = authorization,
         .referer = referer,
-        .method = Methods.GET,
+        .method = method,
         .uri = uri orelse return error.InvalidRequest,
         .headers = headers,
         .cookie_jar = if (cookie_header) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
