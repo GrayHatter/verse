@@ -191,11 +191,12 @@ pub fn RequestData(comptime T: type) type {
             var query_valid = data.query.validator();
             var mpost_valid = if (data.post) |post| post.validator() else null;
             var req: T = undefined;
-            inline for (@typeInfo(T).Struct.fields) |field| {
+            inline for (@typeInfo(T).@"struct".fields) |field| {
                 if (mpost_valid) |*post_valid| {
-                    @field(req, field.name) = get(field.type, field.name, post_valid, field.default_value) catch try get(field.type, field.name, &query_valid, field.default_value);
+                    @field(req, field.name) = get(field.type, field.name, post_valid, field.defaultValue()) catch
+                        try get(field.type, field.name, &query_valid, field.defaultValue());
                 } else {
-                    @field(req, field.name) = try get(field.type, field.name, &query_valid, field.default_value);
+                    @field(req, field.name) = try get(field.type, field.name, &query_valid, field.defaultValue());
                 }
             }
             return req;
@@ -208,20 +209,17 @@ pub fn RequestData(comptime T: type) type {
             return error.NotImplemented;
         }
 
-        fn get(FieldType: type, comptime name: []const u8, valid: anytype, default: ?*const anyopaque) !FieldType {
-            return switch (@typeInfo(FieldType)) {
-                .Optional => |opt| get(opt.child, name, valid, default) catch |err| switch (err) {
-                    error.DataMissing => if (default != null)
-                        @as(*const FieldType, @alignCast(@ptrCast(default.?))).*
-                    else
-                        return null,
+        fn get(FT: type, comptime name: []const u8, valid: anytype, default: ?FT) !FT {
+            return switch (@typeInfo(FT)) {
+                .optional => |opt| get(opt.child, name, valid, null) catch |err| switch (err) {
+                    error.DataMissing => if (default) |d| d else return null,
                     else => return err,
                 },
-                .Bool => valid.optional(bool, name) orelse return error.DataMissing,
-                .Int => try parseInt(FieldType, (try valid.require(name)).value, 10),
-                .Float => try parseFloat(FieldType, (try valid.require(name)).value),
-                .Enum => return stringToEnum(FieldType, (try valid.require(name)).value) orelse error.InvalidEnumMember,
-                .Pointer => (try valid.require(name)).value,
+                .bool => valid.optional(bool, name) orelse return error.DataMissing,
+                .int => try parseInt(FT, (try valid.require(name)).value, 10),
+                .float => try parseFloat(FT, (try valid.require(name)).value),
+                .@"enum" => return stringToEnum(FT, (try valid.require(name)).value) orelse error.InvalidEnumMember,
+                .pointer => (try valid.require(name)).value,
                 else => comptime unreachable, // Not yet implemented
             };
         }
@@ -240,7 +238,7 @@ pub fn RequestData(comptime T: type) type {
 
             var req: T = undefined;
             inline for (std.meta.fields(T)) |field| {
-                @field(req, field.name) = try get(field.type, field.name, &valid, field.default_value);
+                @field(req, field.name) = try get(field.type, field.name, &valid, field.defaultValue());
             }
             return req;
         }
@@ -251,8 +249,8 @@ pub fn RequestData(comptime T: type) type {
             var req: T = undefined;
             inline for (std.meta.fields(T)) |field| {
                 @field(req, field.name) = switch (@typeInfo(field.type)) {
-                    .Optional => if (valid.optionalItem(field.name)) |o| o.value else null,
-                    .Pointer => |fptr| switch (fptr.child) {
+                    .optional => if (valid.optionalItem(field.name)) |o| o.value else null,
+                    .pointer => |fptr| switch (fptr.child) {
                         u8 => (try valid.require(field.name)).value,
                         []const u8 => arr: {
                             const count = valid.count(field.name);

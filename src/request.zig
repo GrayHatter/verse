@@ -48,7 +48,7 @@ pub const Encoding = packed struct(usize) {
 
     pub fn fromStr(str: []const u8) Encoding {
         var e = Encoding.default;
-        inline for (@typeInfo(Encoding).Struct.fields) |f| {
+        inline for (@typeInfo(Encoding).@"struct".fields) |f| {
             if (indexOf(u8, str, f.name)) |_| {
                 @field(e, f.name) = if (f.type == bool) true else 0;
             }

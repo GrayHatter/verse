@@ -75,7 +75,8 @@ pub fn cleanHtml(in: u8, out: ?[]u8) Error!usize {
         else => &same,
     };
 
-    if (comptime out) |o| {
+    // I would like the null check to be comptime, but happy to defer that for now
+    if (out) |o| {
         if (replace.len > o.len) return error.NoSpaceLeft;
         @memcpy(o[0..replace.len], replace);
     }
@@ -117,7 +118,8 @@ pub fn cleanPath(in: u8, out: ?[]u8) Error!usize {
         else => "",
     };
 
-    if (comptime out) |o| {
+    // I would like the null check to be comptime, but happy to defer that for now
+    if (out) |o| {
         if (replace.len > o.len) return error.NoSpaceLeft;
         @memcpy(o[0..replace.len], replace);
     }
@@ -133,7 +135,8 @@ pub fn cleanFilename(in: u8, out: ?[]u8) Error!usize {
         else => return cleanPath(in, out),
     };
 
-    if (comptime out) |o| {
+    // I would like the null check to be comptime, but happy to defer that for now
+    if (out) |o| {
         if (replace.len > o.len) return error.NoSpaceLeft;
         @memcpy(o[0..replace.len], replace);
     }

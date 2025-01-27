@@ -48,10 +48,7 @@ pub fn serve(z: *zWSGI) !void {
         @panic("Cleanup failed");
     };
 
-    signalListen(SIG.INT) catch {
-        log.err("Unable to install sigint handler", .{});
-        return error.Unexpected;
-    };
+    signalListen(SIG.INT);
 
     const uaddr = try std.net.Address.initUnix(z.unix_file);
     var server = try uaddr.listen(.{});
@@ -113,8 +110,8 @@ export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv
     }
 }
 
-fn signalListen(signal: u6) !void {
-    try std.posix.sigaction(signal, &std.posix.Sigaction{
+fn signalListen(signal: u6) void {
+    std.posix.sigaction(signal, &std.posix.Sigaction{
         .handler = .{ .sigaction = sig_cb },
         .mask = std.posix.empty_sigset,
         .flags = SA.SIGINFO,

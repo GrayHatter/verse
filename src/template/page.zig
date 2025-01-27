@@ -92,7 +92,7 @@ pub fn PageRuntime(comptime PageDataType: type) type {
 
 fn getOffset(T: type, name: []const u8, base: usize) usize {
     switch (@typeInfo(T)) {
-        .Struct => {
+        .@"struct" => {
             var local: [0xff]u8 = undefined;
             const end = makeFieldName(name, &local);
             const field = local[0..end];
@@ -156,10 +156,10 @@ fn baseType(T: type, name: []const u8) type {
                 ?[]const u8 => unreachable,
                 ?usize => unreachable,
                 else => switch (@typeInfo(f.type)) {
-                    .Pointer => |ptr| return ptr.child,
-                    .Optional => |opt| return opt.child,
-                    .Struct => return f.type,
-                    .Int => return f.type,
+                    .pointer => |ptr| return ptr.child,
+                    .optional => |opt| return opt.child,
+                    .@"struct" => return f.type,
+                    .int => return f.type,
                     else => @compileError("Unexpected kind " ++ f.name),
                 },
             }
@@ -450,14 +450,14 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         skip = t.len;
                     },
                     .array => |array| switch (@typeInfo(array.kind)) {
-                        .Pointer => {
+                        .pointer => {
                             const child_data: array.kind = dos.getData(array.kind, data).*;
                             for (child_data) |cd| {
                                 count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
                             }
                             skip = array.len;
                         },
-                        .Optional => {
+                        .optional => {
                             const child_data = dos.getData(array.kind, data).*;
                             if (child_data) |cd| {
                                 count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
@@ -498,8 +498,8 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         fn offsetOptionalItem(T: type, item: ?T, comptime ofs: []const Offset, html: []const u8, out: anytype) !void {
             if (comptime T == ?[]const u8) return offsetDirective(T, item.?, ofs[0], out);
             switch (@typeInfo(T)) {
-                .Int => std.debug.print("skipped int\n", .{}),
-                .Struct => if (item) |itm| try formatDirective(T, itm, ofs, html, out),
+                .int => std.debug.print("skipped int\n", .{}),
+                .@"struct" => if (item) |itm| try formatDirective(T, itm, ofs, html, out),
                 else => comptime unreachable,
             }
         }
@@ -519,11 +519,11 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     }
                 },
                 else => switch (@typeInfo(T)) {
-                    .Pointer => |ptr| {
-                        std.debug.assert(ptr.size == .Slice);
+                    .pointer => |ptr| {
+                        std.debug.assert(ptr.size == .slice);
                         for (data) |each| try formatDirective(ptr.child, each, ofs, html, out);
                     },
-                    .Optional => |opt| {
+                    .optional => |opt| {
                         if (opt.child == []const u8) unreachable;
                         try offsetOptionalItem(opt.child, data, ofs, html, out);
                     },
@@ -622,15 +622,15 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     }
                 },
                 else => switch (@typeInfo(T)) {
-                    .Pointer => |ptr| {
-                        std.debug.assert(ptr.size == .Slice);
+                    .pointer => |ptr| {
+                        std.debug.assert(ptr.size == .slice);
                         for (data) |each| idx += try ioVecCore(ptr.child, each, ofs, vec[idx..], a);
                     },
-                    .Optional => |opt| {
+                    .optional => |opt| {
                         if (opt.child == []const u8) unreachable;
                         switch (@typeInfo(opt.child)) {
-                            .Int => std.debug.print("skipped int\n", .{}),
-                            .Struct => {
+                            .int => std.debug.print("skipped int\n", .{}),
+                            .@"struct" => {
                                 if (data) |d| return try ioVecCore(opt.child, d, ofs, vec, a);
                             },
                             else => unreachable,
@@ -738,7 +738,7 @@ test Page {
 
 const makeFieldName = @import("builtins.zig").makeFieldName;
 fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
-    if (@typeInfo(T) != .Struct) return null;
+    if (@typeInfo(T) != .@"struct") return null;
     var local: [0xff]u8 = undefined;
     const realname = local[0..makeFieldName(name, &local)];
     inline for (std.meta.fields(T)) |field| {

@@ -11,7 +11,7 @@ pub const Options = Server.Options;
 /// for verse to construct a valid server route.
 /// TODO enumerate minimal example
 pub fn Endpoints(endpoints: anytype) type {
-    if (@typeInfo(@TypeOf(endpoints)).Struct.is_tuple == false) return error.InvalidEndpointTypes;
+    if (@typeInfo(@TypeOf(endpoints)).@"struct".is_tuple == false) return error.InvalidEndpointTypes;
     inline for (endpoints) |ep| {
         validateEndpoint(ep);
     }
@@ -96,7 +96,7 @@ fn routeCount(endpoints: anytype) usize {
         if (@hasDecl(ep, "verse_router")) {
             count += 1;
         } else {
-            if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .Fn) {
+            if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .@"fn") {
                 count += 1;
             }
 

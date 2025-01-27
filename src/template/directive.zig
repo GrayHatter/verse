@@ -296,11 +296,11 @@ pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!vo
     var local: [0xff]u8 = undefined;
     const realname = local[0..makeFieldName(self.noun, &local)];
     switch (@typeInfo(T)) {
-        .Struct => {
+        .@"struct" => {
             inline for (std.meta.fields(T)) |field| {
                 if (comptime isStringish(field.type)) continue;
                 switch (@typeInfo(field.type)) {
-                    .Pointer => {
+                    .pointer => {
                         if (eql(u8, field.name, realname)) {
                             const child = @field(ctx, field.name);
                             for (child) |each| {
@@ -319,7 +319,7 @@ pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!vo
                             }
                         }
                     },
-                    .Optional => {
+                    .optional => {
                         if (eql(u8, field.name, realname)) {
                             //@compileLog("optional for {s}\n", field.name, field.type, T);
                             const child = @field(ctx, field.name);
@@ -331,14 +331,14 @@ pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!vo
                             }
                         }
                     },
-                    .Struct => {
+                    .@"struct" => {
                         if (eql(u8, field.name, realname)) {
                             const child = @field(ctx, field.name);
                             std.debug.assert(self.verb == .build);
                             try self.withTyped(@TypeOf(child), child, out);
                         }
                     },
-                    .Int => |int| {
+                    .int => |int| {
                         if (eql(u8, field.name, realname)) {
                             std.debug.assert(int.bits == 64);
                             try std.fmt.formatInt(@field(ctx, field.name), 10, .lower, .{}, out);
@@ -348,7 +348,7 @@ pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!vo
                 }
             }
         },
-        .Int => {
+        .int => {
             //std.debug.assert(int.bits == 64);
             try std.fmt.formatInt(ctx, 10, .lower, .{}, out);
         },
@@ -404,7 +404,7 @@ fn getBuiltin(name: []const u8) ?Template {
 }
 
 fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
-    if (@typeInfo(T) != .Struct) return null;
+    if (@typeInfo(T) != .@"struct") return null;
     var local: [0xff]u8 = undefined;
     const realname = local[0..makeFieldName(name, &local)];
     inline for (std.meta.fields(T)) |field| {
@@ -444,10 +444,10 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                     .delete => {},
                     .template => |template| {
                         if (T == usize) unreachable;
-                        if (@typeInfo(T) != .Struct) unreachable;
+                        if (@typeInfo(T) != .@"struct") unreachable;
                         inline for (std.meta.fields(T)) |field| {
                             switch (@typeInfo(field.type)) {
-                                .Optional => |otype| {
+                                .optional => |otype| {
                                     if (otype.child == []const u8) continue;
 
                                     var local: [0xff]u8 = undefined;
@@ -462,7 +462,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                                         );
                                     }
                                 },
-                                .Struct => {
+                                .@"struct" => {
                                     if (std.mem.eql(u8, field.name, noun)) {
                                         const subdata = @field(ctx, field.name);
                                         var subpage = template.pageOf(@TypeOf(subdata), subdata);

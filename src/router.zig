@@ -121,15 +121,15 @@ pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
 
 fn buildTarget(comptime match: anytype) Target {
     return switch (@typeInfo(@TypeOf(match))) {
-        .Pointer => |ptr| switch (@typeInfo(ptr.child)) {
-            .Fn => |fnc| switch (fnc.return_type orelse null) {
+        .pointer => |ptr| switch (@typeInfo(ptr.child)) {
+            .@"fn" => |fnc| switch (fnc.return_type orelse null) {
                 Error!void => .{ .build = match },
                 RoutingError!BuildFn => .{ .route = match },
                 else => @compileError("unknown function return type" ++ @typeName(ptr.child)),
             },
             else => .{ .simple = match },
         },
-        .Fn => |fnc| switch (fnc.return_type orelse null) {
+        .@"fn" => |fnc| switch (fnc.return_type orelse null) {
             Error!void => .{ .build = match },
             RoutingError!BuildFn => .{ .route = match },
             else => @compileError("unknown function return type"),

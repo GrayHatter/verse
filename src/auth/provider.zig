@@ -21,7 +21,7 @@ pub const VTable = struct {
     pub const CreateSessionFn = *const fn (*anyopaque, *User) Error!void;
     pub const GetCookieFn = *const fn (*anyopaque, User) Error!?RequestCookie;
 
-    pub const Empty = .{
+    pub const Empty: VTable = .{
         .authenticate = null,
         .lookup_user = null,
         .valid = null,

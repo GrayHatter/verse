@@ -100,7 +100,7 @@ pub const MultiPart = union(enum) {
     @"form-data": FormData,
 
     pub fn fromStr(str: []const u8) !MultiPart {
-        inline for (@typeInfo(MultiPart).Union.fields) |f| {
+        inline for (@typeInfo(MultiPart).@"union".fields) |f| {
             if (startsWith(u8, str, f.name)) {
                 return try f.type.fromStr(str);
             }

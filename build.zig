@@ -153,7 +153,7 @@ pub const Compiler = struct {
             .root_source_file = .{
                 .cwd_relative = self.b.pathJoin(&.{ local_dir, "src/template/struct-emit.zig" }),
             },
-            .target = self.b.host,
+            .target = self.b.graph.host,
         });
 
         const comptime_templates = try self.buildTemplates();
