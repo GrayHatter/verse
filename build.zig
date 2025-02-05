@@ -76,6 +76,8 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
+const ThisBuild = @This();
+
 pub const Compiler = struct {
     b: *std.Build,
     dirs: std.ArrayList([]const u8),
@@ -103,6 +105,13 @@ pub const Compiler = struct {
         self.collected.deinit();
     }
 
+    pub fn depPath(self: *Compiler, path: []const u8) std.Build.LazyPath {
+        return if (self.b.available_deps.len > 0)
+            self.b.dependencyFromBuildZig(ThisBuild, .{}).path(path)
+        else
+            self.b.path(path);
+    }
+
     pub fn addDir(self: *Compiler, dir: []const u8) void {
         const copy = self.b.allocator.dupe(u8, dir) catch @panic("OOM");
         self.dirs.append(copy) catch @panic("OOM");
@@ -121,12 +130,8 @@ pub const Compiler = struct {
         if (self.templates) |t| return t;
 
         //std.debug.print("building for {}\n", .{self.collected.items.len});
-
-        const local_dir = std.fs.path.dirname(@src().file) orelse ".";
         const compiled = self.b.createModule(.{
-            .root_source_file = .{
-                .cwd_relative = self.b.pathJoin(&.{ local_dir, "src/template/comptime.zig" }),
-            },
+            .root_source_file = self.depPath("src/template/comptime.zig"),
         });
 
         const found = self.b.addOptions();
@@ -147,13 +152,12 @@ pub const Compiler = struct {
         if (self.structs) |s| return s;
 
         if (self.debugging) std.debug.print("building structs for {}\n", .{self.collected.items.len});
-        const local_dir = std.fs.path.dirname(@src().file) orelse ".";
         const t_compiler = self.b.addExecutable(.{
             .name = "template-compiler",
-            .root_source_file = .{
-                .cwd_relative = self.b.pathJoin(&.{ local_dir, "src/template/struct-emit.zig" }),
-            },
-            .target = self.b.graph.host,
+            .root_module = self.b.createModule(.{
+                .root_source_file = self.depPath("src/template/struct-emit.zig"),
+                .target = self.b.graph.host,
+            }),
         });
 
         const comptime_templates = try self.buildTemplates();

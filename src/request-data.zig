@@ -228,7 +228,8 @@ pub fn RequestData(comptime T: type) type {
             var valid = query.validator();
             var req: T = undefined;
             inline for (std.meta.fields(T)) |field| {
-                @field(req, field.name) = try get(field.type, field.name, &valid, field.default_value);
+                // TODO this has no test
+                @field(req, field.name) = try get(field.type, field.name, &valid, field.defaultValue());
             }
             return req;
         }

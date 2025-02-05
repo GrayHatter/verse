@@ -91,9 +91,9 @@ pub fn element(comptime name: []const u8, children: anytype, attrs: ?[]const Att
     if (ChildrenType == @TypeOf(null)) return .{ .name = name, .attrs = attrs };
     const child_type_info = @typeInfo(ChildrenType);
     switch (child_type_info) {
-        .Pointer => |ptr| switch (ptr.size) {
-            .One => switch (@typeInfo(ptr.child)) {
-                .Array => |arr| switch (arr.child) {
+        .pointer => |ptr| switch (ptr.size) {
+            .one => switch (@typeInfo(ptr.child)) {
+                .array => |arr| switch (arr.child) {
                     u8 => return .{
                         .name = name,
                         .text = children,
@@ -108,7 +108,7 @@ pub fn element(comptime name: []const u8, children: anytype, attrs: ?[]const Att
                     },
                     else => @compileError("Unknown type given to element"),
                 },
-                .Pointer => @compileError("Pointer to a pointer, (perhaps &[]u8) did you mistakenly add a &?"),
+                .pointer => @compileError("Pointer to a pointer, (perhaps &[]u8) did you mistakenly add a &?"),
                 else => {
                     @compileLog(ptr);
                     @compileLog(ptr.child);
@@ -116,7 +116,7 @@ pub fn element(comptime name: []const u8, children: anytype, attrs: ?[]const Att
                     @compileLog(ChildrenType);
                 },
             },
-            .Slice => switch (ptr.child) {
+            .slice => switch (ptr.child) {
                 u8 => return .{
                     .name = name,
                     .text = children,
@@ -141,8 +141,8 @@ pub fn element(comptime name: []const u8, children: anytype, attrs: ?[]const Att
                 @compileLog(ChildrenType);
             },
         },
-        .Struct => @compileError("Raw structs aren't allowed, element must be a slice"),
-        .Array => |arr| switch (arr.child) {
+        .@"struct" => @compileError("Raw structs aren't allowed, element must be a slice"),
+        .array => |arr| switch (arr.child) {
             // TODO, this is probably a compiler error, prefix with &
             Element => return .{
                 .name = name,

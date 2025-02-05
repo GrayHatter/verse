@@ -17,9 +17,9 @@ pub fn init(a: Allocator) ResponseData {
 
 fn name(comptime T: type) []const u8 {
     return comptime switch (@typeInfo(T)) {
-        .Array => |a| @typeName(a.child),
-        .Pointer => |p| @typeName(p.child),
-        .Struct => @typeName(T),
+        .array => |a| @typeName(a.child),
+        .pointer => |p| @typeName(p.child),
+        .@"struct" => @typeName(T),
         else => unreachable,
     };
 }

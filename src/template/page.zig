@@ -264,7 +264,7 @@ fn validateDirective(
     pblob: []const u8,
     base_offset: usize,
 ) []const Offset {
-    @setEvalBranchQuota(15000);
+    @setEvalBranchQuota(20000);
     const data_offset = getOffset(BlockType, drct.noun, base_offset);
     const end = drct.tag_block.len;
     switch (drct.verb) {
@@ -585,6 +585,9 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     vec[0] = .{ .base = d.ptr, .len = d.len };
                 } else if (drct.otherwise == .default) {
                     vec[0] = .{ .base = drct.otherwise.default.ptr, .len = drct.otherwise.default.len };
+                } else {
+                    vec[0] = .{ .base = "".ptr, .len = 0 };
+                    return 0;
                 },
                 usize, isize => {
                     const int = try allocPrint(a, "{}", .{data});

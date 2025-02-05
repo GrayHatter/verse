@@ -82,7 +82,7 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
                 return;
             };
             stream.writevAll(vec) catch |err| switch (err) {
-                else => log.err("iovec write error Error {}", .{err}),
+                else => log.err("iovec write error Error {} len {}", .{ err, vec.len }),
             };
             if (required > 2048) vrs.alloc.free(vecs);
         },
