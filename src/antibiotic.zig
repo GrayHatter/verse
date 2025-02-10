@@ -50,8 +50,8 @@ pub fn cleanAlloc(comptime rule: Rule, a: Allocator, in: []const u8) Error![]u8 
 pub const Html = struct {
     text: []const u8,
 
-    pub fn sanitizeAlloc(a: Allocator, in: []const u8) Error![]u8 {
-        return try abx.cleanAlloc(a, in, .{ .rules = .html });
+    pub fn cleanAlloc(a: Allocator, in: []const u8) Error![]u8 {
+        return try abx.cleanAlloc(.html, a, in);
     }
 
     pub fn format(self: Html, comptime _: []const u8, _: FmtOpt, out: anytype) !void {
@@ -96,7 +96,7 @@ pub const Filename = struct {
     permit_directories: bool = false,
 
     pub fn cleanAlloc(a: Allocator, in: []const u8) Error![]u8 {
-        return try abx.cleanAlloc(a, in, .{ .rules = .filename });
+        return try abx.cleanAlloc(.filename, a, in);
     }
 
     pub fn format(self: Filename, comptime _: []const u8, _: FmtOpt, out: anytype) !void {
