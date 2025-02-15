@@ -60,6 +60,17 @@ pub const Html = struct {
             try out.writeAll(buf[0 .. cleanHtml(c, &buf) catch unreachable]);
         }
     }
+
+    pub fn clean(src: u8) ?[]const u8 {
+        return switch (src) {
+            '<' => "&lt;",
+            '&' => "&amp;",
+            '>' => "&gt;",
+            '"' => "&quot;",
+            '\'' => "&apos;",
+            else => null,
+        };
+    }
 };
 
 /// Basic html sanitizer. Will replace all chars, even when it may be
