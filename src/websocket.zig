@@ -40,7 +40,7 @@ pub fn send(ws: Websocket, msg: []const u8) !void {
     };
 }
 
-pub fn recieve(ws: *Websocket, buffer: []u8) !Message {
+pub fn recieve(ws: *Websocket, buffer: []align(8) u8) !Message {
     var reader = switch (ws.frame.downstream) {
         .zwsgi, .http => |stream| stream.reader(),
         else => unreachable,
@@ -56,7 +56,7 @@ pub const Message = struct {
         small: u16,
         large: u64,
     },
-    mask: [4]u8 = undefined,
+    mask: [4]u8 align(4) = undefined,
     msg: []u8,
 
     pub const Header = if (endian == .big)
@@ -97,7 +97,7 @@ pub const Message = struct {
         return message;
     }
 
-    pub fn read(r: *AnyReader, buffer: []u8) !Message {
+    pub fn read(r: *AnyReader, buffer: []align(8) u8) !Message {
         var m: Message = undefined;
 
         if (try r.read(@as(*[2]u8, @ptrCast(&m.header))) != 2) return error.InvalidRead;
@@ -125,9 +125,27 @@ pub const Message = struct {
             std.debug.print("read error: {} \n", .{m.header});
             return error.InvalidRead;
         }
+
+        const umask: u32 = @as(*u32, @ptrCast(&m.mask)).*;
+        applyMask(umask, buffer[0..size]);
         m.msg = buffer[0..size];
-        for (m.msg, 0..) |*msg, i| msg.* ^= m.mask[i % 4];
         return m;
+    }
+
+    pub fn applyMask(mask: u32, buffer: []align(8) u8) void {
+        const block_mask: usize = mask | @as(usize, mask) << 32;
+        const block_buffer: []u8 align(8) = buffer[0 .. (buffer.len / 8) * 8];
+        // TODO fix when zig supports this cast
+        var block_msg: []usize = undefined;
+        block_msg.ptr = @alignCast(@ptrCast(block_buffer.ptr));
+        block_msg.len = block_buffer.len / 8;
+        for (block_msg) |*blk| {
+            blk.* ^= block_mask;
+        }
+
+        const remainder = buffer[block_buffer.len..];
+        const rmask: [*]const u8 = @ptrCast(&mask);
+        for (remainder, 0..) |*msg, i| msg.* ^= rmask[i % 4];
     }
 
     pub fn toVec(m: *const Message) [3]std.posix.iovec_const {

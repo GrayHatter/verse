@@ -22,9 +22,9 @@ const Root = struct {
             var buffer: [0xff]u8 = undefined;
             ws.send(print(&buffer, "Iteration {}\n", .{i}) catch unreachable) catch unreachable;
             std.time.sleep(1_000_000_000);
-            var read_buffer: [0x4000]u8 = undefined;
+            var read_buffer: [0x4000]u8 align(8) = undefined;
             const msg = ws.recieve(&read_buffer) catch unreachable;
-            std.debug.print("msg: {} -- {s}\n", .{ msg.header, msg.msg });
+            std.debug.print("msg: {} -- {} -- {s}\n", .{ msg.header, msg.msg.len, msg.msg });
         }
         std.debug.print("Socket Example Done\n", .{});
     }
