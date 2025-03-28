@@ -1,6 +1,7 @@
 .{
-    .name = "verse",
+    .name = .verse,
     .version = "0.0.0",
+    .fingerprint = 0xd2f7e69feb304207,
     .minimum_zig_version = "0.13.0",
     .dependencies = .{},
 

@@ -211,7 +211,7 @@ fn validateBlockSplit(
     var wsidx = ws_start;
     while (wsidx < pblob.len and
         (pblob[wsidx] == ' ' or pblob[wsidx] == '\t' or
-        pblob[wsidx] == '\n' or pblob[wsidx] == '\r'))
+            pblob[wsidx] == '\n' or pblob[wsidx] == '\r'))
     {
         wsidx += 1;
     }
@@ -360,12 +360,12 @@ pub fn validateBlock(comptime html: []const u8, BlockType: type, base_offset: us
             if (Directive.init(pblob)) |drct| {
                 found_offsets = found_offsets ++
                     [_]Offset{.{
-                    .start = open_idx,
-                    .end = index,
-                    .kind = .{
-                        .slice = html[open_idx..index],
-                    },
-                }} ++ validateDirective(BlockType, index, offset, drct, pblob, base_offset);
+                        .start = open_idx,
+                        .end = index,
+                        .kind = .{
+                            .slice = html[open_idx..index],
+                        },
+                    }} ++ validateDirective(BlockType, index, offset, drct, pblob, base_offset);
                 const end = drct.tag_block.len;
                 pblob = pblob[end..];
                 index += end;
