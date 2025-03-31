@@ -27,6 +27,13 @@ pub const ClientError = errors.ClientError;
 pub const NetworkError = errors.NetworkError;
 pub const Error = errors.Error;
 
-test "verse" {
-    @import("std").testing.refAllDecls(@This());
+comptime {
+    // Actually build docs
+    _ = &@This();
 }
+
+test "verse" {
+    std.testing.refAllDecls(@This());
+}
+
+const std = @import("std");

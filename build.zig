@@ -46,6 +46,15 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
 
+    const docs = b.addObject(.{ .name = "verse", .root_module = verse_lib });
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Build Verse Docs");
+    docs_step.dependOn(&install_docs.step);
+
     const examples = [_][]const u8{
         "basic",            "cookies", "template",  "endpoint", "auth-cookie",
         "request-userdata", "api",     "websocket",
