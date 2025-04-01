@@ -1,6 +1,7 @@
 const Request = @This();
 
 pub const Data = @import("request-data.zig");
+pub const UserAgent = @import("user-agent.zig");
 
 /// Unstable API; likely to exist in some form, but might be changed
 remote_addr: RemoteAddr,
@@ -33,7 +34,6 @@ const Pair = struct {
 
 pub const Host = []const u8;
 pub const RemoteAddr = []const u8;
-pub const UserAgent = []const u8;
 pub const Accept = []const u8;
 pub const Authorization = []const u8;
 pub const Referer = []const u8;
@@ -91,7 +91,7 @@ fn initCommon(
     _method: Methods,
     uri: []const u8,
     host: ?Host,
-    agent: ?UserAgent,
+    ua: ?[]const u8,
     referer: ?Referer,
     accept: ?Accept,
     accept_encoding: Encoding,
@@ -120,7 +120,7 @@ fn initCommon(
         .referer = referer,
         .remote_addr = remote_addr,
         .uri = uri,
-        .user_agent = agent,
+        .user_agent = if (ua) |u| .init(u) else null,
     };
 }
 
@@ -131,7 +131,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var headers = Headers.init(a);
     var accept: ?Accept = null;
     var host: ?Host = null;
-    var uagent: ?UserAgent = null;
+    var ua_slice: ?[]const u8 = null;
     var referer: ?Referer = null;
     var encoding: Encoding = Encoding.default;
     var authorization: ?Authorization = null;
@@ -153,7 +153,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         } else if (eqlIgnoreCase("HTTP_HOST", v.key)) {
             host = v.val;
         } else if (eqlIgnoreCase("HTTP_USER_AGENT", v.key)) {
-            uagent = v.val;
+            ua_slice = v.val;
         } else if (eqlIgnoreCase("HTTP_REFERER", v.key)) {
             referer = v.val;
         } else if (eqlIgnoreCase("HTTP_ACCEPT_ENCODING", v.key)) {
@@ -171,7 +171,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         method orelse return error.InvalidRequest,
         uri orelse return error.InvalidRequest,
         host,
-        uagent,
+        ua_slice,
         referer,
         accept,
         encoding,
@@ -189,7 +189,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
 
     var accept: ?Accept = null;
     var host: ?Host = null;
-    var uagent: ?UserAgent = null;
+    var ua_string: ?[]const u8 = null;
     var referer: ?Referer = null;
     var encoding: Encoding = Encoding.default;
     var authorization: ?Authorization = null;
@@ -202,7 +202,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
         } else if (eqlIgnoreCase("host", head.name)) {
             host = head.value;
         } else if (eqlIgnoreCase("user-agent", head.name)) {
-            uagent = head.value;
+            ua_string = head.value;
         } else if (eqlIgnoreCase("referer", head.name)) {
             referer = head.value;
         } else if (eqlIgnoreCase("accept-encoding", head.name)) {
@@ -228,7 +228,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
         translateStdHttp(http.head.method),
         http.head.target,
         host,
-        uagent,
+        ua_string,
         referer,
         accept,
         encoding,
