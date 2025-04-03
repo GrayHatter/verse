@@ -140,6 +140,20 @@ pub const Browser = struct {
     version: u32,
     version_string: []const u8 = "",
 
+    pub fn age(b: Browser) !i64 {
+        if (comptime !verse_buildopts.botdetection) @compileError("Bot Detection is currently disabled");
+        const versions = BotDetection.Browsers.Versions[@intFromEnum(b.name)];
+        if (b.version >= versions.len) return error.UnknownVersion;
+        return std.time.timestamp() - versions[b.version];
+    }
+
+    test age {
+        if (!verse_buildopts.botdetection) return error.SkipZigTest;
+        const browser = Browser{ .name = .chrome, .version = 134 };
+        try std.testing.expect(try browser.age() < 86400 * 3650); // breaks in 10 years, good luck future me!
+        try std.testing.expect(try browser.age() > 3148551);
+    }
+
     pub const Name = enum {
         chrome,
         edge,
@@ -150,6 +164,8 @@ pub const Browser = struct {
         brave,
         ladybird,
     };
+
+    test Name {}
 };
 
 pub const Script = enum {
@@ -168,12 +184,13 @@ pub fn init(ua_str: []const u8) UserAgent {
 const Request = @import("request.zig");
 const BotDetection = @import("bot-detection.zig");
 
-test "ua" {
+test UserAgent {
     std.testing.refAllDecls(@This());
     _ = &BotDetection;
 }
 
 const std = @import("std");
+const verse_buildopts = @import("verse_buildopts");
 const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
 const indexOf = std.mem.indexOf;

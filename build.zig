@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) !void {
     const ver = version(b);
     const options = b.addOptions();
     options.addOption([]const u8, "version", ver);
+    options.addOption(bool, "botdetection", true);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),
@@ -14,14 +15,14 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    verse_lib.addOptions("build_options", options);
+    verse_lib.addOptions("verse_buildopts", options);
 
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/verse.zig"),
         .target = target,
         .optimize = optimize,
     });
-    lib_unit_tests.root_module.addOptions("build_options", options);
+    lib_unit_tests.root_module.addOptions("verse_buildopts", options);
 
     var compiler = Compiler.init(b);
 

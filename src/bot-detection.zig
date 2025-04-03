@@ -9,12 +9,24 @@ const BotDetection = @This();
 pub fn init() BotDetection {}
 
 pub const Browsers = struct {
+    const Date = i64;
+    const VerDate = struct { u16, Date };
+    const browser_count = @typeInfo(UA.Browser.Name).@"enum".fields.len;
+    pub const Versions: [browser_count][]const Date = .{
+        &Chrome.Version.Dates,
+        &.{},
+        &.{},
+        &.{},
+        &.{},
+        &.{},
+        &.{},
+        &.{},
+    };
     pub const Chrome = struct {
         pub const Version = enum(u16) {
             _,
-        };
-        pub const Versions = struct {
-            const pairs = [_]struct { u16, f64 }{
+
+            pub const VerDates = [_]VerDate{
                 .{ 0, 1227513600 },   .{ 1, 1228982400 },   .{ 2, 1243148400 },   .{ 3, 1255330800 },
                 .{ 4, 1264406400 },   .{ 5, 1274425200 },   .{ 6, 1283410800 },   .{ 7, 1287644400 },
                 .{ 8, 1291276800 },   .{ 9, 1296720000 },   .{ 10, 1299571200 },  .{ 11, 1303887600 },
@@ -51,10 +63,10 @@ pub const Browsers = struct {
                 .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
                 .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 },
             };
-            pub const release_date: [pairs.len]i64 = brk: {
-                var list: [pairs.len]i64 = @splat(0);
+            pub const Dates: [VerDates.len]Date = brk: {
+                var list: [VerDates.len]Date = @splat(0);
 
-                for (pairs) |line| {
+                for (VerDates) |line| {
                     std.debug.assert(list[line[0]] == 0);
                     list[line[0]] = line[1];
                 }
@@ -66,10 +78,11 @@ pub const Browsers = struct {
 
 test Browsers {
     _ = &Browsers.Chrome.Version;
-    try std.testing.expectEqual(Browsers.Chrome.Versions.release_date[93], 1630393200);
+    try std.testing.expectEqual(Browsers.Chrome.Version.Dates[93], 1630393200);
     //for (0.., Browsers.Chrome.Versions.release) |i, date| {
     //    std.debug.print("{} on {}\n", .{ i, date });
     //}
 }
 
 const std = @import("std");
+const UA = @import("user-agent.zig");

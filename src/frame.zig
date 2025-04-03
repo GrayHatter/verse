@@ -398,5 +398,5 @@ const Websocket = @import("websocket.zig");
 const Error = @import("errors.zig").Error;
 const NetworkError = @import("errors.zig").NetworkError;
 
-const build_options = @import("build_options");
-const build_version = build_options.version;
+const verse_buildopts = @import("verse_buildopts");
+const build_version = verse_buildopts.version;
