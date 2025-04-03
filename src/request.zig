@@ -254,19 +254,13 @@ fn translateStdHttp(m: std.http.Method) Methods {
     };
 }
 
-pub fn getHeader(self: Request, key: []const u8) ?[]const u8 {
-    for (self.headers.items) |itm| {
-        if (std.mem.eql(u8, itm.name, key)) {
-            return itm.val;
-        }
-    } else {
-        return null;
-    }
-}
-
 const Headers = @import("headers.zig");
 const Cookies = @import("cookies.zig");
 const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
+
+test "req" {
+    std.testing.refAllDecls(@This());
+}
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

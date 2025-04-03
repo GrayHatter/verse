@@ -1,4 +1,7 @@
 //! User Agent
+//!
+//! Attempts to parse the user agent string provided by the client.
+//! This is only the data represented by the client.
 //! TODO write doc comments
 string: []const u8,
 resolved: Resolved,
@@ -163,7 +166,12 @@ pub fn init(ua_str: []const u8) UserAgent {
 }
 
 const Request = @import("request.zig");
-//const bot = @import("bot-detection.zig");
+const BotDetection = @import("bot-detection.zig");
+
+test "ua" {
+    std.testing.refAllDecls(@This());
+    _ = &BotDetection;
+}
 
 const std = @import("std");
 const startsWith = std.mem.startsWith;
