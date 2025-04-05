@@ -83,14 +83,26 @@ pub fn serve(z: *zWSGI) !void {
         var frame = try Frame.init(a, &request, z.auth);
 
         defer {
-            const vars = frame.request.raw.zwsgi.vars;
-            log.err("zWSGI: [{d:.3}] {s} - {s}: {s} -- \"{s}\"", .{
-                @as(f64, @floatFromInt(timer.lap())) / 1000000.0,
-                findOr(vars, "REMOTE_ADDR"),
-                findOr(vars, "REQUEST_METHOD"),
-                findOr(vars, "REQUEST_URI"),
-                findOr(vars, "HTTP_USER_AGENT"),
-            });
+            if (false) {
+                const vars = frame.request.raw.zwsgi.vars;
+                log.err("zWSGI: [debug] {s} - {s}: {s} -- \"{s}\"", .{
+                    findOr(vars, "REMOTE_ADDR"),
+                    findOr(vars, "REQUEST_METHOD"),
+                    findOr(vars, "REQUEST_URI"),
+                    findOr(vars, "HTTP_USER_AGENT"),
+                });
+            }
+            const lap = @as(f64, @floatFromInt(timer.lap())) / 1000000.0;
+            log.err(
+                "zWSGI: [{d:.3}] {s} - {s}: {s} -- \"{s}\"",
+                .{
+                    lap,
+                    request.remote_addr,
+                    request.method,
+                    request.uri,
+                    if (request.user_agent) |ua| ua.string else "EMPTY",
+                },
+            );
         }
 
         const callable = z.router.routerfn(&frame, z.router.routefn);

@@ -83,6 +83,12 @@ pub const Methods = enum(u9) {
         }
         return error.UnknownMethod;
     }
+
+    pub fn format(m: Methods, comptime _: []const u8, _: std.fmt.FormatOptions, w: anytype) !void {
+        switch (m) {
+            inline else => |e| try w.writeAll(@tagName(e)),
+        }
+    }
 };
 
 fn initCommon(
