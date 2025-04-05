@@ -116,7 +116,15 @@ pub fn main() !void {
     tree = std.StringHashMap(*AbstTree).init(a);
 
     for (compiled.data) |tplt| {
-        const fdata = try std.fs.cwd().readFileAlloc(a, tplt.path, 0xffff);
+        const fdata = std.fs.cwd().readFileAlloc(a, tplt.path, 0xffff) catch |err| br: {
+            if (err != error.FileNotFound) {
+                std.debug.print("template {s}\n", .{tplt.path});
+                std.debug.print("base {s}\n", .{try std.fs.cwd().realpathAlloc(a, ".")});
+                return err;
+            }
+
+            break :br try a.dupe(u8, tplt.blob);
+        };
         defer a.free(fdata);
 
         const name = makeStructName(tplt.path);

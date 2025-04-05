@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) !void {
 
     const ver = version(b);
     const options = b.addOptions();
+
     options.addOption([]const u8, "version", ver);
     options.addOption(bool, "botdetection", true);
 
@@ -24,25 +25,25 @@ pub fn build(b: *std.Build) !void {
     });
     lib_unit_tests.root_module.addOptions("verse_buildopts", options);
 
-    var compiler = Compiler.init(b);
+    const template_path = b.option(std.Build.LazyPath, "template-path", "path for the templates generated at comptime") orelse b.path("examples/templates/");
 
-    var comptime_structs: ?*std.Build.Module = null;
-    var comptime_templates: ?*std.Build.Module = null;
+    var compiler = Compiler.init(b);
+    compiler.addDir(template_path);
 
     if (std.fs.cwd().access("src/fallback_html/index.html", .{})) {
-        compiler.addDir("src/fallback_html/");
-        compiler.addDir("examples/templates/");
-        compiler.collect() catch unreachable;
-        comptime_templates = compiler.buildTemplates() catch unreachable;
-        // Zig build time doesn't expose it's state in a way I know how to check...
-        // so we yolo it like python :D
-        lib_unit_tests.root_module.addImport("comptime_templates", comptime_templates orelse unreachable);
-        comptime_structs = compiler.buildStructs() catch unreachable;
-        lib_unit_tests.root_module.addImport("comptime_structs", comptime_structs orelse unreachable);
-
-        verse_lib.addImport("comptime_structs", comptime_structs orelse @panic("structs missing"));
-        verse_lib.addImport("comptime_templates", comptime_templates orelse @panic("structs missing"));
+        compiler.addDir(b.path("src/fallback_html/"));
     } else |_| {}
+
+    compiler.collect() catch @panic("unreachable");
+    const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
+    const comptime_structs = compiler.buildStructs() catch @panic("unreachable");
+
+    verse_lib.addImport("comptime_structs", comptime_structs);
+    verse_lib.addImport("comptime_templates", comptime_templates);
+
+    lib_unit_tests.root_module.addImport("comptime_templates", comptime_templates);
+    lib_unit_tests.root_module.addImport("comptime_structs", comptime_structs);
+
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
@@ -94,11 +95,11 @@ pub fn build(b: *std.Build) !void {
 
 const ThisBuild = @This();
 
-pub const Compiler = struct {
+const Compiler = struct {
     b: *std.Build,
-    dirs: std.ArrayList([]const u8),
+    dirs: std.ArrayList(std.Build.LazyPath),
     files: std.ArrayList([]const u8),
-    collected: std.ArrayList([]const u8),
+    collected: std.ArrayList(std.Build.LazyPath),
     templates: ?*std.Build.Module = null,
     structs: ?*std.Build.Module = null,
     debugging: bool = false,
@@ -106,9 +107,9 @@ pub const Compiler = struct {
     pub fn init(b: *std.Build) Compiler {
         return .{
             .b = b,
-            .dirs = std.ArrayList([]const u8).init(b.allocator),
+            .dirs = std.ArrayList(std.Build.LazyPath).init(b.allocator),
             .files = std.ArrayList([]const u8).init(b.allocator),
-            .collected = std.ArrayList([]const u8).init(b.allocator),
+            .collected = std.ArrayList(std.Build.LazyPath).init(b.allocator),
         };
     }
 
@@ -128,9 +129,9 @@ pub const Compiler = struct {
             self.b.path(path);
     }
 
-    pub fn addDir(self: *Compiler, dir: []const u8) void {
-        const copy = self.b.allocator.dupe(u8, dir) catch @panic("OOM");
-        self.dirs.append(copy) catch @panic("OOM");
+    pub fn addDir(self: *Compiler, dir: std.Build.LazyPath) void {
+        //const copy = self.b.allocator.dupe(u8, dir) catch @panic("OOM");
+        self.dirs.append(dir) catch @panic("OOM");
         self.templates = null;
         self.structs = null;
     }
@@ -151,15 +152,21 @@ pub const Compiler = struct {
         });
 
         const found = self.b.addOptions();
-        found.addOption([]const []const u8, "names", self.collected.items);
-        compiled.addOptions("config", found);
+        const names: [][]const u8 = self.b.allocator.alloc([]const u8, self.collected.items.len) catch @panic("OOM");
 
-        for (self.collected.items) |file| {
-            _ = compiled.addAnonymousImport(file, .{
-                .root_source_file = self.b.path(file),
+        for (self.collected.items, names) |lpath, *name| {
+            name.* = lpath.getPath3(self.b, null).sub_path;
+            //std.debug.print("builder {s}\n", .{name.*});
+            //const base = lpath.getPath3(self.b, null).basename();
+            //const file = try lpath.getPath3(self.b, null).toString(self.b.allocator);
+            //name.* = try lpath.getPath3(self.b, null).toString(self.b.allocator);
+            _ = compiled.addAnonymousImport(name.*, .{
+                .root_source_file = lpath,
             });
         }
 
+        found.addOption([]const []const u8, "names", names);
+        compiled.addOptions("config", found);
         self.templates = compiled;
         return compiled;
     }
@@ -189,10 +196,9 @@ pub const Compiler = struct {
     }
 
     pub fn collect(self: *Compiler) !void {
-        var cwd = std.fs.cwd();
         for (self.dirs.items) |srcdir| {
-            var idir = cwd.openDir(srcdir, .{ .iterate = true }) catch |err| {
-                std.debug.print("template build error {} for srcdir {s}\n", .{ err, srcdir });
+            var idir = srcdir.getPath3(self.b, null).openDir("", .{ .iterate = true }) catch |err| {
+                std.debug.print("template build error {} for srcdir {}\n", .{ err, srcdir });
                 return err;
             };
             defer idir.close();
@@ -200,11 +206,11 @@ pub const Compiler = struct {
             var itr = idir.iterate();
             while (try itr.next()) |file| {
                 if (!std.mem.endsWith(u8, file.name, ".html")) continue;
-                try self.collected.append(self.b.pathJoin(&[2][]const u8{ srcdir, file.name }));
+                try self.collected.append(srcdir.path(self.b, file.name));
             }
         }
         for (self.files.items) |file| {
-            try self.collected.append(file);
+            try self.collected.append(self.b.path(file));
         }
     }
 };
