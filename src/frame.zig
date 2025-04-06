@@ -365,6 +365,25 @@ fn HTTPHeader(vrs: *Frame) [:0]const u8 {
     };
 }
 
+pub fn dumpDebugData(frame: *const Frame) void {
+    switch (frame.request.raw) {
+        .zwsgi => |zw| {
+            for (zw.vars) |varr| {
+                std.debug.print("DumbDebug '{s}' => '''{s}'''\n", .{ varr.key, varr.val });
+            }
+        },
+        .http => |http| {
+            var itr_headers = http.iterateHeaders();
+            while (itr_headers.next()) |header| {
+                std.debug.print("DumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
+            }
+        },
+    }
+    if (frame.request.data.post) |post_data| {
+        std.debug.print("post data => '''{s}'''\n", .{post_data.rawpost});
+    }
+}
+
 test "Verse" {
     std.testing.refAllDecls(@This());
 }
