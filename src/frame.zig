@@ -231,7 +231,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
         .http, .zwsgi => |stream| {
             var vect = VecList(HEADER_VEC_COUNT).init();
 
-            const h_resp = vrs.HTTPHeader();
+            const h_resp = vrs.HttpHeader("HTTP/1.1");
             try vect.append(h_resp);
 
             // Default headers
@@ -335,32 +335,32 @@ fn flush(vrs: Frame) !void {
     }
 }
 
-fn HTTPHeader(vrs: *Frame) [:0]const u8 {
+fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
     if (vrs.status == null) vrs.status = .ok;
     return switch (vrs.status.?) {
-        .switching_protocols => "HTTP/1.1 101 Switching Protocols\r\n",
-        .ok => "HTTP/1.1 200 OK\r\n",
-        .created => "HTTP/1.1 201 Created\r\n",
-        .no_content => "HTTP/1.1 204 No Content\r\n",
-        .multiple_choice => "HTTP/1.1 300 Multiple Choices\r\n",
-        .moved_permanently => "HTTP/1.1 301 Moved Permanently \r\n",
-        .found => "HTTP/1.1 302 Found\r\n",
-        .see_other => "HTTP/1.1 303 See Other\r\n",
-        .not_modified => "HTTP/1.1 304 Not Modified \r\n",
-        .use_proxy => "HTTP/1.1 305 Use Proxy \r\n",
-        .temporary_redirect => "HTTP/1.1 307 Temporary Redirect\r\n",
-        .permanent_redirect => "HTTP/1.1 308 Permanent Redirect \r\n",
-        .bad_request => "HTTP/1.1 400 Bad Request\r\n",
-        .unauthorized => "HTTP/1.1 401 Unauthorized\r\n",
-        .forbidden => "HTTP/1.1 403 Forbidden\r\n",
-        .not_found => "HTTP/1.1 404 Not Found\r\n",
-        .method_not_allowed => "HTTP/1.1 405 Method Not Allowed\r\n",
-        .conflict => "HTTP/1.1 409 Conflict\r\n",
-        .payload_too_large => "HTTP/1.1 413 Content Too Large\r\n",
-        .internal_server_error => "HTTP/1.1 500 Internal Server Error\r\n",
+        .switching_protocols => ver ++ " 101 Switching Protocols\r\n",
+        .ok => ver ++ " 200 OK\r\n",
+        .created => ver ++ " 201 Created\r\n",
+        .no_content => ver ++ " 204 No Content\r\n",
+        .multiple_choice => ver ++ " 300 Multiple Choices\r\n",
+        .moved_permanently => ver ++ " 301 Moved Permanently\r\n",
+        .found => ver ++ " 302 Found\r\n",
+        .see_other => ver ++ " 303 See Other\r\n",
+        .not_modified => ver ++ " 304 Not Modified\r\n",
+        .use_proxy => ver ++ " 305 Use Proxy\r\n",
+        .temporary_redirect => ver ++ " 307 Temporary Redirect\r\n",
+        .permanent_redirect => ver ++ " 308 Permanent Redirect\r\n",
+        .bad_request => ver ++ " 400 Bad Request\r\n",
+        .unauthorized => ver ++ " 401 Unauthorized\r\n",
+        .forbidden => ver ++ " 403 Forbidden\r\n",
+        .not_found => ver ++ " 404 Not Found\r\n",
+        .method_not_allowed => ver ++ " 405 Method Not Allowed\r\n",
+        .conflict => ver ++ " 409 Conflict\r\n",
+        .payload_too_large => ver ++ " 413 Content Too Large\r\n",
+        .internal_server_error => ver ++ " 500 Internal Server Error\r\n",
         else => b: {
             log.err("Status code not implemented {}", .{vrs.status.?});
-            break :b "HTTP/1.1 500 Internal Server Error\r\n";
+            break :b ver ++ " 500 Internal Server Error\r\n";
         },
     };
 }
