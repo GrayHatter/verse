@@ -369,7 +369,7 @@ pub fn dumpDebugData(frame: *const Frame) void {
     switch (frame.request.raw) {
         .zwsgi => |zw| {
             for (zw.vars) |varr| {
-                std.debug.print("DumbDebug '{s}' => '''{s}'''\n", .{ varr.key, varr.val });
+                std.debug.print("DumpDebug '{s}' => '''{s}'''\n", .{ varr.key, varr.val });
             }
         },
         .http => |http| {
