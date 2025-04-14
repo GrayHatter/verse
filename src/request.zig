@@ -11,7 +11,7 @@ host: ?Host,
 user_agent: ?UserAgent,
 referer: ?Referer,
 accept: ?Accept,
-accept_encoding: Encoding = Encoding.default,
+accept_encoding: Encoding = .default,
 authorization: ?Authorization,
 
 headers: Headers,
