@@ -13,6 +13,7 @@ referer: ?Referer,
 accept: ?Accept,
 accept_encoding: Encoding = .default,
 authorization: ?Authorization,
+protocol: Protocol,
 
 headers: Headers,
 /// Default API, still unstable, but unlike to drastically change
@@ -91,6 +92,11 @@ pub const Methods = enum(u9) {
     }
 };
 
+pub const Protocol = struct {
+    // TODO split name and version
+    str: []const u8,
+};
+
 fn initCommon(
     a: Allocator,
     remote_addr: RemoteAddr,
@@ -104,6 +110,7 @@ fn initCommon(
     authorization: ?Authorization,
     headers: Headers,
     cookies: ?[]const u8,
+    proto: []const u8,
     data: Data,
     raw: RawReq,
 ) !Request {
@@ -127,6 +134,7 @@ fn initCommon(
         .remote_addr = remote_addr,
         .uri = uri,
         .user_agent = if (ua) |u| .init(u) else null,
+        .protocol = .{ .str = proto },
     };
 }
 
@@ -142,6 +150,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var encoding: Encoding = Encoding.default;
     var authorization: ?Authorization = null;
     var cookie_header: ?[]const u8 = null;
+    var proto: []const u8 = "ERROR";
 
     for (zwsgi.vars) |v| {
         try headers.addCustom(v.key, v.val);
@@ -168,6 +177,8 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
             authorization = v.val;
         } else if (eqlIgnoreCase("HTTP_COOKIE", v.key)) {
             cookie_header = v.val;
+        } else if (eqlIgnoreCase("SERVER_PROTOCOL", v.key)) {
+            proto = v.val;
         }
     }
 
@@ -184,6 +195,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         authorization,
         headers,
         cookie_header,
+        proto,
         data,
         .{ .zwsgi = zwsgi },
     );
@@ -200,6 +212,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
     var encoding: Encoding = Encoding.default;
     var authorization: ?Authorization = null;
     var cookie_header: ?[]const u8 = null;
+    const proto: []const u8 = @tagName(http.head.version);
 
     while (itr.next()) |head| {
         try headers.addCustom(head.name, head.value);
@@ -241,6 +254,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
         authorization,
         headers,
         cookie_header,
+        proto,
         data,
         .{ .http = http },
     );

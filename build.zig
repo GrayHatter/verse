@@ -4,11 +4,20 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    //if (b.args) |args| for (args) |arg| std.debug.print("arg {s}\n", .{arg});
+
+    //std.debug.print("default: {s}\n", .{b.default_step.name});
+
+    // root build options
+    const template_path = b.option(std.Build.LazyPath, "template-path", "path for the templates generated at comptime") orelse b.path("examples/templates/");
+    const bot_detection = b.option(bool, "bot-detection", "path for the templates generated at comptime") orelse
+        false;
+
     const ver = version(b);
     const options = b.addOptions();
 
     options.addOption([]const u8, "version", ver);
-    options.addOption(bool, "botdetection", true);
+    options.addOption(bool, "botdetection", bot_detection);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),
@@ -24,8 +33,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     lib_unit_tests.root_module.addOptions("verse_buildopts", options);
-
-    const template_path = b.option(std.Build.LazyPath, "template-path", "path for the templates generated at comptime") orelse b.path("examples/templates/");
 
     var compiler = Compiler.init(b);
     compiler.addDir(template_path);

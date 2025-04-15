@@ -3,10 +3,51 @@
 //! It does something, what that something is? who know, but it's big!
 
 bot: bool,
+malicious: bool,
 
 const BotDetection = @This();
 
-pub fn init() BotDetection {}
+pub fn init(r: *const Request) BotDetection {
+    if (r.user_agent == null) return .{ .bot = true, .malicious = true };
+    const ua = r.user_agent.?;
+    switch (ua.resolved) {
+        .bot => {
+            return .{
+                .bot = true,
+                .malicious = false,
+            };
+        },
+        .browser => |browser| {
+            switch (browser.name) {
+                .chrome => {
+                    return .{
+                        .bot = true,
+                        .malicious = false,
+                    };
+                },
+                else => {
+                    return .{
+                        .bot = true,
+                        .malicious = false,
+                    };
+                },
+            }
+        },
+        .script => {
+            return .{
+                .bot = true,
+                .malicious = false,
+            };
+        },
+        .unknown => {
+            return .{
+                .bot = true,
+                .malicious = std.mem.startsWith(u8, ua.string, "Mozilla/"),
+            };
+        },
+    }
+    comptime unreachable;
+}
 
 pub const Browsers = struct {
     const Date = i64;
@@ -86,3 +127,4 @@ test Browsers {
 
 const std = @import("std");
 const UA = @import("user-agent.zig");
+const Request = @import("request.zig");
