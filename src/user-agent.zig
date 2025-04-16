@@ -159,20 +159,6 @@ pub const Browser = struct {
 
     pub const unknown: Browser = .{ .name = .unknown, .version = 0 };
 
-    pub fn age(b: Browser) !i64 {
-        if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
-        const versions = BotDetection.Browsers.Versions[@intFromEnum(b.name)];
-        if (b.version >= versions.len) return error.UnknownVersion;
-        return std.time.timestamp() - versions[b.version];
-    }
-
-    test age {
-        if (!BOTDETC_ENABLED) return error.SkipZigTest;
-        const browser = Browser{ .name = .chrome, .version = 134 };
-        try std.testing.expect(try browser.age() < 86400 * 3650); // breaks in 10 years, good luck future me!
-        try std.testing.expect(try browser.age() > 3148551);
-    }
-
     pub const Name = enum {
         chrome,
         edge,
@@ -186,6 +172,19 @@ pub const Browser = struct {
     };
 
     test Name {}
+    pub fn age(b: Browser) !i64 {
+        if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
+        const versions = BotDetection.Browsers.Versions[@intFromEnum(b.name)];
+        if (b.version >= versions.len) return error.UnknownVersion;
+        return std.time.timestamp() - versions[b.version];
+    }
+
+    test age {
+        if (!BOTDETC_ENABLED) return error.SkipZigTest;
+        const browser = Browser{ .name = .chrome, .version = 134 };
+        try std.testing.expect(try browser.age() < 86400 * 3650); // breaks in 10 years, good luck future me!
+        try std.testing.expect(try browser.age() > 3148551);
+    }
 };
 
 pub const Script = enum {
