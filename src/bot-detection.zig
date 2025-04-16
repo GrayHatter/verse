@@ -62,6 +62,7 @@ pub const Browsers = struct {
         &.{},
         &.{},
         &.{},
+        &.{},
     };
     pub const Chrome = struct {
         pub const Version = enum(u16) {

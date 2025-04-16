@@ -79,8 +79,17 @@ pub const Resolved = union(enum) {
                     .version = parseVersion(str, "Firefox/") catch return .{ .bot = .unknown },
                 },
             };
+        } else if (indexOf(u8, str, "Safari/") != null) {
+            if (indexOf(u8, str, "Version/") != null) {
+                return .{
+                    .browser = .{
+                        .name = .safari,
+                        .version = parseVersion(str, "Version/") catch return .{ .bot = .unknown },
+                    },
+                };
+            } else return .{ .browser = .unknown };
         } else {
-            return .{ .bot = .unknown };
+            return .{ .browser = .unknown };
         }
     }
 };
@@ -89,7 +98,7 @@ test Resolved {
     try std.testing.expectEqualDeep(Resolved{ .unknown = .{} }, Resolved.init("unknown"));
 
     try std.testing.expectEqualDeep(
-        Resolved{ .bot = .unknown },
+        Resolved{ .browser = .unknown },
         Resolved.init("Mozilla/5.0"),
     );
 
@@ -148,6 +157,8 @@ pub const Browser = struct {
     version: u32,
     version_string: []const u8 = "",
 
+    pub const unknown: Browser = .{ .name = .unknown, .version = 0 };
+
     pub fn age(b: Browser) !i64 {
         if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
         const versions = BotDetection.Browsers.Versions[@intFromEnum(b.name)];
@@ -171,6 +182,7 @@ pub const Browser = struct {
         safari,
         brave,
         ladybird,
+        unknown,
     };
 
     test Name {}
