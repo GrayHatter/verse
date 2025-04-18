@@ -10,6 +10,12 @@ const BotDetection = @This();
 pub fn init(r: *const Request) BotDetection {
     if (r.user_agent == null) return .{ .bot = true, .malicious = true };
     const ua = r.user_agent.?;
+    var score: f64 = 0.0;
+
+    inline for (rules) |rule| {
+        rule(ua, r, &score) catch @panic("not implemented");
+    }
+
     switch (ua.resolved) {
         .bot => {
             return .{
@@ -21,14 +27,14 @@ pub fn init(r: *const Request) BotDetection {
             switch (browser.name) {
                 .chrome => {
                     return .{
-                        .bot = true,
-                        .malicious = false,
+                        .bot = score <= 0.5,
+                        .malicious = score <= 0.5,
                     };
                 },
                 else => {
                     return .{
-                        .bot = true,
-                        .malicious = false,
+                        .bot = score <= 0.5,
+                        .malicious = score <= 0.5,
                     };
                 },
             }
@@ -49,21 +55,35 @@ pub fn init(r: *const Request) BotDetection {
     comptime unreachable;
 }
 
+const RuleError = error{
+    Generic,
+};
+
+const RuleFn = fn (UA, *const Request, *f64) RuleError!void;
+
+const rules = [_]RuleFn{
+    Browsers.browserAge,
+};
+
 pub const Browsers = struct {
     const Date = i64;
     const VerDate = struct { u16, Date };
     const browser_count = @typeInfo(UA.Browser.Name).@"enum".fields.len;
-    pub const Versions: [browser_count][]const Date = .{
-        &Chrome.Version.Dates,
-        &.{},
-        &.{},
-        &.{},
-        &.{},
-        &.{},
-        &.{},
-        &.{},
-        &.{},
+    pub const Versions: [browser_count][]const Date = brk: {
+        var v: [browser_count][]const Date = undefined;
+        v[@intFromEnum(UA.Browser.Name.brave)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.chrome)] = &Chrome.Version.Dates;
+        v[@intFromEnum(UA.Browser.Name.edge)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.firefox)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.hastur)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.ladybird)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.opera)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.safari)] = &.{};
+        v[@intFromEnum(UA.Browser.Name.unknown)] = &.{};
+
+        break :brk v;
     };
+
     pub const Chrome = struct {
         pub const Version = enum(u16) {
             _,
@@ -116,6 +136,47 @@ pub const Browsers = struct {
             };
         };
     };
+
+    pub fn browserAge(ua: UA, _: *const Request, score: *f64) !void {
+        if (ua.resolved != .browser) return;
+        const dates = Versions[@intFromEnum(ua.resolved.browser.name)];
+        if (ua.resolved.browser.version >= dates.len) return; // TODO should this be an error?
+
+        const delta: i64 = std.time.timestamp() - dates[ua.resolved.browser.version];
+        const DAY: i64 = 86400;
+        const YEAR: i64 = 86400 * 365;
+        // These are all just made up based on feeling, TODO real data analysis
+        switch (delta) {
+            std.math.minInt(i64)...0 => {},
+            1...DAY * 45 => {},
+            DAY * 45 + 1...DAY * 120 => score.* = score.* + 0.1,
+            DAY * 120 + 1...YEAR => score.* = score.* + 0.3,
+            YEAR + 1...YEAR * 3 => score.* = score.* + 0.4,
+            YEAR * 3 + 1...std.math.maxInt(i64) => score.* = 1.0,
+        }
+    }
+
+    test browserAge {
+        var score: f64 = 0.0;
+        try browserAge(.{ .string = "", .resolved = .{
+            .browser = .{ .name = .chrome, .version = 0 },
+        } }, undefined, &score);
+        try std.testing.expectEqual(score, 1.0);
+        score = 0;
+        try browserAge(.{ .string = "", .resolved = .{
+            .browser = .{
+                .name = .chrome,
+                .version = Browsers.Chrome.Version.Dates[Browsers.Chrome.Version.Dates.len - 1],
+            },
+        } }, undefined, &score);
+        try std.testing.expectEqual(score, 0.0);
+
+        score = 0.0;
+        try browserAge(.{ .string = "", .resolved = .{
+            .browser = .{ .name = .unknown, .version = 0 },
+        } }, undefined, &score);
+        try std.testing.expectEqual(score, 0.0);
+    }
 };
 
 test Browsers {

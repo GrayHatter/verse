@@ -12,7 +12,8 @@ pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
     if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
 
     const bd: BotDetection = .init(r);
-    std.debug.print("ua detection: {} \n", .{ua});
+    //std.debug.print("ua detection: {s} \n", .{ua.string});
+    std.debug.print("ua detection: {} \n", .{ua.resolved});
     std.debug.print("bot detection: {} \n", .{bd});
 }
 
@@ -187,14 +188,14 @@ pub const Browser = struct {
     pub const unknown: Browser = .{ .name = .unknown, .version = 0 };
 
     pub const Name = enum {
+        brave,
         chrome,
         edge,
         firefox,
         hastur,
+        ladybird,
         opera,
         safari,
-        brave,
-        ladybird,
         unknown,
     };
 
