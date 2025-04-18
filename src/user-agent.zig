@@ -15,6 +15,9 @@ pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
     //std.debug.print("ua detection: {s} \n", .{ua.string});
     std.debug.print("ua detection: {} \n", .{ua.resolved});
     std.debug.print("bot detection: {} \n", .{bd});
+    if (ua.resolved == .browser) {
+        std.debug.print("age: {} \n", .{ua.resolved.browser.age() catch 0});
+    }
 }
 
 pub const Resolved = union(enum) {

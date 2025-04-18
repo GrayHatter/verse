@@ -27,14 +27,14 @@ pub fn init(r: *const Request) BotDetection {
             switch (browser.name) {
                 .chrome => {
                     return .{
-                        .bot = score <= 0.5,
-                        .malicious = score <= 0.5,
+                        .bot = score >= 0.5,
+                        .malicious = score >= 0.5,
                     };
                 },
                 else => {
                     return .{
-                        .bot = score <= 0.5,
-                        .malicious = score <= 0.5,
+                        .bot = score >= 0.5,
+                        .malicious = score >= 0.5,
                     };
                 },
             }
