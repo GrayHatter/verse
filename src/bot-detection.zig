@@ -139,10 +139,10 @@ pub const Browsers = struct {
 
     pub fn browserAge(ua: UA, _: *const Request, score: *f64) !void {
         if (ua.resolved != .browser) return;
-        const dates = Versions[@intFromEnum(ua.resolved.browser.name)];
-        if (ua.resolved.browser.version >= dates.len) return; // TODO should this be an error?
-
-        const delta: i64 = std.time.timestamp() - dates[ua.resolved.browser.version];
+        const delta: i64 = ua.resolved.browser.age() catch {
+            std.debug.print("Unable to resolve age for {}\n", .{ua});
+            return;
+        };
         const DAY: i64 = 86400;
         const YEAR: i64 = 86400 * 365;
         // These are all just made up based on feeling, TODO real data analysis
