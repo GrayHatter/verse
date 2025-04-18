@@ -59,17 +59,30 @@ pub const Resolved = union(enum) {
         } else return error.Invalid;
     }
 
+    fn versionString(str: []const u8, comptime target: []const u8) []const u8 {
+        if (indexOf(u8, str, target)) |idx| {
+            const start = idx + target.len;
+            // 3 is the minimum reasonable tail for a version
+            if (str.len < start + 3) return "";
+            const end = indexOfScalarPos(u8, str, start, ' ') orelse str.len;
+            return str[start..end];
+        }
+        return "";
+    }
+
     fn asBrowser(str: []const u8) Resolved {
         if (indexOf(u8, str, "Edg/") != null) {
             return .{ .browser = .{
                 .name = .edge,
                 .version = parseVersion(str, "Edg/") catch return .{ .bot = .unknown },
+                .version_string = versionString(str, "Edg/"),
             } };
         } else if (indexOf(u8, str, "Chrome/") != null) {
             return .{
                 .browser = .{
                     .name = .chrome,
                     .version = parseVersion(str, "Chrome/") catch return .{ .bot = .unknown },
+                    .version_string = versionString(str, "Chrome/"),
                 },
             };
         } else if (indexOf(u8, str, "Firefox/") != null) {
@@ -77,6 +90,7 @@ pub const Resolved = union(enum) {
                 .browser = .{
                     .name = .firefox,
                     .version = parseVersion(str, "Firefox/") catch return .{ .bot = .unknown },
+                    .version_string = versionString(str, "Firefox/"),
                 },
             };
         } else if (indexOf(u8, str, "Safari/") != null) {
@@ -85,6 +99,7 @@ pub const Resolved = union(enum) {
                     .browser = .{
                         .name = .safari,
                         .version = parseVersion(str, "Version/") catch return .{ .bot = .unknown },
+                        .version_string = versionString(str, "Version/"),
                     },
                 };
             } else return .{ .browser = .unknown };
@@ -107,7 +122,11 @@ test Resolved {
     const not_google_bot = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{ .name = .chrome, .version = 134 } },
+        Resolved{ .browser = .{
+            .name = .chrome,
+            .version = 134,
+            .version_string = "134.0.6998.165",
+        } },
         Resolved.init(not_google_bot),
     );
 
@@ -129,13 +148,21 @@ test Resolved {
     const fake_edge_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " ++
         "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{ .name = .edge, .version = 114 } },
+        Resolved{ .browser = .{
+            .name = .edge,
+            .version = 114,
+            .version_string = "114.0.1823.43",
+        } },
         Resolved.init(fake_edge_ua),
     );
 
     const lin_ff = "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{ .name = .firefox, .version = 134 } },
+        Resolved{ .browser = .{
+            .name = .firefox,
+            .version = 134,
+            .version_string = "134.0",
+        } },
         Resolved.init(lin_ff),
     );
 }
