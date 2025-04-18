@@ -123,7 +123,7 @@ pub const Browsers = struct {
                 .{ 120, 1701244800 }, .{ 121, 1705478400 }, .{ 122, 1707897600 }, .{ 123, 1710313200 },
                 .{ 124, 1712732400 }, .{ 125, 1715151600 }, .{ 126, 1717570800 }, .{ 127, 1721199600 },
                 .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
-                .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 },
+                .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 }, .{ 135, 1743465600 },
             };
             pub const Dates: [VerDates.len]Date = brk: {
                 var list: [VerDates.len]Date = @splat(0);
@@ -139,6 +139,7 @@ pub const Browsers = struct {
 
     pub fn browserAge(ua: UA, _: *const Request, score: *f64) !void {
         if (ua.resolved != .browser) return;
+        if (ua.resolved.browser.name == .unknown) return;
         const delta: i64 = ua.resolved.browser.age() catch {
             std.debug.print("Unable to resolve age for {}\n", .{ua});
             return;
@@ -166,7 +167,7 @@ pub const Browsers = struct {
         try browserAge(.{ .string = "", .resolved = .{
             .browser = .{
                 .name = .chrome,
-                .version = Browsers.Chrome.Version.Dates[Browsers.Chrome.Version.Dates.len - 1],
+                .version = Browsers.Chrome.Version.VerDates[Browsers.Chrome.Version.VerDates.len - 1][0],
             },
         } }, undefined, &score);
         try std.testing.expectEqual(score, 0.0);
