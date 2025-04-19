@@ -12,7 +12,7 @@ pub fn init(r: *const Request) BotDetection {
     const ua = r.user_agent.?;
     var score: f64 = 0.0;
 
-    inline for (rules) |rule| {
+    inline for (rules.global) |rule| {
         rule(ua, r, &score) catch @panic("not implemented");
     }
 
@@ -61,8 +61,10 @@ const RuleError = error{
 
 const RuleFn = fn (UA, *const Request, *f64) RuleError!void;
 
-const rules = [_]RuleFn{
-    Browsers.browserAge,
+const rules = struct {
+    const global = [_]RuleFn{
+        Browsers.browserAge,
+    };
 };
 
 pub const Browsers = struct {
@@ -153,7 +155,10 @@ pub const Browsers = struct {
             DAY * 45 + 1...DAY * 120 => score.* = score.* + 0.1,
             DAY * 120 + 1...YEAR => score.* = score.* + 0.3,
             YEAR + 1...YEAR * 3 => score.* = score.* + 0.4,
-            YEAR * 3 + 1...std.math.maxInt(i64) => score.* = 1.0,
+            YEAR * 3 + 1...std.math.maxInt(i64) => score.* = if (score.* < 0.9)
+                0.9
+            else
+                score.*,
         }
     }
 
@@ -162,7 +167,7 @@ pub const Browsers = struct {
         try browserAge(.{ .string = "", .resolved = .{
             .browser = .{ .name = .chrome, .version = 0 },
         } }, undefined, &score);
-        try std.testing.expectEqual(score, 1.0);
+        try std.testing.expectEqual(score, 0.9);
         score = 0;
         try browserAge(.{ .string = "", .resolved = .{
             .browser = .{
