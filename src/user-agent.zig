@@ -53,7 +53,7 @@ pub const Resolved = union(enum) {
         return .{ .bot = .{ .name = .unknown } };
     }
 
-    fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32 {
+    fn parseVersion(str: []const u8, target: []const u8) error{Invalid}!u32 {
         if (indexOf(u8, str, target)) |idx| {
             const start = idx + target.len;
             // 3 is the minimum reasonable tail for a version
@@ -63,7 +63,7 @@ pub const Resolved = union(enum) {
         } else return error.Invalid;
     }
 
-    fn versionString(str: []const u8, comptime target: []const u8) []const u8 {
+    fn versionString(str: []const u8, target: []const u8) []const u8 {
         if (indexOf(u8, str, target)) |idx| {
             const start = idx + target.len;
             // 3 is the minimum reasonable tail for a version
@@ -74,42 +74,37 @@ pub const Resolved = union(enum) {
         return "";
     }
 
-    fn asBrowser(str: []const u8) Resolved {
-        if (indexOf(u8, str, "Edg/") != null) {
-            return .{ .browser = .{
-                .name = .edge,
-                .version = parseVersion(str, "Edg/") catch return .{ .bot = .unknown },
-                .version_string = versionString(str, "Edg/"),
-            } };
-        } else if (indexOf(u8, str, "Chrome/") != null) {
-            return .{
-                .browser = .{
-                    .name = .chrome,
-                    .version = parseVersion(str, "Chrome/") catch return .{ .bot = .unknown },
-                    .version_string = versionString(str, "Chrome/"),
-                },
-            };
-        } else if (indexOf(u8, str, "Firefox/") != null) {
-            return .{
-                .browser = .{
-                    .name = .firefox,
-                    .version = parseVersion(str, "Firefox/") catch return .{ .bot = .unknown },
-                    .version_string = versionString(str, "Firefox/"),
-                },
-            };
-        } else if (indexOf(u8, str, "Safari/") != null) {
-            if (indexOf(u8, str, "Version/") != null) {
-                return .{
-                    .browser = .{
-                        .name = .safari,
-                        .version = parseVersion(str, "Version/") catch return .{ .bot = .unknown },
-                        .version_string = versionString(str, "Version/"),
-                    },
-                };
-            } else return .{ .browser = .unknown };
-        } else {
-            return .{ .browser = .unknown };
+    fn guessBrowser(str: []const u8) !struct { Browser.Name, []const u8 } {
+        // Because browsers can't be trusted the order here matters which
+        // unfortunately means this is fragile
+        const options = .{
+            .{ .edge, "Edg/", "Edg/" },
+            .{ .chrome, "Chrome/", "Chrome/" },
+            .{ .firefox, "Firefox/", "Firefox/" },
+            .{ .safari, "Safari/", "Version/" },
+        };
+
+        inline for (options) |opt| {
+            const name, const search, const txt = opt;
+            if (indexOf(u8, str, search) != null) {
+                return .{ name, txt };
+            }
         }
+        log.warn("Unable to parse browser UA string '{s}'", .{str});
+        return error.UnknownBrowser;
+    }
+
+    fn asBrowser(str: []const u8) Resolved {
+        const name, const vsearch = guessBrowser(str) catch return .{ .browser = .unknown };
+        const version = parseVersion(str, vsearch) catch return .{ .browser = .unknown };
+        const vstr = versionString(str, vsearch); // catch return .{ .bot = .unknown };
+        return .{
+            .browser = .{
+                .name = name,
+                .version = version,
+                .version_string = vstr,
+            },
+        };
     }
 };
 
@@ -137,7 +132,7 @@ test Resolved {
     const mangled_version = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/a134.0.6998.165 Mobile Safari/537.36";
     try std.testing.expectEqualDeep(
-        Resolved{ .bot = .unknown },
+        Resolved{ .browser = .unknown },
         Resolved.init(mangled_version),
     );
 
@@ -242,6 +237,7 @@ test UserAgent {
 }
 
 const std = @import("std");
+const log = std.log.scoped(.botdetection);
 const builtin = @import("builtin");
 const verse_buildopts = @import("verse_buildopts");
 const startsWith = std.mem.startsWith;
