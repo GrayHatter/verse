@@ -3,63 +3,60 @@
 //! It does something, what that something is? who know, but it's big!
 
 bot: bool,
+/// True when >= the anomaly score
 malicious: bool,
+score: f16,
 
 const BotDetection = @This();
 
+const default: BotDetection = .{
+    .bot = false,
+    .malicious = false,
+    .score = 0.0,
+};
+
+const default_malicious: BotDetection = .{
+    .bot = true,
+    .malicious = true,
+    .score = 1.0,
+};
+
+pub const ANOMALY_MAX: f16 = 0.5;
+
 pub fn init(r: *const Request) BotDetection {
-    if (r.user_agent == null) return .{ .bot = true, .malicious = true };
+    if (r.user_agent == null) return .default_malicious;
     const ua = r.user_agent.?;
-    var score: f64 = 0.0;
+
+    var bot: BotDetection = .default;
 
     inline for (rules.global) |rule| {
-        rule(ua, r, &score) catch @panic("not implemented");
+        rule(ua, r, &bot.score) catch @panic("not implemented");
     }
 
     switch (ua.resolved) {
-        .bot => {
-            return .{
-                .bot = true,
-                .malicious = false,
-            };
-        },
+        .bot => bot.bot = true,
         .browser => |browser| {
+            // Any bot that masqurades as a browser is by definition malign
+            if (bot.score >= ANOMALY_MAX) {
+                bot.bot = true;
+                bot.malicious = true;
+            }
             switch (browser.name) {
-                .chrome => {
-                    return .{
-                        .bot = score >= 0.5,
-                        .malicious = score >= 0.5,
-                    };
-                },
-                else => {
-                    return .{
-                        .bot = score >= 0.5,
-                        .malicious = score >= 0.5,
-                    };
-                },
+                .chrome => {},
+                else => {},
             }
         },
-        .script => {
-            return .{
-                .bot = true,
-                .malicious = false,
-            };
-        },
-        .unknown => {
-            return .{
-                .bot = true,
-                .malicious = std.mem.startsWith(u8, ua.string, "Mozilla/"),
-            };
-        },
+        .script => bot.bot = true,
+        .unknown => bot.malicious = startsWith(u8, ua.string, "Mozilla/"),
     }
-    comptime unreachable;
+    return bot;
 }
 
 const RuleError = error{
     Generic,
 };
 
-const RuleFn = fn (UA, *const Request, *f64) RuleError!void;
+const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
 
 const rules = struct {
     const global = [_]RuleFn{
@@ -192,7 +189,7 @@ pub const Browsers = struct {
         };
     };
 
-    pub fn browserAge(ua: UA, _: *const Request, score: *f64) !void {
+    pub fn browserAge(ua: UA, _: *const Request, score: *f16) !void {
         if (ua.resolved != .browser) return;
         if (ua.resolved.browser.name == .unknown) return;
         const delta: i64 = ua.resolved.browser.age() catch {
@@ -216,7 +213,7 @@ pub const Browsers = struct {
     }
 
     test browserAge {
-        var score: f64 = 0.0;
+        var score: f16 = 0.0;
         try browserAge(.{ .string = "", .resolved = .{
             .browser = .{ .name = .chrome, .version = 0 },
         } }, undefined, &score);
@@ -249,3 +246,4 @@ test Browsers {
 const std = @import("std");
 const UA = @import("user-agent.zig");
 const Request = @import("request.zig");
+const startsWith = std.mem.startsWith;
