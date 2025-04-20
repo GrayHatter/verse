@@ -200,7 +200,7 @@ pub const Browser = struct {
     test Name {}
     pub fn age(b: Browser) !i64 {
         if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
-        const versions = BotDetection.Browsers.Versions[@intFromEnum(b.name)];
+        const versions = BotDetection.browsers.Versions[@intFromEnum(b.name)];
         if (b.version >= versions.len) return error.UnknownVersion;
         return std.time.timestamp() - versions[b.version];
     }
