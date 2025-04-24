@@ -17,6 +17,17 @@ pub const Versions: [browser_count][]const Date = brk: {
     break :brk v;
 };
 
+pub const Brave = struct {
+    pub const Version = enum(u16) {
+        _,
+
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },
+        };
+    };
+};
+
 pub const Chrome = struct {
     pub const Version = enum(u16) {
         _,
@@ -62,6 +73,17 @@ pub const Chrome = struct {
     };
 };
 
+pub const Edge = struct {
+    pub const Version = enum(u16) {
+        _,
+
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },
+        };
+    };
+};
+
 pub const Firefox = struct {
     pub const Version = enum(u16) {
         _,
@@ -103,6 +125,50 @@ pub const Firefox = struct {
             .{ 128, 1720508400 }, .{ 129, 1722927600 }, .{ 130, 1725346800 }, .{ 131, 1727766000 },
             .{ 132, 1730185200 }, .{ 133, 1732608000 }, .{ 134, 1736236800 }, .{ 135, 1738656000 },
             .{ 136, 1741075200 }, .{ 137, 1743490800 },
+        };
+    };
+};
+
+pub const Hastur = struct {
+    pub const Version = enum(u16) {
+        _,
+
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },
+        };
+    };
+};
+
+pub const Ladybird = struct {
+    pub const Version = enum(u16) {
+        _,
+
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },
+        };
+    };
+};
+
+pub const Opera = struct {
+    pub const Version = enum(u16) {
+        _,
+
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },
+        };
+    };
+};
+
+pub const Safari = struct {
+    pub const Version = enum(u16) {
+        _,
+
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },
         };
     };
 };
