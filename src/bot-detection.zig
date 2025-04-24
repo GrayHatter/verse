@@ -34,7 +34,12 @@ pub fn init(r: *const Request) BotDetection {
     }
 
     switch (ua.resolved) {
-        .bot => bot.bot = true,
+        .bot => {
+            bot.bot = true;
+            inline for (rules.bots) |rule| {
+                rule(ua, r, &bot.score) catch @panic("not implemented");
+            }
+        },
         .browser => |browser| {
             // Any bot that masqurades as a browser is by definition malign
             if (bot.score >= ANOMALY_MAX) {
@@ -43,6 +48,10 @@ pub fn init(r: *const Request) BotDetection {
             }
             switch (browser.name) {
                 .chrome => {},
+                .msie => {
+                    bot.bot = true;
+                    bot.malicious = true;
+                },
                 else => {},
             }
         },
@@ -61,6 +70,9 @@ const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
 const rules = struct {
     const global = [_]RuleFn{
         browsers.browserAge,
+    };
+    const bots = [_]RuleFn{
+        //
     };
 };
 

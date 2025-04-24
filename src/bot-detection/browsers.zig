@@ -5,15 +5,14 @@ const browser_count = @typeInfo(UA.Browser.Name).@"enum".fields.len;
 
 pub const Versions: [browser_count][]const Date = brk: {
     var v: [browser_count][]const Date = undefined;
-    v[@intFromEnum(UA.Browser.Name.brave)] = &.{};
-    v[@intFromEnum(UA.Browser.Name.chrome)] = &Chrome.Version.Dates;
-    v[@intFromEnum(UA.Browser.Name.edge)] = &.{};
-    v[@intFromEnum(UA.Browser.Name.firefox)] = &Firefox.Version.Dates;
-    v[@intFromEnum(UA.Browser.Name.hastur)] = &.{};
-    v[@intFromEnum(UA.Browser.Name.ladybird)] = &.{};
-    v[@intFromEnum(UA.Browser.Name.opera)] = &.{};
-    v[@intFromEnum(UA.Browser.Name.safari)] = &.{};
-    v[@intFromEnum(UA.Browser.Name.unknown)] = &.{};
+    for (@typeInfo(UA.Browser.Name).@"enum".fields) |field| {
+        var name: [field.name.len]u8 = field.name[0..].*;
+        name[0] ^= 0b100000;
+        v[field.value] = if (@hasDecl(@This(), &name))
+            &@field(@This(), &name).Version.Dates
+        else
+            &.{};
+    }
 
     break :brk v;
 };
@@ -22,6 +21,7 @@ pub const Chrome = struct {
     pub const Version = enum(u16) {
         _,
 
+        pub const Dates = compileDates(&VerDates);
         pub const VerDates = [_]VerDate{
             .{ 0, 1227513600 },   .{ 1, 1228982400 },   .{ 2, 1243148400 },   .{ 3, 1255330800 },
             .{ 4, 1264406400 },   .{ 5, 1274425200 },   .{ 6, 1283410800 },   .{ 7, 1287644400 },
@@ -59,15 +59,6 @@ pub const Chrome = struct {
             .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
             .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 }, .{ 135, 1743465600 },
         };
-        pub const Dates: [VerDates.len]Date = brk: {
-            var list: [VerDates.len]Date = @splat(0);
-
-            for (VerDates) |line| {
-                std.debug.assert(list[line[0]] == 0);
-                list[line[0]] = line[1];
-            }
-            break :brk list;
-        };
     };
 };
 
@@ -75,6 +66,7 @@ pub const Firefox = struct {
     pub const Version = enum(u16) {
         _,
 
+        pub const Dates = compileDates(&VerDates);
         pub const VerDates = [_]VerDate{
             .{ 0, 1099980000 },   .{ 1, 1099987200 },   .{ 2, 1161673200 },   .{ 3, 1213686000 },
             .{ 4, 1300777200 },   .{ 5, 1308639600 },   .{ 6, 1313478000 },   .{ 7, 1317106800 },
@@ -112,17 +104,30 @@ pub const Firefox = struct {
             .{ 132, 1730185200 }, .{ 133, 1732608000 }, .{ 134, 1736236800 }, .{ 135, 1738656000 },
             .{ 136, 1741075200 }, .{ 137, 1743490800 },
         };
-        pub const Dates: [VerDates.len]Date = brk: {
-            var list: [VerDates.len]Date = @splat(0);
+    };
+};
 
-            for (VerDates) |line| {
-                std.debug.assert(list[line[0]] == 0);
-                list[line[0]] = line[1];
-            }
-            break :brk list;
+pub const Msie = struct {
+    pub const Version = enum(u16) {
+        _,
+        pub const Dates = compileDates(&VerDates);
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },  .{ 1, 0 },  .{ 2, 0 }, .{ 3, 0 }, .{ 4, 0 },
+            .{ 5, 0 },  .{ 6, 0 },  .{ 7, 0 }, .{ 8, 0 }, .{ 9, 0 },
+            .{ 10, 0 }, .{ 11, 0 },
         };
     };
 };
+
+fn compileDates(comptime vd: []const VerDate) [vd.len]Date {
+    var list: [vd.len]Date = @splat(0);
+
+    for (vd) |line| {
+        std.debug.assert(list[line[0]] == 0);
+        list[line[0]] = line[1];
+    }
+    return list;
+}
 
 pub fn browserAge(ua: UA, _: *const Request, score: *f16) !void {
     if (ua.resolved != .browser) return;

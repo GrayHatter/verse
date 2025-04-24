@@ -16,7 +16,8 @@ pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
     std.debug.print("ua detection: {} \n", .{ua.resolved});
     std.debug.print("bot detection: {} \n", .{bd});
     if (ua.resolved == .browser) {
-        std.debug.print("age: {} \n", .{ua.resolved.browser.age() catch 0});
+        const age = ua.resolved.browser.age() catch 0;
+        std.debug.print("age: days {} seconds {}  \n", .{ @divTrunc(age, 86400), age });
     }
 }
 
@@ -36,12 +37,15 @@ pub const Resolved = union(enum) {
     }
 
     fn mozilla(str: []const u8) Resolved {
-        if (indexOf(u8, str, "bot/") != null or
-            indexOf(u8, str, "Bot/") != null or
-            indexOf(u8, str, "bot.html") != null or
-            indexOf(u8, str, "Bot.html") != null)
-        {
-            return asBot(str);
+        const idx: ?usize = indexOf(u8, str, "bot") orelse indexOf(u8, str, "Bot");
+
+        if (idx) |i| {
+            if (str.len == i + 3 or (str.len > i + 4 and (str[i + 3] == '/' or
+                str[i + 3] == '.' or
+                str[i + 3] == ')')))
+            {
+                return asBot(str);
+            }
         }
         return asBrowser(str);
     }
@@ -82,6 +86,7 @@ pub const Resolved = union(enum) {
             .{ .chrome, "Chrome/", "Chrome/" },
             .{ .firefox, "Firefox/", "Firefox/" },
             .{ .safari, "Safari/", "Version/" },
+            .{ .msie, "MSIE ", "MSIE " },
         };
 
         inline for (options) |opt| {
@@ -164,6 +169,16 @@ test Resolved {
         } },
         Resolved.init(lin_ff),
     );
+
+    const msie = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0; Trident/5.0)";
+    try std.testing.expectEqualDeep(
+        Resolved{ .browser = .{
+            .name = .msie,
+            .version = 9,
+            .version_string = "9.0;",
+        } },
+        Resolved.init(msie),
+    );
 }
 
 pub const Bot = struct {
@@ -195,6 +210,8 @@ pub const Browser = struct {
         opera,
         safari,
         unknown,
+        // lol, ok bro
+        msie,
     };
 
     test Name {}
