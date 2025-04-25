@@ -241,6 +241,32 @@ pub const Rules = struct {
         try std.testing.expectEqual(score, 0.0);
     }
 
+    pub fn acceptStr(ua: UA, r: *const Request, score: *f16) !void {
+        std.debug.assert(ua.resolved == .browser);
+        switch (ua.resolved.browser.name) {
+            .chrome => {},
+            else => {
+                const normal = "text/html,application/xhtml+xml,";
+                // My apologies for the obfuscation here, this signal is way to strong
+                // to release to the unmotivated opfor.
+                const obfuscated = [_]u8{
+                    97,  112, 112, 108, 105, 99,  97,  116, 105, 111, 110, 47,  120,
+                    109, 108, 59,  113, 61,  48,  46,  57,  44,  105, 109, 97,  103,
+                    101, 47,  97,  118, 105, 102, 44,  105, 109, 97,  103, 101, 47,
+                    119, 101, 98,  112, 44,  105, 109, 97,  103, 101, 47,  97,  112,
+                    110, 103, 44,  42,  47,  42,  59,  113, 61,  48,  46,  56,  44,
+                    97,  112, 112, 108, 105, 99,  97,  116, 105, 111, 110, 47,  115,
+                    105, 103, 110, 101, 100, 45,  101, 120, 99,  104, 97,  110, 103,
+                    101, 59,  118, 61,  98,  51,  59,  113, 61,  48,  46,  55,
+                };
+                const accept_str = normal ++ obfuscated;
+                if (r.accept) |racpt| if (eql(u8, racpt, accept_str)) {
+                    score.* = if (score.* < 1.0) 1.0 else score.*;
+                };
+            },
+        }
+    }
+
     pub fn protocolVer(_: UA, r: *const Request, score: *f16) !void {
         if (!r.secure) return;
 

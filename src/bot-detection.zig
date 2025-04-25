@@ -76,6 +76,7 @@ const rules = struct {
     };
     const browser = [_]RuleFn{
         browsers.Rules.protocolVer,
+        browsers.Rules.acceptStr,
     };
     const bots = [_]RuleFn{
         //
