@@ -1,14 +1,3 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-const eql = std.mem.eql;
-const fmt = std.fmt;
-const indexOf = std.mem.indexOf;
-const indexOfScalar = std.mem.indexOfScalar;
-const splitSequence = std.mem.splitSequence;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
-
-const Headers = @import("headers.zig");
-
 pub const Attributes = struct {
     domain: ?[]const u8 = null,
     path: ?[]const u8 = null,
@@ -199,7 +188,21 @@ pub const Jar = struct {
         try jar.cookies.append(jar.alloc, c);
     }
 
-    /// Removes a cookie from the jar.
+    /// Only returns the first cookie with this name
+    pub fn get(jar: *const Jar, name: []const u8) ?Cookie {
+        for (jar.cookies.items) |cookie| {
+            if (eql(u8, cookie.name, name)) {
+                return cookie;
+            }
+        }
+
+        return null;
+    }
+
+    /// Remove a cookie from the jar by name.
+    ///
+    /// TODO: cookie names don't need to be unique; but swap remove might skip
+    /// removing a cookie if only one exists.
     pub fn remove(jar: *Jar, name: []const u8) ?Cookie {
         var found: ?Cookie = null;
 
@@ -252,3 +255,14 @@ test Jar {
 
     try std.testing.expectEqual(j.cookies.items.len, 1);
 }
+
+const Headers = @import("headers.zig");
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const eql = std.mem.eql;
+const fmt = std.fmt;
+const indexOf = std.mem.indexOf;
+const indexOfScalar = std.mem.indexOfScalar;
+const splitSequence = std.mem.splitSequence;
+const ArrayListUnmanaged = std.ArrayListUnmanaged;
