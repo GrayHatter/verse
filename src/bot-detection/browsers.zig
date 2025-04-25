@@ -195,53 +195,54 @@ fn compileDates(comptime vd: []const VerDate) [vd.len]Date {
     return list;
 }
 
-pub fn browserAge(ua: UA, _: *const Request, score: *f16) !void {
-    if (ua.resolved != .browser) return;
-    if (ua.resolved.browser.name == .unknown) return;
-    const delta: i64 = ua.resolved.browser.age() catch {
-        std.debug.print("Unable to resolve age for {}\n", .{ua});
-        return;
-    };
-    const DAY: i64 = 86400;
-    const YEAR: i64 = 86400 * 365;
-    // These are all just made up based on feeling, TODO real data analysis
-    switch (delta) {
-        std.math.minInt(i64)...0 => {},
-        1...DAY * 45 => {},
-        DAY * 45 + 1...DAY * 120 => score.* = score.* + 0.1,
-        DAY * 120 + 1...YEAR => score.* = score.* + 0.3,
-        YEAR + 1...YEAR * 3 => score.* = score.* + 0.4,
-        YEAR * 3 + 1...std.math.maxInt(i64) => score.* = if (score.* < 0.9)
-            0.9
-        else
-            score.*,
+pub const Rules = struct {
+    pub fn age(ua: UA, _: *const Request, score: *f16) !void {
+        if (ua.resolved != .browser) return;
+        if (ua.resolved.browser.name == .unknown) return;
+        const delta: i64 = ua.resolved.browser.age() catch {
+            std.debug.print("Unable to resolve age for {}\n", .{ua});
+            return;
+        };
+        const DAY: i64 = 86400;
+        const YEAR: i64 = 86400 * 365;
+        // These are all just made up based on feeling, TODO real data analysis
+        switch (delta) {
+            std.math.minInt(i64)...0 => {},
+            1...DAY * 45 => {},
+            DAY * 45 + 1...DAY * 120 => score.* = score.* + 0.1,
+            DAY * 120 + 1...YEAR => score.* = score.* + 0.3,
+            YEAR + 1...YEAR * 3 => score.* = score.* + 0.4,
+            YEAR * 3 + 1...std.math.maxInt(i64) => score.* = if (score.* < 0.9)
+                0.9
+            else
+                score.*,
+        }
     }
-}
 
-test browserAge {
-    var score: f16 = 0.0;
-    try browserAge(.{ .string = "", .resolved = .{
-        .browser = .{ .name = .chrome, .version = 0 },
-    } }, undefined, &score);
-    try std.testing.expectEqual(score, 0.9);
-    score = 0;
-    try browserAge(.{ .string = "", .resolved = .{
-        .browser = .{
-            .name = .chrome,
-            .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
-        },
-    } }, undefined, &score);
-    try std.testing.expectEqual(score, 0.0);
+    test age {
+        var score: f16 = 0.0;
+        try age(.{ .string = "", .resolved = .{
+            .browser = .{ .name = .chrome, .version = 0 },
+        } }, undefined, &score);
+        try std.testing.expectEqual(score, 0.9);
+        score = 0;
+        try age(.{ .string = "", .resolved = .{
+            .browser = .{
+                .name = .chrome,
+                .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
+            },
+        } }, undefined, &score);
+        try std.testing.expectEqual(score, 0.0);
 
-    score = 0.0;
-    try browserAge(.{ .string = "", .resolved = .{
-        .browser = .{ .name = .unknown, .version = 0 },
-    } }, undefined, &score);
-    try std.testing.expectEqual(score, 0.0);
-}
+        score = 0.0;
+        try age(.{ .string = "", .resolved = .{
+            .browser = .{ .name = .unknown, .version = 0 },
+        } }, undefined, &score);
+        try std.testing.expectEqual(score, 0.0);
+    }
+};
 
 const browsers = @This();
-
 test browsers {
     _ = std.testing.refAllDecls(browsers);
 }

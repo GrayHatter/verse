@@ -69,7 +69,7 @@ const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
 
 const rules = struct {
     const global = [_]RuleFn{
-        browsers.browserAge,
+        browsers.Rules.age,
     };
     const bots = [_]RuleFn{
         //
