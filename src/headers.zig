@@ -29,13 +29,13 @@ const ValueList = struct {
 };
 
 const KnownMap = EnumMap(KnownHeaders, []const u8);
-const CustomMap = std.StringArrayHashMap(*ValueList);
+const CustomMap = std.StringArrayHashMapUnmanaged(*ValueList);
 
 pub fn init(a: Allocator) Headers {
     return .{
         .alloc = a,
         .known = KnownMap{},
-        .custom = CustomMap.init(a),
+        .custom = CustomMap{},
     };
 }
 
@@ -50,7 +50,7 @@ pub fn raze(h: *Headers) void {
             h.alloc.destroy(destroy);
         }
     }
-    h.custom.deinit();
+    h.custom.deinit(h.alloc);
 }
 
 fn normalize(_: []const u8) !void {
@@ -59,7 +59,7 @@ fn normalize(_: []const u8) !void {
 
 pub fn addCustom(h: *Headers, name: []const u8, value: []const u8) !void {
     // TODO normalize lower
-    const gop = try h.custom.getOrPut(name);
+    const gop = try h.custom.getOrPut(h.alloc, name);
     if (gop.found_existing) {
         var end: *ValueList = gop.value_ptr.*;
         while (end.*.next != null) {
