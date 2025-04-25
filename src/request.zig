@@ -1,8 +1,3 @@
-const Request = @This();
-
-pub const Data = @import("request-data.zig");
-pub const UserAgent = @import("user-agent.zig");
-
 /// Unstable API; likely to exist in some form, but might be changed
 remote_addr: RemoteAddr,
 method: Methods,
@@ -22,6 +17,11 @@ cookie_jar: Cookies.Jar,
 data: Data,
 /// TODO this is unstable and likely to be removed
 raw: RawReq,
+
+const Request = @This();
+
+pub const Data = @import("request-data.zig");
+pub const UserAgent = @import("user-agent.zig");
 
 pub const RawReq = union(enum) {
     zwsgi: *zWSGIRequest,
@@ -92,10 +92,32 @@ pub const Methods = enum(u9) {
     }
 };
 
-pub const Protocol = struct {
+pub const Protocol = union(enum) {
     // TODO split name and version
-    str: []const u8,
+    http: Http,
+    malformed: []const u8,
+
+    pub fn parse(str: []const u8) Protocol {
+        if (startsWith(u8, str, "HTTP/")) {
+            inline for (Http.fields) |f| {
+                if (eql(u8, str[5..], f.name)) return .{ .http = @as(Http, @enumFromInt(f.value)) };
+            }
+        }
+        return .{ .malformed = str };
+    }
+
+    pub const Http = enum {
+        @"1.0",
+        @"1.1",
+        @"2.0",
+
+        pub const fields = @typeInfo(Http).@"enum".fields;
+    };
 };
+
+const Headers = @import("headers.zig");
+const Cookies = @import("cookies.zig");
+const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
 
 fn initCommon(
     a: Allocator,
@@ -134,7 +156,7 @@ fn initCommon(
         .remote_addr = remote_addr,
         .uri = uri,
         .user_agent = if (ua) |u| .init(u) else null,
-        .protocol = .{ .str = proto },
+        .protocol = .parse(proto),
     };
 }
 
@@ -274,17 +296,14 @@ fn translateStdHttp(m: std.http.Method) Methods {
     };
 }
 
-const Headers = @import("headers.zig");
-const Cookies = @import("cookies.zig");
-const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
-
-test "req" {
-    std.testing.refAllDecls(@This());
+test Request {
+    std.testing.refAllDecls(Request);
 }
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const indexOf = std.mem.indexOf;
+const startsWith = std.mem.startsWith;
 const lastIndexOfScalar = std.mem.lastIndexOfScalar;
 const eql = std.mem.eql;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
