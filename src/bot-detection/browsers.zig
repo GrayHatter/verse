@@ -240,6 +240,21 @@ pub const Rules = struct {
         } }, undefined, &score);
         try std.testing.expectEqual(score, 0.0);
     }
+
+    pub fn protocolVer(_: UA, r: *const Request, score: *f16) !void {
+        if (!r.secure) return;
+
+        // TODO To actually be correct, this should do a browser version check as well
+
+        switch (r.protocol) {
+            .http => |http| switch (http) {
+                .@"1.0" => score.* += 1.0,
+                .@"1.1" => score.* += 1.0,
+                .@"2.0" => {},
+            },
+            .malformed => |_| {},
+        }
+    }
 };
 
 const browsers = @This();
@@ -250,3 +265,5 @@ test browsers {
 const std = @import("std");
 const UA = @import("../user-agent.zig");
 const Request = @import("../request.zig");
+
+const eql = std.mem.eql;

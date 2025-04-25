@@ -41,6 +41,9 @@ pub fn init(r: *const Request) BotDetection {
             }
         },
         .browser => |browser| {
+            inline for (rules.browser) |rule| {
+                rule(ua, r, &bot.score) catch @panic("not implemented");
+            }
             // Any bot that masqurades as a browser is by definition malign
             if (bot.score >= ANOMALY_MAX) {
                 bot.bot = true;
@@ -70,6 +73,9 @@ const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
 const rules = struct {
     const global = [_]RuleFn{
         browsers.Rules.age,
+    };
+    const browser = [_]RuleFn{
+        browsers.Rules.protocolVer,
     };
     const bots = [_]RuleFn{
         //

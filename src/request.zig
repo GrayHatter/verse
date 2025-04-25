@@ -9,6 +9,7 @@ accept: ?Accept,
 accept_encoding: Encoding = .default,
 authorization: ?Authorization,
 protocol: Protocol,
+secure: bool,
 
 headers: Headers,
 /// Default API, still unstable, but unlike to drastically change
@@ -135,6 +136,7 @@ fn initCommon(
     proto: []const u8,
     data: Data,
     raw: RawReq,
+    secure: bool,
 ) !Request {
     var method = _method;
     if (headers.getCustom("Upgrade")) |val| {
@@ -157,6 +159,7 @@ fn initCommon(
         .uri = uri,
         .user_agent = if (ua) |u| .init(u) else null,
         .protocol = .parse(proto),
+        .secure = secure,
     };
 }
 
@@ -173,6 +176,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var authorization: ?Authorization = null;
     var cookie_header: ?[]const u8 = null;
     var proto: []const u8 = "ERROR";
+    var secure: bool = false;
 
     for (zwsgi.vars) |v| {
         try headers.addCustom(v.key, v.val);
@@ -201,6 +205,8 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
             cookie_header = v.val;
         } else if (eqlIgnoreCase("SERVER_PROTOCOL", v.key)) {
             proto = v.val;
+        } else if (eqlIgnoreCase("REQUEST_SCHEME", v.key)) {
+            secure = eqlIgnoreCase("https", v.val);
         }
     }
 
@@ -220,6 +226,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         proto,
         data,
         .{ .zwsgi = zwsgi },
+        secure,
     );
 }
 
@@ -279,6 +286,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
         proto,
         data,
         .{ .http = http },
+        false, // https isn't currently supported using verse internal http
     );
 }
 
