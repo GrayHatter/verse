@@ -243,7 +243,7 @@ pub fn init(ua_str: []const u8) UserAgent {
 }
 
 const Request = @import("request.zig");
-const BotDetection = @import("bot-detection.zig");
+pub const BotDetection = @import("bot-detection.zig");
 
 const BOTDETC_ENABLED: bool = verse_buildopts.botdetection or builtin.is_test;
 

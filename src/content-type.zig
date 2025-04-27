@@ -1,12 +1,15 @@
 base: ContentBase,
 parameter: ?CharSet = null,
 
+const ContentType = @This();
+
+pub const @"text/plain": ContentType = .{ .base = .{ .text = .plain } };
+pub const @"text/html": ContentType = .{ .base = .{ .text = .html }, .parameter = .@"utf-8" };
+
 pub const default: ContentType = .{
     .base = .{ .text = .html },
     .parameter = .@"utf-8",
 };
-
-const ContentType = @This();
 
 pub const ContentBase = union(Base) {
     application: Application,

@@ -83,14 +83,60 @@ const rules = struct {
     };
 };
 
-pub const browsers = @import("bot-detection/browsers.zig");
-
 test BotDetection {
     _ = std.testing.refAllDecls(@This());
     _ = &browsers;
 }
 
-const std = @import("std");
+pub fn robotsTxt(
+    comptime default_allow: bool,
+    delay_int: comptime_int,
+    comptime robots: []const bots.TxtRules,
+) Router.Match {
+    const EP = struct {
+        const delay = std.fmt.comptimePrint("Crawl-delay: {}\n", .{delay_int});
+        const robots_txt: []const u8 = brk: {
+            var compiled: []const u8 = "User-agent: *\n" ++
+                (if (delay_int > 0) delay else "") ++
+                (if (default_allow) "Allow: /\n\n" else "Disallow: /\n\n");
+            for (robots) |each| {
+                compiled = compiled ++
+                    "User-agent: " ++ each.name ++ "\n" ++
+                    (if (each.allow) "Allow" else "Disallow") ++ ": /\n" ++
+                    (if (each.delay) "Crawl-delay: 4\n\n" else "\n");
+            }
+
+            break :brk compiled;
+        };
+
+        pub fn endpoint(f: *Frame) Router.Error!void {
+            f.status = .ok;
+            f.content_type = .@"text/plain";
+            f.sendHeaders() catch |err| switch (err) {
+                error.HeadersFinished => unreachable,
+                inline else => |e| return e,
+            };
+
+            try f.sendRawSlice("\r\n");
+            try f.sendRawSlice(robots_txt);
+        }
+    };
+
+    return Router.ANY("robots.txt", EP.endpoint);
+}
+
+test robotsTxt {
+    // TODO mock a full request frame
+    _ = robotsTxt(true, 4, &[_]bots.TxtRules{.{ .name = "googlebot", .allow = false }});
+}
+
+pub const browsers = @import("bot-detection/browsers.zig");
+pub const bots = @import("bot-detection/bots.zig");
+
+const Router = @import("router.zig");
+const Frame = @import("frame.zig");
 const UA = @import("user-agent.zig");
 const Request = @import("request.zig");
+
+const std = @import("std");
 const startsWith = std.mem.startsWith;
