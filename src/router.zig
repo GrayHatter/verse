@@ -1,29 +1,34 @@
-routefn: RouteFn,
-builderfn: BuilderFn,
-routerfn: RouterFn,
-
-/// TODO document
-const Router = @This();
-
-/// The default page generator, this is the function that will be called, and
-/// expected to write the page data back to the client.
-pub const BuildFn = *const fn (*Frame) Error!void;
-
-/// Similar to RouteFn and RouterFn above, Verse requires all page build steps
-/// to finish cleanly. While a default is provided. It's strongly recommended
-/// that a custom builder function be provided when custom error handling is
-/// desired.
-pub const BuilderFn = *const fn (*Frame, BuildFn) void;
-
 /// Route Functions are allowed to return errors for select cases where
 /// backtracking through the routing system might be useful. This in an
 /// exercise left to the caller, as eventually a sever default server error page
 /// will need to be returned.
+route: RouteFn,
+
+/// Similar to RouteFn and FallbackRouter: Verse allows endpoint pages to return
+/// errors, but the final result must finish cleanly (ideally returning page
+/// data to the client, but this isn't enforced). A default is provided, which
+/// can handle most of the common cases,  but it's recommended that users
+/// provide a custom builder function to handle errors, for complex cases, or
+/// when errors are expected.
+builder: Builder = defaultBuilder,
+
+/// The router must eventually return an endpoint, if it returns an error
+/// instead, the fallbackRouter will be called to route to internal pages.
+fallback: FallbackRouter = fallbackRouter,
+
+/// TODO document
+const Router = @This();
+
+/// The default page generator, this is the function that will be called once a
+/// route is completed, and this function should write the page data back to the
+/// client.
+pub const BuildFn = *const fn (*Frame) Error!void;
+
+pub const Builder = *const fn (*Frame, BuildFn) void;
+
 pub const RouteFn = *const fn (*Frame) RoutingError!BuildFn;
 
-/// The provided RouteFn will be wrapped with a default error provider that will
-/// return a default BuildFn.
-pub const RouterFn = *const fn (*Frame, RouteFn) BuildFn;
+pub const FallbackRouter = *const fn (*Frame, RouteFn) BuildFn;
 
 /// The Verse router will scan through an array of Match structs looking for a
 /// given name. Verse doesn't assert that the given name will match a director
@@ -86,14 +91,13 @@ pub const Target = union(enum) {
 /// Builds a default router given an array of matches.
 pub fn Routes(comptime routes: []const Match) Router {
     const routefn = struct {
+        const local: [routes.len]Match = routes;
         pub fn r(f: *Frame) RoutingError!BuildFn {
-            return router(f, routes);
+            return defaultRouter(f, routes);
         }
     };
     return .{
-        .routefn = routefn.r,
-        .builderfn = defaultBuilder,
-        .routerfn = defaultRouter,
+        .route = routefn.r,
     };
 }
 
@@ -265,7 +269,7 @@ pub const RoutingError = error{
 /// provide to verse with the Match array for your site. It can also be used
 /// internally within custom routing functions, that provide additional page,
 /// data or routing support/validation, before continuing to build the route.
-pub fn router(frame: *Frame, comptime routes: []const Match) RoutingError!BuildFn {
+pub fn defaultRouter(frame: *Frame, comptime routes: []const Match) RoutingError!BuildFn {
     const search = frame.uri.peek() orelse {
         if (routes.len > 0 and routes[0].name.len == 0) {
             switch (frame.request.method) {
@@ -296,7 +300,7 @@ pub fn router(frame: *Frame, comptime routes: []const Match) RoutingError!BuildF
                             },
                             inline .simple => |simple| {
                                 _ = frame.uri.next();
-                                return router(frame, simple);
+                                return defaultRouter(frame, simple);
                             },
                         }
                     } else return error.MethodNotAllowed;
@@ -307,12 +311,15 @@ pub fn router(frame: *Frame, comptime routes: []const Match) RoutingError!BuildF
     return error.Unrouteable;
 }
 
-/// The Verse Server is unlikely to be able to handle the various error states
-/// an endpoint might generate. Pages are permitted to return an error, and the
-/// page builder is required to handle all errors, and make a final decision.
-/// Ideally it should also be able to return a response to the user, but that
-/// implementation detail is left to the caller. This default builder is
-/// provided and handles an abbreviated set of errors.
+/// This default builder is provided and handles an abbreviated set of errors.
+/// This builder is unlikely to be able to handle all possible server error
+/// states generated from all endpoints. More complicated uses may require a
+/// custom builder.
+///
+/// Pages are permitted to return an error, but the page builder is required to
+/// handle all errors, (and make a final decision where required). Ideally it
+/// should also be able to return a response to the user, but that
+/// implementation decision is left to the final builder.
 pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
     build(vrs) catch |err| {
         switch (err) {
@@ -381,7 +388,7 @@ const root = [_]Match{
     ROUTE("", default),
 };
 
-fn defaultRouter(frame: *Frame, routefn: RouteFn) BuildFn {
+fn fallbackRouter(frame: *Frame, routefn: RouteFn) BuildFn {
     return routefn(frame) catch |err| switch (err) {
         error.MethodNotAllowed => methodNotAllowed,
         error.NotFound => notFound,
@@ -396,7 +403,7 @@ const root_with_static = root ++ [_]Match{
 fn defaultRouterHtml(frame: *Frame, routefn: RouteFn) Error!void {
     if (frame.uri.peek()) |first| {
         if (first.len > 0)
-            return routefn(frame) catch router(frame, &root_with_static) catch notFound;
+            return routefn(frame) catch defaultRouter(frame, &root_with_static) catch notFound;
     }
     return internalServerError;
 }

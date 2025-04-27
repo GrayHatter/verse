@@ -105,8 +105,8 @@ pub fn serve(z: *zWSGI) !void {
             );
         }
 
-        const callable = z.router.routerfn(&frame, z.router.routefn);
-        z.router.builderfn(&frame, callable);
+        const routed_endpoint = z.router.fallback(&frame, z.router.route);
+        z.router.builder(&frame, routed_endpoint);
     }
     log.warn("closing, and cleaning up", .{});
 }

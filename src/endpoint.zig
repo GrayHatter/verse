@@ -27,8 +27,9 @@ pub fn Endpoints(endpoints: anytype) type {
             var rtr = Router.Routes(&routes);
             // TODO expand route constructor to find the correct builder for
             // every route
+            // TODO weakly tested
             if (@hasDecl(endpoints[0], "verse_builder")) {
-                rtr.builderfn = endpoints[0].verse_builder;
+                rtr.builder = endpoints[0].verse_builder;
             }
             break :brk rtr;
         };
@@ -77,7 +78,7 @@ pub fn validateEndpoint(EP: anytype) void {
     }
 
     if (@hasDecl(EP, "verse_builder")) {
-        if (@TypeOf(EP.verse_builder) != Router.BuilderFn) {
+        if (@TypeOf(EP.verse_builder) != Router.Builder) {
             // TODO support `fn ...` in addition to `*const fn ...`
             @compileError("The `verse_builder` decl must be a Router.BuilderFn. Instead it was " ++
                 @typeName(@TypeOf(EP.verse_builder)));
@@ -269,6 +270,25 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
 
     if (idx == 0) @compileError("Unable to build routes for " ++ @typeName(EP) ++ " No valid routes found");
     return match;
+}
+
+test Endpoints {
+    const Example = struct {
+        pub fn nopEndpoint(_: *Frame) Router.Error!void {}
+    };
+
+    _ = Endpoints(.{
+        struct {
+            pub const verse_name = .root;
+            pub const verse_routes = [_]Router.Match{
+                Router.GET("nop", Example.nopEndpoint),
+                Router.ROUTE("routes", Example.nopEndpoint),
+                Router.STATIC("static"),
+            };
+            pub const verse_builder = &Router.defaultBuilder;
+            pub const index = Example.nopEndpoint;
+        },
+    });
 }
 
 const std = @import("std");
