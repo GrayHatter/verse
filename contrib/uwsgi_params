@@ -1,8 +1,9 @@
 # These are minimum params that nginx should send to verse/zwsgi in order for a
-# reqeust to be handled correctly.
+# request to be handled correctly.
 uwsgi_param  REMOTE_ADDR        $remote_addr;
 uwsgi_param  REMOTE_PORT        $remote_port;
 uwsgi_param  REQUEST_URI        $request_uri;
+uwsgi_param  REQUEST_PATH       $document_uri;
 uwsgi_param  REQUEST_METHOD     $request_method;
 uwsgi_param  REQUEST_SCHEME     $scheme;
 uwsgi_param  QUERY_STRING       $query_string;
@@ -16,7 +17,7 @@ uwsgi_param  SERVER_PORT        $server_port;
 uwsgi_param  SERVER_PROTOCOL    $server_protocol;
 uwsgi_param  HTTPS              $https if_not_empty;
 
-# Required for MTLS Auth support in verse. Can be ommitted if https is not being
+# Required for MTLS Auth support in verse. Can be omitted if https is not being
 # used
 uwsgi_param  MTLS_ENABLED       $ssl_client_verify;
 uwsgi_param  MTLS_CERT          $ssl_client_cert if_not_empty;

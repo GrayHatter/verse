@@ -368,8 +368,15 @@ fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
 pub fn dumpDebugData(frame: *const Frame) void {
     switch (frame.request.raw) {
         .zwsgi => |zw| {
-            for (zw.vars) |varr| {
-                std.debug.print("DumpDebug '{s}' => '''{s}'''\n", .{ varr.key, varr.val });
+            var itr = zw.known.iterator();
+            while (itr.next()) |entry| {
+                std.debug.print(
+                    "DumpDebug '{s}' => '{s}'\n",
+                    .{ @tagName(entry.key), entry.value.* orelse "[empty]" },
+                );
+            }
+            for (zw.vars.items) |varr| {
+                std.debug.print("DumpDebug '{s}' => '{s}'\n", .{ varr.key, varr.val });
             }
         },
         .http => |http| {

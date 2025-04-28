@@ -130,10 +130,48 @@ fn signalListen(signal: u6) void {
     }, null);
 }
 
+pub const zWSGIParam = enum {
+    // These are minimum expected values
+    REMOTE_ADDR,
+    REMOTE_PORT,
+    REQUEST_URI,
+    REQUEST_PATH,
+    REQUEST_METHOD,
+    REQUEST_SCHEME,
+    QUERY_STRING,
+    CONTENT_TYPE,
+    CONTENT_LENGTH,
+    SERVER_NAME,
+    SERVER_PORT,
+    SERVER_PROTOCOL,
+    HTTPS,
+    MTLS_ENABLED,
+    MTLS_CERT,
+    MTLS_FINGERPRINT,
+    // These are seen often enough to be worth including here
+    HTTP_HOST,
+    HTTP_ACCEPT,
+    HTTP_USER_AGENT,
+    HTTP_ACCEPT_ENCODING,
+    HTTP_AUTHORIZATION,
+    HTTP_COOKIE,
+    HTTP_REFERER,
+
+    pub const fields = @typeInfo(zWSGIParam).@"enum".fields;
+
+    pub fn fromStr(str: []const u8) ?zWSGIParam {
+        inline for (fields) |f| {
+            if (eqlIgnoreCase(f.name, str)) return @enumFromInt(f.value);
+        } else return null;
+    }
+};
+
 pub const zWSGIRequest = struct {
     conn: *net.Server.Connection,
     header: uProtoHeader = uProtoHeader{},
-    vars: []uWSGIVar = &[0]uWSGIVar{},
+    buffer: []u8,
+    known: std.EnumArray(zWSGIParam, ?[]const u8) = .initFill(null),
+    vars: std.ArrayListUnmanaged(uWSGIVar) = .{},
 
     pub fn init(a: Allocator, c: *net.Server.Connection) !zWSGIRequest {
         const uwsgi_header = try uProtoHeader.init(c);
@@ -142,39 +180,51 @@ pub const zWSGIRequest = struct {
         const read = try c.stream.read(buf);
         if (read != uwsgi_header.size) {
             std.log.err("unexpected read size {} {}", .{ read, uwsgi_header.size });
+            @panic("unreachable");
         }
 
-        const vars = try readVars(a, buf);
-        for (vars) |v| {
-            log.debug("{}", .{v});
-        }
-
-        return .{
+        var zr: zWSGIRequest = .{
             .conn = c,
             .header = uwsgi_header,
-            .vars = vars,
+            .buffer = buf,
         };
+        try zr.readVars(a);
+        return zr;
     }
-    fn readVars(a: Allocator, b: []const u8) ![]uWSGIVar {
-        var list = std.ArrayList(uWSGIVar).init(a);
-        var buf = b;
+
+    fn readVars(zr: *zWSGIRequest, a: Allocator) !void {
+        var buf = zr.buffer;
+        try zr.vars.ensureTotalCapacity(a, 10);
         while (buf.len > 0) {
-            const keysize = readU16(buf[0..2]);
+            const key_len = readU16(buf[0..2]);
             buf = buf[2..];
-            const key = try a.dupe(u8, buf[0..keysize]);
-            buf = buf[keysize..];
+            const key_str = buf[0..key_len];
+            buf = buf[key_len..];
+            const expected = zWSGIParam.fromStr(key_str);
 
-            const valsize = readU16(buf[0..2]);
+            const val_len = readU16(buf[0..2]);
             buf = buf[2..];
-            const val = try a.dupe(u8, if (valsize == 0) "" else buf[0..valsize]);
-            buf = buf[valsize..];
+            if (val_len > 0) {
+                const val_str = buf[0..val_len];
+                buf = buf[val_len..];
 
-            try list.append(uWSGIVar{
-                .key = key,
-                .val = val,
-            });
+                if (expected) |k| {
+                    if (zr.known.get(k)) |old| {
+                        log.err(
+                            "Duplicate key found (dropping) {s} :: original {s} | new {s}",
+                            .{ @tagName(k), old, val_str },
+                        );
+                        continue;
+                    }
+                    zr.known.set(k, val_str);
+                } else {
+                    try zr.vars.append(a, uWSGIVar{
+                        .key = key_str,
+                        .val = val_str,
+                    });
+                }
+            }
         }
-        return try list.toOwnedSlice();
     }
 };
 
@@ -234,8 +284,8 @@ fn findOr(list: []uWSGIVar, search: []const u8) []const u8 {
 fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
     var post_data: ?Request.Data.PostData = null;
 
-    if (find(zreq.vars, "HTTP_CONTENT_LENGTH")) |h_len| {
-        const h_type = findOr(zreq.vars, "HTTP_CONTENT_TYPE");
+    if (find(zreq.vars.items, "HTTP_CONTENT_LENGTH")) |h_len| {
+        const h_type = findOr(zreq.vars.items, "HTTP_CONTENT_TYPE");
 
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {
@@ -252,13 +302,9 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
         }
     }
 
-    var query: Request.Data.QueryData = undefined;
-    if (find(zreq.vars, "QUERY_STRING")) |qs| {
-        query = try Request.Data.readQuery(a, qs);
-    }
     return .{
         .post = post_data,
-        .query = query,
+        .query = try Request.Data.readQuery(a, zreq.known.get(.QUERY_STRING) orelse ""),
     };
 }
 
@@ -277,6 +323,7 @@ const net = std.net;
 const siginfo_t = std.posix.siginfo_t;
 const SIG = std.posix.SIG;
 const SA = std.posix.SA;
+const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");

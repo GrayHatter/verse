@@ -164,56 +164,32 @@ fn initCommon(
 }
 
 pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
-    var uri: ?[]const u8 = null;
-    var method: ?Methods = null;
-    var remote_addr: ?RemoteAddr = null;
-    var headers = Headers.init(a);
-    var accept: ?Accept = null;
-    var host: ?Host = null;
-    var ua_slice: ?[]const u8 = null;
-    var referer: ?Referer = null;
-    var encoding: Encoding = Encoding.default;
-    var authorization: ?Authorization = null;
-    var cookie_header: ?[]const u8 = null;
-    var proto: []const u8 = "ERROR";
-    var secure: bool = false;
+    const zk = &zwsgi.known;
+    const uri: ?[]const u8 = zk.get(.REQUEST_PATH);
+    const method = Methods.fromStr(zk.get(.REQUEST_METHOD) orelse "GET") catch {
+        std.debug.print("Unsupported Method seen '{any}'", .{zk.get(.REQUEST_METHOD)});
+        return error.InvalidRequest;
+    };
+    const remote_addr: ?RemoteAddr = zk.get(.REMOTE_ADDR);
+    const accept: ?Accept = zk.get(.HTTP_ACCEPT);
+    const host: ?Host = zk.get(.HTTP_HOST);
+    const ua_slice: ?[]const u8 = zk.get(.HTTP_USER_AGENT);
+    const referer: ?Referer = zk.get(.HTTP_REFERER);
+    const encoding: Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else .default;
+    const authorization: ?Authorization = zk.get(.HTTP_AUTHORIZATION);
+    const cookie_header: ?[]const u8 = zk.get(.HTTP_COOKIE);
+    const proto: []const u8 = zk.get(.SERVER_PROTOCOL) orelse "ERROR";
+    const secure: bool = if (zk.get(.HTTPS)) |sec| eql(u8, sec, "on") else false;
 
-    for (zwsgi.vars) |v| {
+    var headers = Headers.init(a);
+    for (zwsgi.vars.items) |v| {
         try headers.addCustom(v.key, v.val);
-        if (eql(u8, v.key, "PATH_INFO")) {
-            uri = v.val;
-        } else if (eql(u8, v.key, "REQUEST_METHOD")) {
-            method = Methods.fromStr(v.val) catch {
-                std.debug.print("Unsupported Method seen '{any}'", .{v.val});
-                return error.InvalidRequest;
-            };
-        } else if (eql(u8, v.key, "REMOTE_ADDR")) {
-            remote_addr = v.val;
-        } else if (eqlIgnoreCase("HTTP_ACCEPT", v.key)) {
-            accept = v.val;
-        } else if (eqlIgnoreCase("HTTP_HOST", v.key)) {
-            host = v.val;
-        } else if (eqlIgnoreCase("HTTP_USER_AGENT", v.key)) {
-            ua_slice = v.val;
-        } else if (eqlIgnoreCase("HTTP_REFERER", v.key)) {
-            referer = v.val;
-        } else if (eqlIgnoreCase("HTTP_ACCEPT_ENCODING", v.key)) {
-            encoding = Encoding.fromStr(v.val);
-        } else if (eqlIgnoreCase("HTTP_AUTHORIZATION", v.key)) {
-            authorization = v.val;
-        } else if (eqlIgnoreCase("HTTP_COOKIE", v.key)) {
-            cookie_header = v.val;
-        } else if (eqlIgnoreCase("SERVER_PROTOCOL", v.key)) {
-            proto = v.val;
-        } else if (eqlIgnoreCase("REQUEST_SCHEME", v.key)) {
-            secure = eqlIgnoreCase("https", v.val);
-        }
     }
 
     return initCommon(
         a,
         remote_addr orelse return error.InvalidRequest,
-        method orelse return error.InvalidRequest,
+        method,
         uri orelse return error.InvalidRequest,
         host,
         ua_slice,
