@@ -29,11 +29,6 @@ pub const RawReq = union(enum) {
     http: *std.http.Server.Request,
 };
 
-const Pair = struct {
-    name: []const u8,
-    val: []const u8,
-};
-
 pub const Host = []const u8;
 pub const RemoteAddr = []const u8;
 pub const Accept = []const u8;
