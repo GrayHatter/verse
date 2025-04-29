@@ -156,6 +156,7 @@ pub const zWSGIParam = enum {
     HTTP_AUTHORIZATION,
     HTTP_COOKIE,
     HTTP_REFERER,
+    HTTP_FROM,
 
     pub const fields = @typeInfo(zWSGIParam).@"enum".fields;
 
