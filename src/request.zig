@@ -135,7 +135,7 @@ fn initCommon(
 ) !Request {
     var method = _method;
     if (headers.getCustom("Upgrade")) |val| {
-        std.debug.print("Upgrade: {s}\n", .{val.value_list.value});
+        std.debug.print("Upgrade: {s}\n", .{val.list[0]});
         method = Methods.WEBSOCKET;
     }
 

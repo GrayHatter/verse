@@ -4,7 +4,7 @@ const Websocket = @This();
 
 pub fn accept(frame: *Frame) !Websocket {
     const key = if (frame.request.headers.getCustom("Sec-WebSocket-Key")) |key|
-        key.value_list.value
+        key.list[0]
     else
         return error.InvalidWebsocketRequest;
 

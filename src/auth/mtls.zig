@@ -15,11 +15,11 @@ pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
     const mtls: *MTLS = @ptrCast(@alignCast(ptr));
     var success: bool = false;
     if (headers.getCustom("MTLS_ENABLED")) |enabled| {
-        if (enabled.value_list.next) |_| return error.InvalidAuth;
+        if (enabled.list.len > 1) return error.InvalidAuth;
         // MTLS validation as currently supported here is done by the
         // reverse proxy. Constant time compare would provide no security
         // benefits here.
-        if (std.mem.eql(u8, enabled.value_list.value, "SUCCESS")) {
+        if (std.mem.eql(u8, enabled.list[0], "SUCCESS")) {
             success = true;
         }
     }
@@ -31,8 +31,8 @@ pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
             // Verse does not specify an order for which is valid so it is
             // an error if there is ever more than a single value for the
             // mTLS fingerprint
-            if (enabled.value_list.next != null) return error.InvalidAuth;
-            return base.lookupUser(enabled.value_list.value);
+            if (enabled.list.len > 1) return error.InvalidAuth;
+            return base.lookupUser(enabled.list[0]);
         }
     }
     return .{ .user_ptr = null };

@@ -1,10 +1,10 @@
 alloc: Allocator,
 known: KnownMap,
-custom: CustomMap,
+extra: ExtraMap,
 
 const Headers = @This();
 
-pub const KnownHeaders = enum {
+pub const Expected = enum {
     accept,
     accept_encoding,
     host,
@@ -20,37 +20,26 @@ pub const Header = struct {
 /// Unstable API that may get removed
 pub const HeaderList = struct {
     name: []const u8,
-    value_list: *ValueList,
+    list: [][]const u8,
 };
 
-const ValueList = struct {
-    value: []const u8,
-    next: ?*ValueList = null,
-};
-
-const KnownMap = EnumMap(KnownHeaders, []const u8);
-const CustomMap = std.StringArrayHashMapUnmanaged(*ValueList);
+const KnownMap = std.EnumMap(Expected, []const u8);
+const ExtraMap = std.StringArrayHashMapUnmanaged(HeaderList);
 
 pub fn init(a: Allocator) Headers {
     return .{
         .alloc = a,
         .known = KnownMap{},
-        .custom = CustomMap{},
+        .extra = ExtraMap{},
     };
 }
 
 pub fn raze(h: *Headers) void {
-    const values = h.custom.values();
+    const values = h.extra.values();
     for (values) |val| {
-        var next: ?*ValueList = val.*.next;
-        h.alloc.destroy(val);
-        while (next != null) {
-            const destroy = next.?;
-            next = next.?.next;
-            h.alloc.destroy(destroy);
-        }
+        h.alloc.free(val.list);
     }
-    h.custom.deinit(h.alloc);
+    h.extra.deinit(h.alloc);
 }
 
 fn normalize(_: []const u8) !void {
@@ -59,27 +48,28 @@ fn normalize(_: []const u8) !void {
 
 pub fn addCustom(h: *Headers, name: []const u8, value: []const u8) !void {
     // TODO normalize lower
-    const gop = try h.custom.getOrPut(h.alloc, name);
+    const gop = try h.extra.getOrPut(h.alloc, name);
+    const hl: *HeaderList = gop.value_ptr;
     if (gop.found_existing) {
-        var end: *ValueList = gop.value_ptr.*;
-        while (end.*.next != null) {
-            end = end.next.?;
+        if (!h.alloc.resize(hl.list, hl.list.len + 1)) {
+            hl.list = try h.alloc.realloc(hl.list, hl.list.len + 1);
         }
-        end.next = try h.alloc.create(ValueList);
-        end.next.?.value = value;
-        end.next.?.next = null;
+        hl.list[hl.list.len - 1] = value;
     } else {
-        gop.value_ptr.* = try h.alloc.create(ValueList);
-        gop.value_ptr.*.value = value;
-        gop.value_ptr.*.next = null;
+        hl.* = .{
+            .name = name,
+            .list = try h.alloc.alloc([]const u8, 1),
+        };
+        hl.list[0] = value;
     }
 }
 
 pub fn getCustom(h: *const Headers, name: []const u8) ?HeaderList {
-    if (h.custom.get(name)) |header| {
+    // TODO fix me
+    if (h.extra.get(name)) |header| {
         return .{
             .name = name,
-            .value_list = header,
+            .list = header.list,
         };
     } else return null;
 }
@@ -92,34 +82,34 @@ pub fn iterator(h: *Headers) Iterator {
 
 pub const Iterator = struct {
     header: *Headers,
-    inner: CustomMap.Iterator,
-    entry: ?CustomMap.Entry = null,
-    current: ?*ValueList = null,
-    current_name: ?[]const u8 = null,
+    inner: ExtraMap.Iterator,
+    entry: ?ExtraMap.Entry = null,
+    current: ?*HeaderList = null,
+    current_idx: usize = 0,
 
     pub fn init(h: *Headers) Iterator {
-        h.custom.lockPointers();
+        h.extra.lockPointers();
         return .{
             .header = h,
-            .inner = h.custom.iterator(),
+            .inner = h.extra.iterator(),
         };
     }
 
     pub fn next(i: *Iterator) ?Header {
         if (i.current) |current| {
-            defer i.current = current.next;
+            defer i.current_idx += 1;
             return .{
-                .name = i.current_name.?,
-                .value = current.value,
+                .name = current.name,
+                .value = current.list[i.current_idx],
             };
         } else {
-            i.current_name = null;
+            i.current = null;
             i.entry = i.inner.next();
+            i.current_idx = 0;
             if (i.entry) |entry| {
-                i.current = entry.value_ptr.*;
-                i.current_name = entry.key_ptr.*;
+                i.current = entry.value_ptr;
             } else {
-                i.header.custom.unlockPointers();
+                i.header.extra.unlockPointers();
                 return null;
             }
             return i.next();
@@ -132,7 +122,7 @@ pub const Iterator = struct {
     }
 };
 
-pub fn toSlice(h: Headers, a: Allocator) ![]Header {
+pub fn toSlice(h: *Headers, a: Allocator) ![]Header {
     var itr = h.iterator();
     var count: usize = 0;
     while (itr.next()) |_| count += 1;
@@ -147,18 +137,18 @@ pub fn toSlice(h: Headers, a: Allocator) ![]Header {
 
 pub fn format(h: Headers, comptime fmts: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
     comptime if (fmts.len > 0) @compileError("Header format string must be empty");
-    var iter = h.custom.iterator();
+    var iter = h.extra.iterator();
 
     while (iter.next()) |next| {
-        var old: ?*ValueList = next.value_ptr.*;
-        while (old) |this| {
-            try out.print("{s}: {s}\n", .{ next.key_ptr.*, this.value });
-            old = this.next;
+        for (next.value_ptr.list) |this| {
+            try out.print("{s}: {s}\n", .{ next.value_ptr.name, this });
         }
     }
 }
 
 test Headers {
+    _ = std.testing.refAllDecls(Headers);
+
     const a = std.testing.allocator;
     var hmap = init(a);
     defer hmap.raze();
@@ -167,13 +157,13 @@ test Headers {
     try hmap.addCustom("first", "3");
     try hmap.addCustom("second", "4");
 
-    try std.testing.expectEqual(2, hmap.custom.count());
-    const first = hmap.custom.get("first");
-    try std.testing.expectEqualStrings(first.?.value, "1");
-    try std.testing.expectEqualStrings(first.?.next.?.value, "2");
-    try std.testing.expectEqualStrings(first.?.next.?.next.?.value, "3");
-    const second = hmap.custom.get("second");
-    try std.testing.expectEqualStrings(second.?.value, "4");
+    try std.testing.expectEqual(2, hmap.extra.count());
+    const first = hmap.extra.get("first");
+    try std.testing.expectEqualStrings(first.?.list[0], "1");
+    try std.testing.expectEqualStrings(first.?.list[1], "2");
+    try std.testing.expectEqualStrings(first.?.list[2], "3");
+    const second = hmap.extra.get("second");
+    try std.testing.expectEqualStrings(second.?.list[0], "4");
 }
 
 const std = @import("std");
