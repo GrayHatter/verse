@@ -7,9 +7,13 @@ const Headers = @This();
 pub const Expected = enum {
     accept,
     accept_encoding,
+    accept_language,
+    authorization,
+    cookie,
+    from,
     host,
+    referer,
     user_agent,
-    cookies,
 };
 
 pub const Header = struct {
