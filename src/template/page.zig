@@ -464,8 +464,15 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                 count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
                             } else count += array.len;
                             skip = array.len;
-                        }, // TODO implement
-                        else => unreachable,
+                        },
+                        .array => {
+                            const child_data: array.kind = dos.getData(array.kind, data).*;
+                            for (child_data) |cd| {
+                                count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
+                            }
+                            skip = array.len;
+                        },
+                        else => comptime unreachable,
                     },
                 }
             }
@@ -533,7 +540,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     },
                     else => {
                         std.debug.print("unexpected type {s}\n", .{@typeName(T)});
-                        unreachable;
+                        comptime unreachable;
                     },
                 },
             };
@@ -614,7 +621,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         fn ioVecArray(T: type, data: T, comptime ofs: []const Offset, vec: []IOVec, a: Allocator) !usize {
             var idx: usize = 0;
             switch (T) {
-                []const u8, u8 => unreachable,
+                []const u8, u8 => comptime unreachable,
                 []const []const u8 => {
                     for (data) |each| {
                         vec[idx] = .{ .base = each.ptr, .len = each.len };
@@ -643,9 +650,12 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             else => unreachable,
                         }
                     },
+                    .array => |arr| {
+                        for (data) |each| idx += try ioVecCore(arr.child, each, ofs, vec[idx..], a);
+                    },
                     else => {
                         std.debug.print("unexpected type {s}\n", .{@typeName(T)});
-                        unreachable;
+                        comptime unreachable;
                     },
                 },
             }
