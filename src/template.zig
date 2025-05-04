@@ -1,13 +1,3 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-const eql = std.mem.eql;
-const endsWith = std.mem.endsWith;
-const indexOfScalar = std.mem.indexOfScalar;
-const allocPrint = std.fmt.allocPrint;
-const log = std.log.scoped(.Verse);
-
-const build_mode = @import("builtin").mode;
-
 pub const Structs = @import("comptime_structs");
 pub const Directive = @import("template/directive.zig");
 pub const Template = @import("template/Template.zig");
@@ -26,6 +16,7 @@ pub var dynamic = &template_data.dynamic;
 
 const initDynamic = template_data.initDynamic;
 const makeStructName = template_data.makeStructName;
+const makeFieldName = template_data.makeFieldName;
 pub const findTemplate = template_data.findTemplate;
 
 pub fn raze(a: Allocator) void {
@@ -75,6 +66,83 @@ fn testPrint(comptime fmt: []const u8, args: anytype) void {
     } else if (std.testing.backend_can_print) {
         std.debug.print(fmt, args);
     }
+}
+
+fn comptimeCountNames(text: []const u8) usize {
+    var last: usize = 0;
+    var count: usize = 0;
+    while (std.mem.indexOfScalarPos(u8, text, last, '<')) |idx| {
+        last = idx + 1;
+        if (last >= text.len) break;
+        if (std.ascii.isUpper(text[last])) count += 1;
+        if (Directive.init(text[last - 1 ..])) |drct| switch (drct.verb) {
+            .variable => {},
+            else => last += drct.tag_block.len,
+        };
+    }
+    return count;
+}
+
+fn comptimeFields(text: []const u8) [comptimeCountNames(text)]std.builtin.Type.StructField {
+    var fields: [comptimeCountNames(text)]std.builtin.Type.StructField = undefined;
+    var last: usize = 0;
+    for (&fields) |*field| {
+        while (std.mem.indexOfScalarPos(u8, text, last, '<')) |idx| {
+            last = idx + 1;
+            if (last >= text.len) unreachable;
+            if (Directive.init(text[last - 1 ..])) |drct| switch (drct.verb) {
+                .variable => {
+                    const ws = std.mem.indexOfAnyPos(u8, text, last, " />") orelse unreachable;
+                    const name = text[last..ws];
+                    var lower: [name.len + 8:0]u8 = @splat(0);
+                    const llen = makeFieldName(name, &lower);
+                    lower[llen] = 0;
+                    const lname: [:0]const u8 = @as([:0]u8, lower[0..llen :0]);
+
+                    field.* = .{
+                        .name = lname,
+                        .type = []const u8,
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf([]const u8),
+                    };
+                    break;
+                },
+                .foreach => {
+                    var lower: [drct.noun.len + 8:0]u8 = @splat(0);
+                    const llen = makeFieldName(drct.noun, &lower);
+                    lower[llen] = 0;
+                    const lname: [:0]const u8 = @as([:0]u8, lower[0..llen :0]);
+
+                    const body_type = comptimeStruct(drct.tag_block_body.?);
+
+                    field.* = .{
+                        .name = lname,
+                        .type = switch (drct.otherwise) {
+                            .exact => |ex| [ex]body_type,
+                            else => []const body_type,
+                        },
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf([]const u8),
+                    };
+                    break;
+                },
+                else => unreachable,
+            };
+        }
+    }
+    return fields;
+}
+
+fn comptimeStruct(text: []const u8) type {
+    @setEvalBranchQuota(10000);
+    return @Type(.{ .@"struct" = .{
+        .layout = .auto,
+        .fields = &comptimeFields(text),
+        .decls = &.{},
+        .is_tuple = false,
+    } });
 }
 
 test findPageType {
@@ -228,23 +296,26 @@ test "directive nothing" {
 }
 
 test "directive nothing new" {
-    //const a = std.testing.allocator;
-    //const t = Template{
-    //    //.path = "/dev/null",
-    //    .name = "test",
-    //    .blob = "<Nothing>",
-    //};
+    // TODO fix test
+    if (true) return error.SkipZigTest;
 
-    //const ctx = .{};
+    const a = std.testing.allocator;
+    const t = Template{
+        //.path = "/dev/null",
+        .name = "test",
+        .blob = "<Nothing>",
+    };
 
-    //// TODO is this still the expected behavior
-    ////const p = Page(t, @TypeOf(ctx)).init(.{});
-    ////try std.testing.expectError(error.VariableMissing, p);
+    const ctx = .{};
 
-    //const pg = Page(t, @TypeOf(ctx)).init(.{});
-    //const p = try allocPrint(a, "{}", .{pg});
-    //defer a.free(p);
-    //try std.testing.expectEqualStrings("<Nothing>", p);
+    // TODO is this still the expected behavior
+    //const p = Page(t, @TypeOf(ctx)).init(.{});
+    //try std.testing.expectError(error.VariableMissing, p);
+
+    const pg = Page(t, @TypeOf(ctx)).init(.{});
+    const p = try allocPrint(a, "{}", .{pg});
+    defer a.free(p);
+    try std.testing.expectEqualStrings("<Nothing>", p);
 }
 
 test "directive ORELSE" {
@@ -748,3 +819,56 @@ test "comment tags" {
 
     try std.testing.expectEqualStrings(expected, page);
 }
+
+test "For exact" {
+    var a = std.testing.allocator;
+
+    // 4 chosen by a fair dice roll!
+    const blob =
+        \\<For Loop exact="4">
+        \\    <span><Name></span>
+        \\</For>
+    ;
+
+    const expected: []const u8 =
+        \\<span>first</span>
+        \\<span>second</span>
+        \\<span>third</span>
+        \\<span>forth</span>
+        \\
+    ;
+
+    const t = Template{
+        //.path = "/dev/null",
+        .name = "test",
+        .blob = blob,
+    };
+
+    const PgType = comptimeStruct(blob);
+    //@compileLog(@typeInfo(PgType));
+    //@compileLog(@typeInfo(PgType).@"struct".fields);
+
+    const ctx = PgType{
+        .loop = .{
+            .{ .name = "first" },
+            .{ .name = "second" },
+            .{ .name = "third" },
+            .{ .name = "forth" },
+        },
+    };
+    const pg = Page(t, PgType).init(ctx);
+
+    const p = try allocPrint(a, "{}", .{pg});
+    defer a.free(p);
+    try std.testing.expectEqualStrings(expected, p);
+}
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const eql = std.mem.eql;
+const endsWith = std.mem.endsWith;
+const indexOfScalar = std.mem.indexOfScalar;
+const allocPrint = std.fmt.allocPrint;
+const log = std.log.scoped(.Verse);
+
+const build_mode = @import("builtin").mode;

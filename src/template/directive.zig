@@ -13,6 +13,7 @@ pub const Otherwise = union(enum) {
     delete: void,
     default: []const u8,
     template: Template,
+    exact: usize,
     //page: type,
 };
 
@@ -40,8 +41,7 @@ pub const KnownType = enum {
 pub fn init(str: []const u8) ?Directive {
     if (str.len < 2) return null;
     if (!isUpper(str[1]) and str[1] != '_') return null;
-    const end = findTag(str) catch return null;
-    const tag = str[0..end];
+    const tag = findTag(str) catch return null;
     const verb = tag[1 .. indexOfAnyPos(u8, tag, 1, " /") orelse tag.len - 1];
 
     if (verb.len == tag.len - 2) {
@@ -51,14 +51,8 @@ pub fn init(str: []const u8) ?Directive {
     }
 
     const noun = tag[verb.len + 1 .. tag.len - 1];
-    if (initVerb(verb, noun, str)) |kind| {
-        return kind;
-    }
 
-    if (initNoun(verb, tag)) |kind| {
-        return kind;
-    }
-    return null;
+    return initVerb(verb, noun, str) orelse initNoun(verb, tag);
 }
 
 fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
@@ -119,6 +113,7 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
 pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive {
     var end: ?usize = null;
     var word: Verb = undefined;
+
     if (eql(u8, verb, "For")) {
         end = calcBody("For", noun, blob) orelse return null;
         word = .foreach;
@@ -161,32 +156,43 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
         }
     } else return null;
 
-    // TODO convert to while
-    //inline for (Word) |tag_name| {
-    //    if (eql(u8, noun, @tagName(tag_name))) {
-    //        pos = calcPos(@tagName(tag_name), blob, verb) orelse return null;
-    //        word = tag_name;
-    //        break;
-    //    }
-    //} else return null;
+    var name_end = (indexOfAnyPos(u8, noun, 1, " >") orelse noun.len);
+    if (noun[name_end - 1] == '/') name_end -= 1;
+    const name = noun[1..name_end];
 
-    var end2 = (indexOf(u8, noun, ">") orelse noun.len);
-    if (noun[end2 - 1] == '/') end2 -= 1;
+    var exact: ?usize = null;
+
+    var rem_attr: []const u8 = noun[1 + name.len ..];
+    while (indexOfScalar(u8, rem_attr, '=') != null) {
+        if (findAttribute(rem_attr)) |attr| {
+            if (eql(u8, attr.name, "exact")) {
+                exact = std.fmt.parseInt(usize, attr.value, 10) catch null;
+            } else {
+                std.debug.print("attr {s}\n", .{attr.name});
+                unreachable;
+            }
+            rem_attr = rem_attr[attr.len..];
+        } else |err| switch (err) {
+            error.AttrInvalid => break,
+            else => unreachable,
+        }
+    }
+
     const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
     const body_end: usize = end.? - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
     const tag_block_body = blob[body_start..body_end];
     return .{
         .verb = word,
-        .noun = noun[1..end2],
-        .otherwise = .required,
+        .noun = name,
+        .otherwise = if (exact) |e| .{ .exact = e } else .required,
         .tag_block = blob[0..end.?],
         .tag_block_body = tag_block_body,
         .tag_block_skip = body_start,
     };
 }
 
-fn findTag(blob: []const u8) !usize {
-    return 1 + (indexOf(u8, blob, ">") orelse return error.TagInvalid);
+fn findTag(blob: []const u8) ![]const u8 {
+    return blob[0 .. 1 + (indexOf(u8, blob, ">") orelse return error.TagInvalid)];
 }
 
 const TAttr = struct {
@@ -473,6 +479,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                             }
                         }
                     },
+                    .exact => unreachable,
                     //inline for (std.meta.fields(T)) |field| {
                     //    if (eql(u8, field.name, noun)) {
                     //        const subdata = @field(ctx, field.name);

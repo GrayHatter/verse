@@ -1,13 +1,3 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-const eql = std.mem.eql;
-const bufPrint = std.fmt.bufPrint;
-const indexOf = std.mem.indexOf;
-const indexOfPos = std.mem.indexOfPos;
-const compiled = @import("comptime_templates");
-const Directive = @import("directive.zig");
-const Page = @import("page.zig");
-
 const AbstTree = struct {
     pub const Member = struct {
         name: []u8,
@@ -20,16 +10,16 @@ const AbstTree = struct {
         }
     };
 
-    parent: ?*AbstTree,
+    //parent: ?*AbstTree,
     alloc: Allocator,
     name: []u8,
     children: []Member,
     child_cap: usize = 0,
 
-    pub fn init(a: Allocator, name: []const u8, parent: ?*AbstTree) !*AbstTree {
+    pub fn init(a: Allocator, name: []const u8, _: ?*AbstTree) !*AbstTree {
         const self = try a.create(AbstTree);
         self.* = .{
-            .parent = parent,
+            //.parent = parent,
             .alloc = a,
             .name = try a.dupe(u8, name),
             .children = try a.alloc(Member, 50),
@@ -53,11 +43,11 @@ const AbstTree = struct {
             if (std.mem.eql(u8, child.name, name)) {
                 if (!std.mem.eql(u8, child.kind, kind)) {
                     std.debug.print("Error: kind mismatch while building ", .{});
-                    var par = self.parent;
-                    while (par != null) {
-                        par = par.?.parent;
-                        std.debug.print("{s}.", .{par.?.name});
-                    }
+                    //var par = self.parent;
+                    //while (par != null) {
+                    //    par = par.?.parent;
+                    //    std.debug.print("{s}.", .{par.?.name});
+                    //}
 
                     std.debug.print(
                         "{s}.{s}\n  {s} != {s}\n",
@@ -91,7 +81,7 @@ const AbstTree = struct {
     }
 };
 
-var tree: std.StringHashMap(*AbstTree) = undefined;
+var root_tree: std.StringHashMapUnmanaged(*AbstTree) = .{};
 
 pub fn main() !void {
     var args = std.process.args();
@@ -113,8 +103,6 @@ pub fn main() !void {
     );
     var wout = wfile.writer();
 
-    tree = std.StringHashMap(*AbstTree).init(a);
-
     for (compiled.data) |tplt| {
         const fdata = std.fs.cwd().readFileAlloc(a, tplt.path, 0xffff) catch |err| br: {
             if (err != error.FileNotFound) {
@@ -129,26 +117,33 @@ pub fn main() !void {
 
         const name = makeStructName(tplt.path);
         const this = try AbstTree.init(a, name, null);
-        const gop = try tree.getOrPut(this.name);
+        const gop = try root_tree.getOrPut(a, this.name);
         if (!gop.found_existing) {
             gop.value_ptr.* = this;
         }
-        try emitVars(a, fdata, this);
+        try emitSourceVars(a, fdata, this);
     }
 
-    var itr = tree.iterator();
+    var itr = root_tree.iterator();
     while (itr.next()) |each| {
         //std.debug.print("tree: {}\n", .{each.value_ptr.*});
         try wout.print("{}\n", .{each.value_ptr.*});
     }
 }
 
-fn emitVars(a: Allocator, fdata: []const u8, current: *AbstTree) !void {
+fn genType(d: Directive) type {
+    std.debug.print("dir {any}\n", .{d});
+
+    return @Type(.{});
+}
+
+fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
     var data = fdata;
     while (data.len > 0) {
         if (indexOf(u8, data, "<")) |offset| {
             data = data[offset..];
             if (Directive.init(data)) |drct| {
+                //_ = genType(drct);
                 data = data[drct.tag_block.len..];
                 const s_name = makeStructName(drct.noun);
                 var f_name = makeFieldName(drct.noun);
@@ -159,6 +154,7 @@ fn emitVars(a: Allocator, fdata: []const u8, current: *AbstTree) !void {
 
                         switch (drct.otherwise) {
                             .required => {},
+                            .exact => unreachable,
                             .default => |str| {
                                 kind = try bufPrint(&buffer, ": []const u8 = \"{s}\",\n", .{str});
                             },
@@ -173,11 +169,11 @@ fn emitVars(a: Allocator, fdata: []const u8, current: *AbstTree) !void {
                         if (drct.known_type) |kt| {
                             kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(kt)});
                         }
-                        try current.append(f_name, kind);
+                        try root.append(f_name, kind);
                     },
                     else => |verb| {
-                        var this = try AbstTree.init(a, s_name, current);
-                        const gop = try tree.getOrPut(this.name);
+                        var this = try AbstTree.init(a, s_name, root);
+                        const gop = try root_tree.getOrPut(a, this.name);
                         if (!gop.found_existing) {
                             gop.value_ptr.* = this;
                         } else {
@@ -188,27 +184,32 @@ fn emitVars(a: Allocator, fdata: []const u8, current: *AbstTree) !void {
                             .variable => unreachable,
                             .foreach => {
                                 var buffer: [0xFF]u8 = undefined;
-                                const kind = try bufPrint(&buffer, ": []const {s},\n", .{s_name});
-                                try current.append(f_name, kind);
-                                try emitVars(a, drct.tag_block_body.?, this);
+                                if (drct.otherwise == .exact) {
+                                    const kind = try bufPrint(&buffer, ": [{}]{s},\n", .{ drct.otherwise.exact, s_name });
+                                    try root.append(f_name, kind);
+                                    try emitSourceVars(a, drct.tag_block_body.?, this);
+                                } else {
+                                    const kind = try bufPrint(&buffer, ": []const {s},\n", .{s_name});
+                                    try root.append(f_name, kind);
+                                    try emitSourceVars(a, drct.tag_block_body.?, this);
+                                }
                             },
                             .split => {
                                 var buffer: [0xFF]u8 = undefined;
                                 const kind = try bufPrint(&buffer, ": []const []const u8,\n", .{});
-                                try current.append(f_name, kind);
+                                try root.append(f_name, kind);
                             },
                             .with => {
                                 var buffer: [0xFF]u8 = undefined;
                                 const kind = try bufPrint(&buffer, ": ?{s},\n", .{s_name});
-                                try current.append(f_name, kind);
-                                try emitVars(a, drct.tag_block_body.?, this);
+                                try root.append(f_name, kind);
+                                try emitSourceVars(a, drct.tag_block_body.?, this);
                             },
                             .build => {
                                 var buffer: [0xFF]u8 = undefined;
                                 const tmpl_name = makeStructName(drct.otherwise.template.name);
                                 const kind = try bufPrint(&buffer, ": {s},\n", .{tmpl_name});
-                                try current.append(f_name, kind);
-                                //try emitVars(a, drct.otherwise.template.blob, this);
+                                try root.append(f_name, kind);
                             },
                         }
                     },
@@ -315,3 +316,13 @@ fn intToWord(in: u8) []const u8 {
         else => unreachable,
     };
 }
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const eql = std.mem.eql;
+const bufPrint = std.fmt.bufPrint;
+const indexOf = std.mem.indexOf;
+const indexOfPos = std.mem.indexOfPos;
+const compiled = @import("comptime_templates");
+const Directive = @import("directive.zig");
+const Page = @import("page.zig");

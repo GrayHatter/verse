@@ -160,6 +160,7 @@ fn baseType(T: type, name: []const u8) type {
                     .optional => |opt| return opt.child,
                     .@"struct" => return f.type,
                     .int => return f.type,
+                    .array => |ar| return ar.child,
                     else => @compileError("Unexpected kind " ++ f.name),
                 },
             }
@@ -526,6 +527,9 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     .optional => |opt| {
                         if (opt.child == []const u8) unreachable;
                         try offsetOptionalItem(opt.child, data, ofs, html, out);
+                    },
+                    .array => |arr| {
+                        for (data) |each| try formatDirective(arr.child, each, ofs, html, out);
                     },
                     else => {
                         std.debug.print("unexpected type {s}\n", .{@typeName(T)});
