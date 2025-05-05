@@ -31,17 +31,13 @@ user: ?Auth.User = null,
 /// reading it later. Use with caution, as may leak if misused.
 response_data: ResponseData,
 
-// Raw move from response.zig
-
-/// Response headers; instead of modifying these headers directly prefer calling
-/// `headersAdd`
 headers: Headers,
 cookie_jar: Cookies.Jar,
 // TODO document content_type
 content_type: ?ContentType = ContentType.default,
 status: ?std.http.Status = null,
 
-wrote_headers: bool = false,
+headers_done: bool = false,
 
 const Frame = @This();
 
@@ -229,7 +225,7 @@ fn VecList(comptime SIZE: usize) type {
 }
 
 pub fn sendHeaders(vrs: *Frame) SendError!void {
-    if (vrs.wrote_headers) {
+    if (vrs.headers_done) {
         return SendError.HeadersFinished;
     }
 
@@ -282,7 +278,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
         .buffer => @panic("not implemented"),
     }
 
-    vrs.wrote_headers = true;
+    vrs.headers_done = true;
 }
 
 /// Helper function to return a default error page for a given http status code.
@@ -324,7 +320,7 @@ fn writevAll(vrs: Frame, vect: []iovec_c) !void {
     }
 }
 
-/// Raw writer, use with caution!
+// Raw writer, use with caution!
 fn write(vrs: Frame, data: []const u8) Downstream.Error!usize {
     return switch (vrs.downstream) {
         .zwsgi => |*w| try w.write(data),
