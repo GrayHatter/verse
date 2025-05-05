@@ -31,10 +31,13 @@ user: ?Auth.User = null,
 /// reading it later. Use with caution, as may leak if misused.
 response_data: ResponseData,
 
+/// Response Headers
 headers: Headers,
+/// Response Cookies
 cookie_jar: Cookies.Jar,
 // TODO document content_type
 content_type: ?ContentType = ContentType.default,
+
 status: ?std.http.Status = null,
 
 headers_done: bool = false,
