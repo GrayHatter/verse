@@ -23,7 +23,7 @@ const Offset = struct {
             data_offset: usize,
             len: usize,
         },
-        array: struct {
+        list: struct {
             kind: type,
             data_offset: usize,
             len: usize,
@@ -34,7 +34,7 @@ const Offset = struct {
         const ptr_offset: usize = switch (o.kind) {
             .directive => |d| d.data_offset,
             .template => |t| t.data_offset,
-            .array => |a| a.data_offset,
+            .list => |a| a.data_offset,
             .slice => unreachable,
         };
         return @ptrCast(@alignCast(&ptr[ptr_offset]));
@@ -160,7 +160,7 @@ fn baseType(T: type, name: []const u8) type {
                     .optional => |opt| return opt.child,
                     .@"struct" => return f.type,
                     .int => return f.type,
-                    .array => |ar| return ar.child,
+                    .array => |array| return array.child,
                     else => @compileError("Unexpected kind " ++ f.name),
                 },
             }
@@ -222,7 +222,7 @@ fn validateBlockSplit(
                 .start = index + drct.tag_block.len,
                 .end = index + wsidx,
                 .kind = .{
-                    .array = .{
+                    .list = .{
                         .data_offset = data_offset,
                         .kind = []const []const u8,
                         .len = 2,
@@ -245,7 +245,7 @@ fn validateBlockSplit(
                 .end = index + end,
                 .data_offset = null,
                 .kind = .{
-                    .array = .{
+                    .list = .{
                         .kind = []const []const u8,
                         .data_offset = data_offset,
                         .len = 1,
@@ -313,7 +313,7 @@ fn validateDirective(
                     .start = index + drct.tag_block_skip.?,
                     .end = index + end,
                     .kind = .{
-                        .array = .{
+                        .list = .{
                             .kind = FieldT,
                             .data_offset = data_offset,
                             .len = loop.len,
@@ -450,27 +450,27 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         count += iovecCount(ofs[idx..][0..t.len], @ptrCast(child_data));
                         skip = t.len;
                     },
-                    .array => |array| switch (@typeInfo(array.kind)) {
+                    .list => |list| switch (@typeInfo(list.kind)) {
                         .pointer => {
-                            const child_data: array.kind = dos.getData(array.kind, data).*;
+                            const child_data: list.kind = dos.getData(list.kind, data).*;
                             for (child_data) |cd| {
-                                count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
+                                count += iovecCount(ofs[idx..][0..list.len], @ptrCast(&cd));
                             }
-                            skip = array.len;
+                            skip = list.len;
                         },
                         .optional => {
-                            const child_data = dos.getData(array.kind, data).*;
+                            const child_data = dos.getData(list.kind, data).*;
                             if (child_data) |cd| {
-                                count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
-                            } else count += array.len;
-                            skip = array.len;
+                                count += iovecCount(ofs[idx..][0..list.len], @ptrCast(&cd));
+                            } else count += list.len;
+                            skip = list.len;
                         },
                         .array => {
-                            const child_data: array.kind = dos.getData(array.kind, data).*;
+                            const child_data: list.kind = dos.getData(list.kind, data).*;
                             for (child_data) |cd| {
-                                count += iovecCount(ofs[idx..][0..array.len], @ptrCast(&cd));
+                                count += iovecCount(ofs[idx..][0..list.len], @ptrCast(&cd));
                             }
-                            skip = array.len;
+                            skip = list.len;
                         },
                         else => comptime unreachable,
                     },
@@ -535,8 +535,8 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         if (opt.child == []const u8) unreachable;
                         try offsetOptionalItem(opt.child, data, ofs, html, out);
                     },
-                    .array => |arr| {
-                        for (data) |each| try formatDirective(arr.child, each, ofs, html, out);
+                    .array => |array| {
+                        for (data) |each| try formatDirective(array.child, each, ofs, html, out);
                     },
                     else => {
                         std.debug.print("unexpected type {s}\n", .{@typeName(T)});
@@ -564,10 +564,10 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             try out.writeAll(slice);
                         }
                     },
-                    .array => |array| {
-                        const child_data = os.getData(array.kind, @ptrCast(&data));
-                        try offsetArray(array.kind, child_data.*, ofs[idx + 1 ..][0..array.len], html[os.start..os.end], out);
-                        skip = array.len;
+                    .list => |list| {
+                        const child_data = os.getData(list.kind, @ptrCast(&data));
+                        try offsetArray(list.kind, child_data.*, ofs[idx + 1 ..][0..list.len], html[os.start..os.end], out);
+                        skip = list.len;
                     },
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {
@@ -650,8 +650,8 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             else => unreachable,
                         }
                     },
-                    .array => |arr| {
-                        for (data) |each| idx += try ioVecCore(arr.child, each, ofs, vec[idx..], a);
+                    .array => |array| {
+                        for (data) |each| idx += try ioVecCore(array.child, each, ofs, vec[idx..], a);
                     },
                     else => {
                         std.debug.print("unexpected type {s}\n", .{@typeName(T)});
@@ -676,10 +676,10 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         };
                         vec_idx += 1;
                     },
-                    .array => |array| {
-                        const child_data = os.getData(array.kind, @ptrCast(&data));
-                        vec_idx += try ioVecArray(array.kind, child_data.*, ofs[os_idx..][0..array.len], vec[vec_idx..], a);
-                        skip = array.len;
+                    .list => |list| {
+                        const child_data = os.getData(list.kind, @ptrCast(&data));
+                        vec_idx += try ioVecArray(list.kind, child_data.*, ofs[os_idx..][0..list.len], vec[vec_idx..], a);
+                        skip = list.len;
                     },
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {
