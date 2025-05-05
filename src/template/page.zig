@@ -419,31 +419,13 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                 } else switch (dos.kind) {
                     .slice => count += 1,
                     .directive => |_| {
-                        // TODO actually less that 1
-                        count += 1;
-
                         // I originally implemented this assuming that the
                         // correct implementation should give the exact size,
                         // but it's possible the correct implementation should
                         // give a max size, to optimize for time instead of
                         // space.
-                        //
-                        //const dr_opt = dos.getData(drct.kind, @ptrCast(&self.data));
-                        //switch (drct.kind) {
-                        //    usize, []const u8 => count += 1,
-                        //    ?[]const u8 => {
-                        //        if (dr_opt.*) |_| {
-                        //            count += 1;
-                        //        } else if (drct.d.otherwise == .default) {
-                        //            count += 1;
-                        //        }
-                        //    },
-                        //    ?usize => {
-                        //        if (dr_opt.*) |_| count += 1;
-                        //    },
-                        //    else => |t| @compileError("unsupported directive type " ++ @typeName(t)),
-                        //}
-
+                        // TODO actually less that 1
+                        count += 1;
                     },
                     .template => |t| {
                         const child_data = dos.getData(t.kind, data);
