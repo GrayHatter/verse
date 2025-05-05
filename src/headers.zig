@@ -150,9 +150,11 @@ pub fn format(h: Headers, comptime fmts: []const u8, _: std.fmt.FormatOptions, o
     }
 }
 
-test Headers {
+test {
     _ = std.testing.refAllDecls(Headers);
+}
 
+test Headers {
     const a = std.testing.allocator;
     var hmap = init(a);
     defer hmap.raze();
