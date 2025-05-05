@@ -12,11 +12,7 @@ alloc: Allocator,
 request: *const Request,
 /// downsteam writer based on which ever server accepted the client request and
 /// created this Frame
-downstream: union(Downstream) {
-    buffer: std.io.BufferedWriter(ONESHOT_SIZE, Stream.Writer),
-    zwsgi: Stream,
-    http: Stream,
-},
+downstream: Downstream,
 /// Request URI as received by Verse
 uri: Router.UriIterator,
 
@@ -52,6 +48,16 @@ const Frame = @This();
 pub const SendError = error{
     HeadersFinished,
 } || NetworkError;
+
+pub const Downstream = union(enum) {
+    buffer: Buffered,
+    http: Stream,
+    zwsgi: Stream,
+
+    pub const Error = Stream.WriteError || Buffered.Error;
+
+    const Buffered = std.io.BufferedWriter(ONESHOT_SIZE, Stream.Writer);
+};
 
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
@@ -100,35 +106,35 @@ pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
     };
 }
 
-pub const NetworkJsonError = NetworkError || error{OutOfMemory};
-
 /// Takes a any object, that can be represented by json, converts it into a
 /// json string, and sends to the client.
-pub fn sendJSON(vrs: *Frame, comptime code: std.http.Status, json: anytype) NetworkJsonError!void {
+pub fn sendJSON(fr: *Frame, comptime code: std.http.Status, json: anytype) NetworkError!void {
     if (code == .no_content) {
         @compileError("Sending JSON is not supported with status code no content");
     }
 
-    vrs.status = code;
-    vrs.content_type = .{
+    fr.status = code;
+    fr.content_type = .{
         .base = .{ .application = .json },
         .parameter = .@"utf-8",
     };
 
-    vrs.sendHeaders() catch |err| switch (err) {
+    fr.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
         else => return error.IOWriteFailure,
     };
 
-    try vrs.sendRawSlice("\r\n");
+    try fr.sendRawSlice("\r\n");
+    const w = fr.writer();
 
-    const data = std.json.stringifyAlloc(vrs.alloc, json, .{
-        .emit_null_optional_fields = false,
-    }) catch |err| {
+    std.json.stringify(
+        json,
+        .{ .emit_null_optional_fields = false },
+        w,
+    ) catch |err| {
         log.err("Error trying to print json {}", .{err});
-        return error.OutOfMemory;
     };
-    vrs.writeAll(data) catch |err| switch (err) {
+    fr.flush() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
         else => return error.IOWriteFailure,
     };
@@ -291,18 +297,18 @@ pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !vo
 const ONESHOT_SIZE = 14720;
 const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
 
-const Downstream = enum {
-    buffer,
-    zwsgi,
-    http,
-};
+pub const Writer = std.io.GenericWriter(Frame, Downstream.Error, write);
 
-const VarPair = struct {
-    []const u8,
-    []const u8,
-};
+fn writer(fr: Frame) Writer {
+    return .{
+        .context = fr,
+    };
+}
 
-// The remaining functions are internal
+fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) anyerror!usize {
+    const fr: *const Frame = @alignCast(@ptrCast(ptr));
+    return try fr.write(bytes);
+}
 
 fn writeAll(vrs: Frame, data: []const u8) !void {
     var index: usize = 0;
@@ -319,19 +325,18 @@ fn writevAll(vrs: Frame, vect: []iovec_c) !void {
 }
 
 /// Raw writer, use with caution!
-fn write(vrs: Frame, data: []const u8) !usize {
+fn write(vrs: Frame, data: []const u8) Downstream.Error!usize {
     return switch (vrs.downstream) {
         .zwsgi => |*w| try w.write(data),
-        .http => |*w| return try w.write(data),
-        .buffer => return try vrs.write(data),
+        .http => |*w| try w.write(data),
+        .buffer => try vrs.write(data),
     };
 }
 
-fn flush(vrs: Frame) !void {
+fn flush(vrs: *Frame) Downstream.Error!void {
     switch (vrs.downstream) {
         .buffer => |*w| try w.flush(),
-        .http => |*h| h.flush(),
-        .zwsgi => {},
+        .http, .zwsgi => {},
     }
 }
 
@@ -391,7 +396,7 @@ pub fn dumpDebugData(frame: *const Frame) void {
     }
 }
 
-test "Verse" {
+test {
     std.testing.refAllDecls(@This());
 }
 
