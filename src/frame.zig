@@ -286,10 +286,6 @@ pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
     return Router.defaultResponse(code)(vrs);
 }
 
-pub fn headersAdd(vrs: *Frame, comptime name: []const u8, value: []const u8) !void {
-    try vrs.headers.addCustom(name, value);
-}
-
 const ONESHOT_SIZE = 14720;
 const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
 

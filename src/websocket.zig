@@ -23,9 +23,9 @@ fn respond(f: *Frame, key: []const u8) !void {
     sha.final(&digest);
     var encoded: [28]u8 = undefined;
     _ = base64.encode(&encoded, &digest);
-    try f.headersAdd("Upgrade", "websocket");
-    try f.headersAdd("Connection", "Upgrade");
-    try f.headersAdd("Sec-WebSocket-Accept", encoded[0..]);
+    try f.headers.addCustom("Upgrade", "websocket");
+    try f.headers.addCustom("Connection", "Upgrade");
+    try f.headers.addCustom("Sec-WebSocket-Accept", encoded[0..]);
     try f.sendHeaders();
     try f.sendRawSlice("\r\n");
 }
