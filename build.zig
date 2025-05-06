@@ -3,6 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const use_llvm = false;
 
     //if (b.args) |args| for (args) |arg| std.debug.print("arg {s}\n", .{arg});
 
@@ -31,6 +32,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/verse.zig"),
         .target = target,
         .optimize = optimize,
+        .use_llvm = use_llvm,
     });
     lib_unit_tests.root_module.addOptions("verse_buildopts", options);
 
@@ -80,6 +82,7 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("examples/" ++ example ++ ".zig"),
             .target = target,
             .optimize = optimize,
+            .use_llvm = use_llvm,
         });
         // All Examples should compile for tests to pass
         test_step.dependOn(&example_exe.step);
