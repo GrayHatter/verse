@@ -101,23 +101,24 @@ pub const Iterator = struct {
 
     pub fn next(i: *Iterator) ?Header {
         if (i.current) |current| {
-            defer i.current_idx += 1;
-            return .{
-                .name = current.name,
-                .value = current.list[i.current_idx],
-            };
-        } else {
-            i.current = null;
-            i.entry = i.inner.next();
-            i.current_idx = 0;
-            if (i.entry) |entry| {
-                i.current = entry.value_ptr;
-            } else {
-                i.header.extended.unlockPointers();
-                return null;
+            if (i.current_idx < current.list.len) {
+                defer i.current_idx += 1;
+                return .{
+                    .name = current.name,
+                    .value = current.list[i.current_idx],
+                };
             }
-            return i.next();
         }
+        i.current = null;
+        i.entry = i.inner.next();
+        i.current_idx = 0;
+        if (i.entry) |entry| {
+            i.current = entry.value_ptr;
+        } else {
+            i.header.extended.unlockPointers();
+            return null;
+        }
+        return i.next();
     }
 
     /// Helper
