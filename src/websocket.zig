@@ -97,7 +97,7 @@ pub const Message = struct {
         return message;
     }
 
-    pub fn read(r: *AnyReader, buffer: []align(8) u8) !Message {
+    pub fn read(r: *AnyReader, buffer: []align(@alignOf(Mask)) u8) !Message {
         var m: Message = undefined;
 
         if (try r.read(@as(*[2]u8, @ptrCast(&m.header))) != 2) return error.InvalidRead;
@@ -133,7 +133,7 @@ pub const Message = struct {
     }
 
     pub const Mask = usize;
-    pub fn applyMask(mask: u32, buffer: []align(8) u8) void {
+    pub fn applyMask(mask: u32, buffer: []align(@alignOf(Mask)) u8) void {
         const block_mask: Mask = switch (@sizeOf(Mask)) {
             4 => mask,
             8 => mask | @as(Mask, mask) << 32,
@@ -150,7 +150,7 @@ pub const Message = struct {
     }
 
     test applyMask {
-        var vector: [56]u8 align(8) = [_]u8{
+        var vector: [56]u8 align(@alignOf(Mask)) = [_]u8{
             0x0b, 0x0a, 0x2e, 0xc1, 0x63, 0x06, 0x31, 0xcd,
             0x3a, 0x00, 0x22, 0xca, 0x31, 0x0a, 0x77, 0x9f,
             0x26, 0x0e, 0x33, 0x84, 0x2d, 0x08, 0x77, 0x99,
