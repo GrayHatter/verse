@@ -115,7 +115,9 @@ test getOffset {
     try std.testing.expectEqual(8, test_2);
     // Yes, by definition, if the previous two are true, the 3rd must be, but
     // it's actually testing specific behavior.
-    try std.testing.expectEqual(test_1, test_2);
+    // dear future me; you can have this back once you comment what specific
+    // behavior this proves!
+    // try std.testing.expectEqual(test_1, test_2);
 
     const SUT2 = struct {
         a: usize,
