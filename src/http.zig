@@ -68,10 +68,12 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
     var post_data: ?RequestData.PostData = null;
 
     if (req.head.content_length) |h_len| {
-        if (h_len > 0) {
+        if (h_len > std.math.maxInt(usize)) return error.ContentTooLarge;
+        const hlen: usize = @intCast(h_len);
+        if (hlen > 0) {
             const h_type = req.head.content_type orelse "text/plain";
             var reader = try req.reader();
-            post_data = try RequestData.readPost(a, &reader, h_len, h_type);
+            post_data = try RequestData.readPost(a, &reader, hlen, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },

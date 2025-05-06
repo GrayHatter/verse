@@ -35,13 +35,11 @@ pub const Accept = []const u8;
 pub const Authorization = []const u8;
 pub const Referer = []const u8;
 
-pub const Encoding = packed struct(usize) {
+pub const Encoding = packed struct {
     br: bool,
     deflate: bool,
     gzip: bool,
     zstd: bool,
-
-    _padding: u60 = 0,
 
     pub fn fromStr(str: []const u8) Encoding {
         var e = Encoding.default;

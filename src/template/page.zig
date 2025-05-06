@@ -104,7 +104,7 @@ fn getOffset(T: type, name: []const u8, base: usize) usize {
 
 test getOffset {
     const SUT1 = struct {
-        a: usize,
+        a: u64,
         b: u8,
         value: []const u8,
     };
@@ -120,7 +120,7 @@ test getOffset {
     // try std.testing.expectEqual(test_1, test_2);
 
     const SUT2 = struct {
-        a: usize,
+        a: u64,
         b: u16,
         parent: SUT1,
     };

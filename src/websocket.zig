@@ -111,7 +111,9 @@ pub const Message = struct {
         }
 
         const length: usize = switch (m.length) {
-            inline else => |l| l,
+            .tiny => |t| t,
+            .small => |s| s,
+            .large => |l| if (@sizeOf(usize) != @sizeOf(@TypeOf(l))) @intCast(l) else l,
         };
 
         if (length > buffer.len) return error.NoSpaceLeft;
