@@ -45,8 +45,7 @@ pub fn recieve(ws: *Websocket, buffer: []align(8) u8) !Message {
         .zwsgi, .http => |stream| stream.reader(),
         else => unreachable,
     };
-    var any = reader.any();
-    return try Message.read(&any, buffer);
+    return try Message.read(reader.any(), buffer);
 }
 
 pub const Message = struct {
@@ -97,7 +96,7 @@ pub const Message = struct {
         return message;
     }
 
-    pub fn read(r: *AnyReader, buffer: []align(@alignOf(Mask)) u8) !Message {
+    pub fn read(r: AnyReader, buffer: []align(@alignOf(Mask)) u8) !Message {
         var m: Message = undefined;
 
         if (try r.read(@as(*[2]u8, @ptrCast(&m.header))) != 2) return error.InvalidRead;
