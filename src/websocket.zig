@@ -132,20 +132,37 @@ pub const Message = struct {
         return m;
     }
 
+    pub const Mask = usize;
     pub fn applyMask(mask: u32, buffer: []align(8) u8) void {
-        const block_mask: usize = mask | @as(usize, mask) << 32;
-        const block_buffer: []u8 align(8) = buffer[0 .. (buffer.len / 8) * 8];
-        // TODO fix when zig supports this cast
-        var block_msg: []usize = undefined;
-        block_msg.ptr = @alignCast(@ptrCast(block_buffer.ptr));
-        block_msg.len = block_buffer.len / 8;
-        for (block_msg) |*blk| {
-            blk.* ^= block_mask;
-        }
+        const block_mask: Mask = switch (@sizeOf(Mask)) {
+            4 => mask,
+            8 => mask | @as(Mask, mask) << 32,
+            else => @compileError("mask not implemented for this arch size"),
+        };
+        const block_buffer: []u8 align(@alignOf(Mask)) =
+            buffer[0 .. (buffer.len / @sizeOf(Mask)) * @sizeOf(Mask)];
+        const block_msg: []Mask = @alignCast(@ptrCast(block_buffer));
+        for (block_msg) |*blk| blk.* ^= block_mask;
 
         const remainder = buffer[block_buffer.len..];
         const rmask: [*]const u8 = @ptrCast(&mask);
         for (remainder, 0..) |*msg, i| msg.* ^= rmask[i % 4];
+    }
+
+    test applyMask {
+        var vector: [56]u8 align(8) = [_]u8{
+            0x0b, 0x0a, 0x2e, 0xc1, 0x63, 0x06, 0x31, 0xcd,
+            0x3a, 0x00, 0x22, 0xca, 0x31, 0x0a, 0x77, 0x9f,
+            0x26, 0x0e, 0x33, 0x84, 0x2d, 0x08, 0x77, 0x99,
+            0x2b, 0x06, 0x24, 0xc1, 0x63, 0x26, 0x77, 0x85,
+            0x2c, 0x1f, 0x32, 0xcd, 0x3a, 0x00, 0x22, 0xcd,
+            0x2b, 0x0e, 0x21, 0x88, 0x63, 0x0e, 0x77, 0x8a,
+            0x2c, 0x00, 0x33, 0xcd, 0x27, 0x0e, 0x2e, 0xcc,
+        };
+        const mask: u32 = 3981930307;
+        const expected = "Hey, if you're reading this, I hope you have a good day!";
+        applyMask(mask, &vector);
+        try std.testing.expectEqualStrings(expected, &vector);
     }
 
     pub fn toVec(m: *const Message) [3]std.posix.iovec_const {
