@@ -261,7 +261,7 @@ pub const Rules = struct {
                 };
                 const accept_str = normal ++ obfuscated;
                 if (r.accept) |racpt| if (eql(u8, racpt, accept_str)) {
-                    score.* = if (score.* < 1.0) 1.0 else score.*;
+                    score.* = @max(score.*, 1.0);
                 };
             },
         }
