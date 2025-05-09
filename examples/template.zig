@@ -32,6 +32,12 @@ fn index(frame: *verse.Frame) Router.Error!void {
             .{ .color = "red", .text = "This color is red" },
             .{ .color = "blue", .text = "This color is blue" },
             .{ .color = "green", .text = "This color is green" },
+            // The template system also provides a translation method if you
+            // have an existing source struct you'd like to use.
+            .translate(BasicLoopSourceObject{ .color = "purple", .text = "This color is purple" }),
+            // You can't provide an incompatible type trying to do so is a
+            // compile error.
+            //.translate(BasicLoopIncomplete{ .text = "The color field is missing!" }),
         },
 
         .slices = &.{
@@ -52,9 +58,14 @@ fn index(frame: *verse.Frame) Router.Error!void {
     try frame.sendPage(&page);
 }
 
-const routes = Router.Routes(&[_]Router.Match{
-    Router.GET("", index),
-});
+const BasicLoopSourceObject = struct {
+    color: []const u8,
+    text: []const u8,
+};
+
+const BasicLoopIncomplete = struct {
+    text: []const u8,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -70,8 +81,12 @@ pub fn main() !void {
         std.posix.exit(1);
     };
 }
-const std = @import("std");
 
+const routes = Router.Routes(&[_]Router.Match{
+    Router.GET("", index),
+});
+
+const std = @import("std");
 const verse = @import("verse");
 const PageData = verse.template.PageData;
 const Router = verse.Router;
