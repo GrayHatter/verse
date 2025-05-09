@@ -214,7 +214,7 @@ fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
                         }
                     },
                 }
-            } else if (Page.commentTag(data)) |skip| {
+            } else if (constructor.commentTag(data)) |skip| {
                 data = data[skip..];
             } else if (indexOfPos(u8, data, 1, "<")) |next| {
                 data = data[next..];
@@ -326,3 +326,4 @@ const indexOfPos = std.mem.indexOfPos;
 const compiled = @import("comptime_templates");
 const Directive = @import("directive.zig");
 const Page = @import("page.zig");
+const constructor = @import("constructor.zig");
