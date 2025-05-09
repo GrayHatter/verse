@@ -57,14 +57,8 @@ pub fn init(str: []const u8) ?Directive {
 
 fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
     //std.debug.print("init noun {s}\n", .{noun});
-    if (noun[0] == '_') if (getBuiltin(noun)) |bi| {
-        return Directive{
-            .noun = noun,
-            .verb = .variable,
-            .otherwise = .{ .template = bi },
-            .tag_block = tag,
-        };
-    };
+
+    if (noun[0] == '_') @panic("Template Directives must not start with _");
 
     var default_str: ?[]const u8 = null;
     var knownt: ?KnownType = null;
