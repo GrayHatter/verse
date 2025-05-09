@@ -85,27 +85,27 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         count += iovecCount(ofs[idx..][0..t.len], @ptrCast(child_data));
                         skip = t.len;
                     },
-                    .list => |list| switch (@typeInfo(list.kind)) {
+                    .component => |comp| switch (@typeInfo(comp.kind)) {
                         .pointer => {
-                            const child_data: list.kind = dos.getData(list.kind, data).*;
+                            const child_data: comp.kind = dos.getData(comp.kind, data).*;
                             for (child_data) |cd| {
-                                count += iovecCount(ofs[idx..][0..list.len], @ptrCast(&cd));
+                                count += iovecCount(ofs[idx..][0..comp.len], @ptrCast(&cd));
                             }
-                            skip = list.len;
+                            skip = comp.len;
                         },
                         .optional => {
-                            const child_data = dos.getData(list.kind, data).*;
+                            const child_data = dos.getData(comp.kind, data).*;
                             if (child_data) |cd| {
-                                count += iovecCount(ofs[idx..][0..list.len], @ptrCast(&cd));
-                            } else count += list.len;
-                            skip = list.len;
+                                count += iovecCount(ofs[idx..][0..comp.len], @ptrCast(&cd));
+                            } else count += comp.len;
+                            skip = comp.len;
                         },
                         .array => {
-                            const child_data: list.kind = dos.getData(list.kind, data).*;
+                            const child_data: comp.kind = dos.getData(comp.kind, data).*;
                             for (child_data) |cd| {
-                                count += iovecCount(ofs[idx..][0..list.len], @ptrCast(&cd));
+                                count += iovecCount(ofs[idx..][0..comp.len], @ptrCast(&cd));
                             }
-                            skip = list.len;
+                            skip = comp.len;
                         },
                         else => comptime unreachable,
                     },
@@ -199,10 +199,10 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             try out.writeAll(slice);
                         }
                     },
-                    .list => |list| {
-                        const child_data = os.getData(list.kind, @ptrCast(&data));
-                        try offsetArray(list.kind, child_data.*, ofs[idx + 1 ..][0..list.len], html[os.start..os.end], out);
-                        skip = list.len;
+                    .component => |comp| {
+                        const child_data = os.getData(comp.kind, @ptrCast(&data));
+                        try offsetArray(comp.kind, child_data.*, ofs[idx + 1 ..][0..comp.len], html[os.start..os.end], out);
+                        skip = comp.len;
                     },
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {
@@ -311,10 +311,10 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         };
                         vec_idx += 1;
                     },
-                    .list => |list| {
-                        const child_data = os.getData(list.kind, @ptrCast(&data));
-                        vec_idx += try ioVecArray(list.kind, child_data.*, ofs[os_idx..][0..list.len], vec[vec_idx..], a);
-                        skip = list.len;
+                    .component => |comp| {
+                        const child_data = os.getData(comp.kind, @ptrCast(&data));
+                        vec_idx += try ioVecArray(comp.kind, child_data.*, ofs[os_idx..][0..comp.len], vec[vec_idx..], a);
+                        skip = comp.len;
                     },
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {

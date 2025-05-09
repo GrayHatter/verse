@@ -19,7 +19,7 @@ pub const Offset = struct {
             data_offset: usize,
             len: usize,
         },
-        list: struct {
+        component: struct {
             kind: type,
             data_offset: usize,
             len: usize,
@@ -30,7 +30,7 @@ pub const Offset = struct {
         const ptr_offset: usize = switch (o.kind) {
             .directive => |d| d.data_offset,
             .template => |t| t.data_offset,
-            .list => |a| a.data_offset,
+            .component => |a| a.data_offset,
             .slice => unreachable,
         };
         return @ptrCast(@alignCast(&ptr[ptr_offset]));
@@ -171,7 +171,7 @@ fn validateBlockSplit(
                 .start = index + drct.tag_block.len,
                 .end = index + wsidx,
                 .kind = .{
-                    .list = .{
+                    .component = .{
                         .data_offset = data_offset,
                         .kind = []const []const u8,
                         .len = 2,
@@ -194,7 +194,7 @@ fn validateBlockSplit(
                 .end = index + end,
                 .data_offset = null,
                 .kind = .{
-                    .list = .{
+                    .component = .{
                         .kind = []const []const u8,
                         .data_offset = data_offset,
                         .len = 1,
@@ -262,7 +262,7 @@ fn validateDirective(
                     .start = index + drct.tag_block_skip.?,
                     .end = index + end,
                     .kind = .{
-                        .list = .{
+                        .component = .{
                             .kind = FieldT,
                             .data_offset = data_offset,
                             .len = loop.len,
