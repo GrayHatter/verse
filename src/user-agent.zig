@@ -42,6 +42,7 @@ pub const Resolved = union(enum) {
         if (idx) |i| {
             if (str.len == i + 3 or (str.len > i + 4 and (str[i + 3] == '/' or
                 str[i + 3] == '.' or
+                str[i + 3] == ';' or
                 str[i + 3] == ')')))
             {
                 return asBot(str);
