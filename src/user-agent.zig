@@ -96,7 +96,7 @@ pub const Resolved = union(enum) {
                 return .{ name, txt };
             }
         }
-        log.warn("Unable to parse browser UA string '{s}'", .{str});
+        //log.warn("Unable to parse browser UA string '{s}'", .{str});
         return error.UnknownBrowser;
     }
 
