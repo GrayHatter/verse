@@ -17,40 +17,6 @@ pub const Error = error{
     UnknownUser,
 };
 
-pub const InvalidAuth = struct {
-    pub fn provider() Provider {
-        return Provider{
-            .ctx = undefined,
-            .vtable = .{
-                .authenticate = authenticate,
-                .valid = valid,
-                .lookup_user = lookupUser,
-                .create_session = createSession,
-                .get_cookie = getCookie,
-            },
-        };
-    }
-
-    fn authenticate(_: *const anyopaque, _: *const Headers) Error!User {
-        return error.UnknownUser;
-    }
-
-    fn createSession(_: *const anyopaque, _: *const User) Error!void {
-        return error.Unauthenticated;
-    }
-    fn getCookie(_: *const anyopaque, _: User) Error!?RequestCookie {
-        return error.Unauthenticated;
-    }
-
-    fn valid(_: *const anyopaque, _: *const User) bool {
-        return false;
-    }
-
-    fn lookupUser(_: *const anyopaque, _: []const u8) Error!User {
-        return error.UnknownUser;
-    }
-};
-
 const TestingAuth = struct {
     pub fn init() TestingAuth {
         return .{};

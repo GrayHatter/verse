@@ -87,8 +87,37 @@ test "Provider" {
     try std.testing.expectEqual(null, p.getCookie(undefined));
 }
 
+pub const invalid: Provider = .{
+    .ctx = undefined,
+    .vtable = .{
+        .authenticate = Invalid.authenticate,
+        .valid = Invalid.valid,
+        .lookup_user = Invalid.lookupUser,
+        .create_session = Invalid.createSession,
+        .get_cookie = Invalid.getCookie,
+    },
+};
+
+pub const Invalid = struct {
+    fn authenticate(_: *const anyopaque, _: *const Headers) Error!User {
+        return error.UnknownUser;
+    }
+    fn createSession(_: *const anyopaque, _: *const User) Error!void {
+        return error.Unauthenticated;
+    }
+    fn getCookie(_: *const anyopaque, _: User) Error!?RequestCookie {
+        return error.Unauthenticated;
+    }
+    fn valid(_: *const anyopaque, _: *const User) bool {
+        return false;
+    }
+    fn lookupUser(_: *const anyopaque, _: []const u8) Error!User {
+        return error.UnknownUser;
+    }
+};
+
 const Auth = @import("../auth.zig");
-pub const Error = Auth.Error;
+const Error = Auth.Error;
 const Headers = @import("../headers.zig");
 const RequestCookie = @import("../cookies.zig").Cookie;
 const User = @import("user.zig");
