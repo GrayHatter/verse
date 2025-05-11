@@ -69,46 +69,43 @@ pub fn serve(z: *zWSGI) !void {
         };
         const ready = try std.posix.poll(&pollfds, 100);
         if (ready == 0) continue;
-        var acpt = try server.accept();
-        defer acpt.stream.close();
-        var timer = try std.time.Timer.start();
-
-        var arena = std.heap.ArenaAllocator.init(z.alloc);
-        defer arena.deinit();
-        const a = arena.allocator();
-
-        var zreq = try zWSGIRequest.init(a, &acpt);
-        const request_data = try requestData(a, &zreq);
-        const request = try Request.initZWSGI(a, &zreq, request_data);
-        var frame = try Frame.init(a, &request, z.auth);
-
-        defer {
-            if (false) {
-                const vars = frame.request.raw.zwsgi.vars;
-                log.err("zWSGI: [debug] {s} - {s}: {s} -- \"{s}\"", .{
-                    findOr(vars, "REMOTE_ADDR"),
-                    findOr(vars, "REQUEST_METHOD"),
-                    findOr(vars, "REQUEST_URI"),
-                    findOr(vars, "HTTP_USER_AGENT"),
-                });
-            }
-            const lap = @as(f64, @floatFromInt(timer.lap())) / 1000000.0;
-            log.err(
-                "zWSGI: [{d:.3}] {s} - {s}: {s} -- \"{s}\"",
-                .{
-                    lap,
-                    request.remote_addr,
-                    request.method,
-                    request.uri,
-                    if (request.user_agent) |ua| ua.string else "EMPTY",
-                },
-            );
-        }
-
-        const routed_endpoint = z.router.fallback(&frame, z.router.route);
-        z.router.builder(&frame, routed_endpoint);
+        const acpt = try server.accept();
+        try once(z, acpt);
     }
     log.warn("closing, and cleaning up", .{});
+}
+
+pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
+    var timer = try std.time.Timer.start();
+
+    var conn = acpt;
+    defer acpt.stream.close();
+
+    var arena = std.heap.ArenaAllocator.init(z.alloc);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    var zreq = try zWSGIRequest.init(a, &conn);
+    const request_data = try requestData(a, &zreq);
+    const request = try Request.initZWSGI(a, &zreq, request_data);
+    var frame = try Frame.init(a, &request, z.auth);
+
+    defer {
+        const lap = @as(f64, @floatFromInt(timer.lap())) / 1000000.0;
+        log.err(
+            "zWSGI: [{d:.3}] {s} - {s}: {s} -- \"{s}\"",
+            .{
+                lap,
+                request.remote_addr,
+                request.method,
+                request.uri,
+                if (request.user_agent) |ua| ua.string else "EMPTY",
+            },
+        );
+    }
+
+    const routed_endpoint = z.router.fallback(&frame, z.router.route);
+    z.router.builder(&frame, routed_endpoint);
 }
 
 export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv(.C) void {
