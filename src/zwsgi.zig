@@ -5,6 +5,7 @@ alloc: Allocator,
 router: Router,
 options: Options,
 auth: Auth.Provider,
+threads: ?u16,
 
 unix_file: []const u8,
 
@@ -20,8 +21,9 @@ pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) 
         .alloc = a,
         .unix_file = opts.file,
         .router = router,
-        .auth = sopts.auth,
         .options = opts,
+        .auth = sopts.auth,
+        .threads = sopts.threads,
     };
 }
 
@@ -63,6 +65,11 @@ pub fn serve(z: *zWSGI) !void {
     }
     log.warn("Unix server listening", .{});
 
+    var thr_pool: std.Thread.Pool = undefined;
+    if (z.threads) |thread_count| {
+        try thr_pool.init(.{ .allocator = z.alloc, .n_jobs = thread_count });
+    }
+
     while (running) {
         var pollfds = [1]std.os.linux.pollfd{
             .{ .fd = server.stream.handle, .events = std.math.maxInt(i16), .revents = 0 },
@@ -70,7 +77,12 @@ pub fn serve(z: *zWSGI) !void {
         const ready = try std.posix.poll(&pollfds, 100);
         if (ready == 0) continue;
         const acpt = try server.accept();
-        try once(z, acpt);
+
+        if (z.threads) |_| {
+            try thr_pool.spawn(onceThreaded, .{ z, acpt });
+        } else {
+            try once(z, acpt);
+        }
     }
     log.warn("closing, and cleaning up", .{});
 }
@@ -106,6 +118,13 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);
     z.router.builder(&frame, routed_endpoint);
+}
+
+fn onceThreaded(z: *const zWSGI, acpt: net.Server.Connection) void {
+    once(z, acpt) catch |err| {
+        log.err("Unexpected endpoint error {} in threaded mode", .{err});
+        running = false;
+    };
 }
 
 export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv(.C) void {

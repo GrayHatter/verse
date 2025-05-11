@@ -5,10 +5,12 @@ router: Router,
 auth: Auth.Provider,
 
 listen_addr: std.net.Address,
-max_request_size: usize = 0xffff,
-request_buffer: [0xffff]u8 = undefined,
 running: bool = true,
 alive: bool = false,
+threads: ?struct {
+    count: usize,
+    pool: std.Thread.Pool,
+} = null,
 
 const HTTP = @This();
 
@@ -25,6 +27,14 @@ pub fn init(a: Allocator, router: Router, opts: Options, sopts: VServer.Options)
         .router = router,
         .auth = sopts.auth,
         .listen_addr = try std.net.Address.parseIp(opts.host, opts.port),
+        .threads = if (sopts.threads) |tcount| brk: {
+            var pool: std.Thread.Pool = undefined;
+            try pool.init(.{ .allocator = a, .n_jobs = tcount });
+            break :brk .{
+                .count = tcount,
+                .pool = pool,
+            };
+        } else null,
     };
 }
 
@@ -35,20 +45,39 @@ pub fn serve(http: *HTTP) !void {
     log.info("HTTP Server listening on port: {any}", .{http.listen_addr.getPort()});
     http.alive = true;
     while (http.running) {
-        try http.once(&srv);
+        const conn = try srv.accept();
+        if (http.threads) |*threads| {
+            try threads.pool.spawn(onceThreaded, .{ http, conn });
+        } else {
+            try http.once(conn);
+        }
     }
+    log.info("Normal HTTPD shutdown", .{});
 }
 
-pub fn once(http: *HTTP, srv: *net.Server) !void {
+fn onceThreaded(http: *HTTP, acpt: net.Server.Connection) void {
+    once(http, acpt) catch |err| switch (err) {
+        error.HttpRequestTruncated => {
+            log.err("HttpRequestTruncated in threaded mode", .{});
+        },
+        else => {
+            log.err("Unexpected endpoint error {} in threaded mode", .{err});
+            http.running = false;
+        },
+    };
+}
+
+pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
+    var conn = sconn;
+    defer conn.stream.close();
+
+    var request_buffer: [0xfffff]u8 = undefined;
+    log.info("HTTP connection from {}", .{conn.address});
+    var hsrv = std.http.Server.init(conn, &request_buffer);
+
     var arena = std.heap.ArenaAllocator.init(http.alloc);
     defer arena.deinit();
     const a = arena.allocator();
-
-    var conn = try srv.accept();
-    defer conn.stream.close();
-
-    log.info("HTTP connection from {}", .{conn.address});
-    var hsrv = std.http.Server.init(conn, &http.request_buffer);
 
     var hreq = try hsrv.receiveHead();
     const reqdata = try requestData(a, &hreq);

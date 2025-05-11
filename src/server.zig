@@ -25,6 +25,7 @@ pub const Interface = union(RunModes) {
 pub const Options = struct {
     mode: RunMode = .{ .http = .{} },
     auth: Auth.Provider = .invalid,
+    threads: ?u16 = null,
 };
 
 pub fn init(a: Allocator, router: Router, opts: Options) !Server {
