@@ -4,9 +4,9 @@ pub const Template = @import("template/Template.zig");
 
 pub const html = @import("template/html.zig");
 
-const Pages = @import("template/page.zig");
-pub const Page = Pages.Page;
-pub const PageRuntime = Pages.PageRuntime;
+const pages = @import("template/page.zig");
+pub const Page = pages.Page;
+pub const PageRuntime = pages.PageRuntime;
 
 const MAX_BYTES = 2 <<| 15;
 

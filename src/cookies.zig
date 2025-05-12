@@ -18,7 +18,7 @@ pub const Attributes = struct {
     };
 
     /// vec must be large enough for the largest cookie (10)
-    pub fn writeVec(a: Attributes, vec: []std.posix.iovec_const) !usize {
+    pub fn writeVec(a: Attributes, vec: []IOVec) !usize {
         var used: usize = 0;
         if (a.domain) |d| {
             vec[used] = .{ .base = "; Domain=", .len = 9 };
@@ -96,7 +96,7 @@ pub const Cookie = struct {
     }
 
     /// vec must be large enough for the largest cookie (4 + attributes)
-    pub fn writeVec(c: Cookie, vec: []std.posix.iovec_const) !usize {
+    pub fn writeVec(c: Cookie, vec: []IOVec) !usize {
         if (vec.len < 12) return error.NoSpaceLeft;
         var used: usize = 0;
         vec[used] = .{ .base = "Set-Cookie: ".ptr, .len = 12 };
@@ -143,14 +143,14 @@ test Cookie {
         try std.testing.expectEqualStrings(expect, res);
     }
 
-    const v_expct = [4]std.posix.iovec_const{
+    const v_expct = [4]IOVec{
         .{ .base = "Set-Cookie: ", .len = 12 },
         .{ .base = "name", .len = 4 },
         .{ .base = "=", .len = 1 },
         .{ .base = "value", .len = 5 },
     };
 
-    var v_buf: [14]std.posix.iovec_const = undefined;
+    var v_buf: [14]IOVec = undefined;
     const used = try cookies[0].writeVec(v_buf[0..]);
     try std.testing.expectEqual(4, used);
     try std.testing.expectEqualDeep(v_expct[0..4], v_buf[0..4]);
@@ -266,3 +266,5 @@ const indexOf = std.mem.indexOf;
 const indexOfScalar = std.mem.indexOfScalar;
 const splitSequence = std.mem.splitSequence;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
+
+const IOVec = @import("iovec.zig").IOVec;

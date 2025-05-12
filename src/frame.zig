@@ -60,25 +60,27 @@ pub const Downstream = union(enum) {
 
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
-pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
-    vrs.status = .ok;
+pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
+    frame.status = .ok;
 
-    vrs.sendHeaders() catch |err| switch (err) {
+    frame.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
         else => return error.IOWriteFailure,
     };
 
-    try vrs.sendRawSlice("\r\n");
+    try frame.sendRawSlice("\r\n");
 
-    switch (vrs.downstream) {
+    switch (frame.downstream) {
         .http, .zwsgi => |stream| {
-            var vec_s = [_]std.posix.iovec_const{undefined} ** 2048;
-            var vecs: []std.posix.iovec_const = vec_s[0..];
+            var vec_s: [2048]IOVec = @splat(undefined);
+            var vecs: []IOVec = vec_s[0..];
             const required = page.iovecCountAll();
-            if (required > 2048) {
-                vecs = vrs.alloc.alloc(std.posix.iovec_const, required) catch @panic("OOM");
+            if (required > vec_s.len) {
+                vecs = frame.alloc.alloc(IOVec, required) catch @panic("OOM");
             }
-            const vec = page.ioVec(vecs, vrs.alloc) catch |iovec_err| {
+            var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
+            const stkalloc = stkfb.get();
+            const vec = page.ioVec(vecs, stkalloc) catch |iovec_err| {
                 log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
                 const w = stream.writer();
                 page.format("{}", .{}, w) catch |err| switch (err) {
@@ -86,10 +88,10 @@ pub fn sendPage(vrs: *Frame, page: anytype) NetworkError!void {
                 };
                 return;
             };
-            stream.writevAll(vec) catch |err| switch (err) {
+            stream.writevAll(@ptrCast(vec)) catch |err| switch (err) {
                 else => log.err("iovec write error Error {} len {}", .{ err, vec.len }),
             };
-            if (required > 2048) vrs.alloc.free(vecs);
+            if (required > 2048) frame.alloc.free(vecs);
         },
         .buffer => @panic("not implemented"),
     }
@@ -174,10 +176,10 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
         else => return error.IOWriteFailure,
     };
 
-    var vect = [3]iovec_c{
-        .{ .base = "Location: ".ptr, .len = 10 },
-        .{ .base = loc.ptr, .len = loc.len },
-        .{ .base = "\r\n\r\n".ptr, .len = 4 },
+    var vect = [3]IOVec{
+        .fromSlice("Location: "),
+        .fromSlice(loc),
+        .fromSlice("\r\n\r\n"),
     };
     vrs.writevAll(vect[0..]) catch |err| switch (err) {
         error.BrokenPipe => return error.BrokenPipe,
@@ -209,7 +211,7 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
 fn VecList(comptime SIZE: usize) type {
     return struct {
         pub const capacity = SIZE;
-        vect: [SIZE]iovec_c = undefined,
+        vect: [SIZE]IOVec = undefined,
         length: usize = 0,
 
         pub fn init() @This() {
@@ -218,10 +220,7 @@ fn VecList(comptime SIZE: usize) type {
 
         pub fn append(self: *@This(), str: []const u8) !void {
             if (self.length >= capacity) return error.NoSpaceLeft;
-            self.vect[self.length] = .{
-                .base = str.ptr,
-                .len = str.len,
-            };
+            self.vect[self.length] = .fromSlice(str);
             self.length += 1;
         }
     };
@@ -276,7 +275,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
                 try vect.append("\r\n");
             }
 
-            stream.writevAll(vect.vect[0..vect.length]) catch return error.IOWriteFailure;
+            stream.writevAll(@ptrCast(vect.vect[0..vect.length])) catch return error.IOWriteFailure;
         },
         .buffer => @panic("not implemented"),
     }
@@ -312,9 +311,9 @@ fn writeAll(vrs: Frame, data: []const u8) !void {
     }
 }
 
-fn writevAll(vrs: Frame, vect: []iovec_c) !void {
+fn writevAll(vrs: Frame, vect: []IOVec) !void {
     switch (vrs.downstream) {
-        .zwsgi, .http => |stream| try stream.writevAll(vect),
+        .zwsgi, .http => |stream| try stream.writevAll(@ptrCast(vect)),
         .buffer => @panic("not implemented"),
     }
 }
@@ -404,8 +403,8 @@ const bufPrint = std.fmt.bufPrint;
 const allocPrint = std.fmt.allocPrint;
 const splitScalar = std.mem.splitScalar;
 const log = std.log.scoped(.Verse);
-const iovec = std.posix.iovec;
-const iovec_c = std.posix.iovec_const;
+
+const IOVec = @import("iovec.zig").IOVec;
 
 const Server = @import("server.zig");
 const Request = @import("request.zig");

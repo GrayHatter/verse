@@ -226,23 +226,23 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         fn ioVecDirective(T: type, data: T, drct: Directive, vec: []IOVec, a: Allocator) !usize {
             std.debug.assert(drct.verb == .variable);
             switch (T) {
-                []const u8 => vec[0] = .{ .base = data.ptr, .len = data.len },
+                []const u8 => vec[0] = .fromSlice(data),
                 ?[]const u8 => if (data) |d| {
-                    vec[0] = .{ .base = d.ptr, .len = d.len };
+                    vec[0] = .fromSlice(d);
                 } else if (drct.otherwise == .default) {
-                    vec[0] = .{ .base = drct.otherwise.default.ptr, .len = drct.otherwise.default.len };
+                    vec[0] = .fromSlice(drct.otherwise.default);
                 } else {
-                    vec[0] = .{ .base = "".ptr, .len = 0 };
+                    vec[0] = .empty;
                     return 0;
                 },
                 usize, isize => {
                     const int = try allocPrint(a, "{}", .{data});
-                    vec[0] = .{ .base = int.ptr, .len = int.len };
+                    vec[0] = .fromSlice(int);
                 },
                 ?usize => {
                     if (data) |us| {
                         const int = try allocPrint(a, "{}", .{us});
-                        vec[0] = .{ .base = int.ptr, .len = int.len };
+                        vec[0] = .fromSlice(int);
                     }
                 },
                 else => {
@@ -259,12 +259,12 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                 []const u8, u8 => comptime unreachable,
                 []const []const u8 => {
                     for (data) |each| {
-                        vec[idx] = .{ .base = each.ptr, .len = each.len };
+                        vec[idx] = .fromSlice(each);
                         idx += 1;
                         // I should find a better way to write this hack
                         if (ofs.len == 2) {
                             if (ofs[1].kind == .slice and ofs[1].kind.slice.len > 0) {
-                                vec[idx] = .{ .base = ofs[1].kind.slice.ptr, .len = ofs[1].kind.slice.len };
+                                vec[idx] = .fromSlice(ofs[1].kind.slice);
                                 idx += 1;
                             }
                         }
@@ -305,10 +305,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     skip -|= 1;
                 } else switch (os.kind) {
                     .slice => |slice| {
-                        vec[vec_idx] = .{
-                            .base = slice.ptr,
-                            .len = slice.len,
-                        };
+                        vec[vec_idx] = .fromSlice(slice);
                         vec_idx += 1;
                     },
                     .component => |comp| {
@@ -405,7 +402,9 @@ const std = @import("std");
 const is_test = @import("builtin").is_test;
 const log = std.log.scoped(.Verse);
 const Allocator = std.mem.Allocator;
-const IOVec = std.posix.iovec_const;
+
+pub const IOVec = @import("../iovec.zig").IOVec;
+
 const indexOfScalar = std.mem.indexOfScalar;
 const indexOfPosLinear = std.mem.indexOfPosLinear;
 const allocPrint = std.fmt.allocPrint;
