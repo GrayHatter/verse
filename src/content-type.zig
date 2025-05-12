@@ -5,6 +5,10 @@ const ContentType = @This();
 
 pub const @"text/plain": ContentType = .{ .base = .{ .text = .plain } };
 pub const @"text/html": ContentType = .{ .base = .{ .text = .html }, .parameter = .@"utf-8" };
+pub const @"application/json": ContentType = .{ .base = .{ .application = .json }, .parameter = .@"utf-8" };
+
+pub const html: ContentType = .@"text/html";
+pub const json: ContentType = .@"application/json";
 
 pub const default: ContentType = .{
     .base = .{ .text = .html },

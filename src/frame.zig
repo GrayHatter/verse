@@ -115,10 +115,7 @@ pub fn sendJSON(fr: *Frame, comptime code: std.http.Status, json: anytype) Netwo
     }
 
     fr.status = code;
-    fr.content_type = .{
-        .base = .{ .application = .json },
-        .parameter = .@"utf-8",
-    };
+    fr.content_type = .json;
 
     fr.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
@@ -143,10 +140,7 @@ pub fn sendJSON(fr: *Frame, comptime code: std.http.Status, json: anytype) Netwo
 
 pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
     frame.status = code;
-    frame.content_type = .{
-        .base = .{ .text = .html },
-        .parameter = .@"utf-8",
-    };
+    frame.content_type = .html;
 
     frame.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
