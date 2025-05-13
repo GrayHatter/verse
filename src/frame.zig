@@ -61,7 +61,7 @@ pub const Downstream = union(enum) {
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
 pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
-    frame.status = .ok;
+    frame.status = frame.status orelse .ok;
 
     frame.sendHeaders() catch |err| switch (err) {
         error.BrokenPipe => |e| return e,
