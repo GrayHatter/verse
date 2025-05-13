@@ -10,20 +10,20 @@ const Root = struct {
 
     pub fn index(frame: *verse.Frame) verse.Router.Error!void {
         var buffer: [0xffffff]u8 = undefined;
-        const page = try print(&buffer, page_html, .{"page never generated"});
+        const page = try bufPrint(&buffer, page_html, .{"page never generated"});
 
         try frame.sendHTML(.ok, page);
     }
 
     fn socket(frame: *verse.Frame) verse.Router.Error!void {
-        var ws = frame.acceptWebsocket() catch unreachable;
+        var ws = frame.acceptWebsocket() catch return error.DataMissing;
 
         for (0..10) |i| {
             var buffer: [0xff]u8 = undefined;
-            ws.send(print(&buffer, "Iteration {}\n", .{i}) catch unreachable) catch unreachable;
+            try ws.send(try bufPrint(&buffer, "Iteration {}\n", .{i}));
             std.time.sleep(1_000_000_000);
             var read_buffer: [0x4000]u8 align(8) = undefined;
-            const msg = ws.recieve(&read_buffer) catch unreachable;
+            const msg = ws.recieve(&read_buffer) catch return error.BrokenPipe;
             std.debug.print("msg: {} -- {} -- {s}\n", .{ msg.header, msg.msg.len, msg.msg });
         }
         std.debug.print("Socket Example Done\n", .{});
@@ -82,4 +82,4 @@ pub fn main() !void {
 
 const std = @import("std");
 const verse = @import("verse");
-const print = std.fmt.bufPrint;
+const bufPrint = std.fmt.bufPrint;

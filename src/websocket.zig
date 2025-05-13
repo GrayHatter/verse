@@ -2,17 +2,32 @@ frame: *Frame,
 
 const Websocket = @This();
 
-pub fn accept(frame: *Frame) !Websocket {
+pub const Error = WriteError || MemError || ReadError;
+
+pub const MemError = error{
+    OutOfMemory,
+};
+
+pub const WriteError = error{
+    IOWriteFailure,
+} || MemError;
+
+pub const ReadError = error{
+    IOReadFailure,
+    RequiredHeaderMissing,
+} || MemError;
+
+pub fn accept(frame: *Frame) Error!Websocket {
     const key = if (frame.request.headers.getCustom("Sec-WebSocket-Key")) |key|
         key.list[0]
     else
-        return error.InvalidWebsocketRequest;
+        return error.RequiredHeaderMissing;
 
     try respond(frame, key);
     return Websocket{ .frame = frame };
 }
 
-fn respond(f: *Frame, key: []const u8) !void {
+fn respond(f: *Frame, key: []const u8) WriteError!void {
     f.status = .switching_protocols;
     f.content_type = null;
 
@@ -28,26 +43,25 @@ fn respond(f: *Frame, key: []const u8) !void {
     const accept_key = base64.encode(&encoded, &digest);
     try f.headers.addCustom("Sec-WebSocket-Accept", accept_key);
 
-    try f.sendHeaders();
-    try f.sendRawSlice("\r\n");
+    f.sendHeaders() catch return error.IOWriteFailure;
+    f.sendRawSlice("\r\n") catch return error.IOWriteFailure;
 }
 
-pub fn send(ws: Websocket, msg: []const u8) !void {
+pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
     const m = Message.init(msg, .text);
-    const vec = m.toVec();
 
     _ = switch (ws.frame.downstream) {
-        .zwsgi, .http => |stream| try stream.writev(vec[0..3]),
-        else => {},
-    };
+        .zwsgi, .http => |stream| stream.writev(m.toVec()[0..3]),
+        else => unreachable,
+    } catch return error.IOWriteFailure;
 }
 
-pub fn recieve(ws: *Websocket, buffer: []align(8) u8) !Message {
+pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
     var reader = switch (ws.frame.downstream) {
         .zwsgi, .http => |stream| stream.reader(),
         else => unreachable,
     };
-    return try Message.read(reader.any(), buffer);
+    return Message.read(reader.any(), buffer) catch error.IOReadFailure;
 }
 
 pub const Message = struct {
