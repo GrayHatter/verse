@@ -105,11 +105,12 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
     defer {
         const lap = @as(f64, @floatFromInt(timer.lap())) / 1000000.0;
         log.err(
-            "zWSGI: [{d:.3}] {s} - {s}: {s} -- \"{s}\"",
+            "zWSGI: [{d:.3}] {s} - {s}:{} {s} -- \"{s}\"",
             .{
                 lap,
                 request.remote_addr,
                 request.method,
+                @intFromEnum(frame.status orelse .ok),
                 request.uri,
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
