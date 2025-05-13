@@ -183,12 +183,9 @@ test Resolved {
 }
 
 pub const Bot = struct {
-    name: Name = .unknown,
+    name: Bots = .unknown,
 
-    pub const Name = enum {
-        googlebot,
-        unknown,
-    };
+    pub const Bots = BotDetection.bots.Bots;
 
     pub const unknown: Bot = .{ .name = .unknown };
 };

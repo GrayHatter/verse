@@ -22,6 +22,7 @@ const default_malicious: BotDetection = .{
 };
 
 pub const ANOMALY_MAX: f16 = 0.5;
+pub const BOT_DEVIANCE: f16 = 0.2;
 
 pub fn init(r: *const Request) BotDetection {
     if (r.user_agent == null) return .default_malicious;
@@ -36,9 +37,12 @@ pub fn init(r: *const Request) BotDetection {
     switch (ua.resolved) {
         .bot => {
             bot.bot = true;
-            inline for (rules.bots) |rule| {
+            inline for (rules.bot) |rule| {
                 rule(ua, r, &bot.score) catch @panic("not implemented");
             }
+            // the score of something actively identifying itself as a bot
+            // is only related to it's malfeasance
+            bot.malicious = bot.score >= BOT_DEVIANCE;
         },
         .browser => |browser| {
             inline for (rules.browser) |rule| {
@@ -66,6 +70,7 @@ pub fn init(r: *const Request) BotDetection {
 
 const RuleError = error{
     Generic,
+    NotABot,
 };
 
 const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
@@ -78,8 +83,8 @@ const rules = struct {
         browsers.Rules.protocolVer,
         browsers.Rules.acceptStr,
     };
-    const bots = [_]RuleFn{
-        //
+    const bot = [_]RuleFn{
+        bots.Rules.knownSubnet,
     };
 };
 
