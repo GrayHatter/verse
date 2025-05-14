@@ -31,8 +31,8 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
     f.status = .switching_protocols;
     f.content_type = null;
 
-    try f.headers.addCustom("Upgrade", "websocket");
-    try f.headers.addCustom("Connection", "Upgrade");
+    try f.headers.addCustom(f.alloc, "Upgrade", "websocket");
+    try f.headers.addCustom(f.alloc, "Connection", "Upgrade");
 
     var digest: [Hash.digest_length]u8 = undefined;
     var encoded: [28]u8 = undefined;
@@ -41,7 +41,7 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
     sha.update("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
     sha.final(&digest);
     const accept_key = base64.encode(&encoded, &digest);
-    try f.headers.addCustom("Sec-WebSocket-Accept", accept_key);
+    try f.headers.addCustom(f.alloc, "Sec-WebSocket-Accept", accept_key);
 
     f.sendHeaders() catch return error.IOWriteFailure;
     f.sendRawSlice("\r\n") catch return error.IOWriteFailure;

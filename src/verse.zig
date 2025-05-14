@@ -35,8 +35,9 @@ comptime {
     _ = &@This();
 }
 
-test "verse" {
+test {
     std.testing.refAllDecls(@This());
+    _ = @import("testing.zig");
 }
 
 const std = @import("std");

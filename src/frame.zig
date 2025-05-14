@@ -195,7 +195,7 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
         },
         .uri = try splitUri(req.uri),
         .auth_provider = auth,
-        .headers = Headers.init(a),
+        .headers = Headers.init(),
         .user = auth.authenticate(&req.headers) catch null,
         .cookie_jar = try Cookies.Jar.init(a),
         .response_data = ResponseData.init(a),

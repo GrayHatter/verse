@@ -68,23 +68,23 @@ test MTLS {
     var mtls = MTLS{};
     var provider_ = mtls.provider();
 
-    var headers = Headers.init(a);
-    defer headers.raze();
-    try headers.addCustom("MTLS_ENABLED", "SUCCESS");
-    try headers.addCustom("MTLS_FINGERPRINT", "LOLTOTALLYVALID");
+    var headers = Headers.init();
+    defer headers.raze(a);
+    try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
+    try headers.addCustom(a, "MTLS_FINGERPRINT", "LOLTOTALLYVALID");
 
     const user = try provider_.authenticate(&headers);
 
     try std.testing.expectEqual(null, user.user_ptr);
 
-    try headers.addCustom("MTLS_ENABLED", "SUCCESS");
+    try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
     const err = provider_.authenticate(&headers);
     try std.testing.expectError(error.InvalidAuth, err);
 
-    headers.raze();
-    headers = Headers.init(a);
+    headers.raze(a);
+    headers = Headers.init();
 
-    try headers.addCustom("MTLS_ENABLED", "FAILURE!");
+    try headers.addCustom(a, "MTLS_ENABLED", "FAILURE!");
     const err2 = provider_.authenticate(&headers);
     try std.testing.expectError(error.UnknownUser, err2);
     // TODO there's likely a few more error states we should validate;

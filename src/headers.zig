@@ -1,4 +1,3 @@
-alloc: Allocator,
 known: KnownMap,
 extended: ExtendedMap,
 
@@ -30,39 +29,38 @@ pub const HeaderList = struct {
 const KnownMap = std.EnumMap(Expected, []const u8);
 const ExtendedMap = std.StringArrayHashMapUnmanaged(HeaderList);
 
-pub fn init(a: Allocator) Headers {
+pub fn init() Headers {
     return .{
-        .alloc = a,
         .known = KnownMap{},
         .extended = ExtendedMap{},
     };
 }
 
-pub fn raze(h: *Headers) void {
+pub fn raze(h: *Headers, a: Allocator) void {
     const values = h.extended.values();
     for (values) |val| {
-        h.alloc.free(val.list);
+        a.free(val.list);
     }
-    h.extended.deinit(h.alloc);
+    h.extended.deinit(a);
 }
 
 fn normalize(_: []const u8) !void {
     comptime unreachable;
 }
 
-pub fn addCustom(h: *Headers, name: []const u8, value: []const u8) !void {
+pub fn addCustom(h: *Headers, a: Allocator, name: []const u8, value: []const u8) !void {
     // TODO normalize lower
-    const gop = try h.extended.getOrPut(h.alloc, name);
+    const gop = try h.extended.getOrPut(a, name);
     const hl: *HeaderList = gop.value_ptr;
     if (gop.found_existing) {
-        if (!h.alloc.resize(hl.list, hl.list.len + 1)) {
-            hl.list = try h.alloc.realloc(hl.list, hl.list.len + 1);
+        if (!a.resize(hl.list, hl.list.len + 1)) {
+            hl.list = try a.realloc(hl.list, hl.list.len + 1);
         }
         hl.list[hl.list.len - 1] = value;
     } else {
         hl.* = .{
             .name = name,
-            .list = try h.alloc.alloc([]const u8, 1),
+            .list = try a.alloc([]const u8, 1),
         };
         hl.list[0] = value;
     }
@@ -157,12 +155,12 @@ test {
 
 test Headers {
     const a = std.testing.allocator;
-    var hmap = init(a);
-    defer hmap.raze();
-    try hmap.addCustom("first", "1");
-    try hmap.addCustom("first", "2");
-    try hmap.addCustom("first", "3");
-    try hmap.addCustom("second", "4");
+    var hmap = init();
+    defer hmap.raze(a);
+    try hmap.addCustom(a, "first", "1");
+    try hmap.addCustom(a, "first", "2");
+    try hmap.addCustom(a, "first", "3");
+    try hmap.addCustom(a, "second", "4");
 
     try std.testing.expectEqual(2, hmap.extended.count());
     const first = hmap.extended.get("first");

@@ -107,6 +107,8 @@ pub const Protocol = union(enum) {
 
         pub const fields = @typeInfo(Http).@"enum".fields;
     };
+
+    pub const default: Protocol = .{ .http = .@"1.1" };
 };
 
 const Headers = @import("headers.zig");
@@ -174,9 +176,9 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     const proto: []const u8 = zk.get(.SERVER_PROTOCOL) orelse "ERROR";
     const secure: bool = if (zk.get(.HTTPS)) |sec| eql(u8, sec, "on") else false;
 
-    var headers = Headers.init(a);
+    var headers = Headers.init();
     for (zwsgi.vars.items) |v| {
-        try headers.addCustom(v.key, v.val);
+        try headers.addCustom(a, v.key, v.val);
     }
 
     return initCommon(
@@ -200,8 +202,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
 }
 
 pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Request {
-    var itr = http.iterateHeaders();
-    var headers = Headers.init(a);
+    var headers = Headers.init();
 
     var accept: ?Accept = null;
     var host: ?Host = null;
@@ -212,8 +213,9 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
     var cookie_header: ?[]const u8 = null;
     const proto: []const u8 = @tagName(http.head.version);
 
+    var itr = http.iterateHeaders();
     while (itr.next()) |head| {
-        try headers.addCustom(head.name, head.value);
+        try headers.addCustom(a, head.name, head.value);
         if (eqlIgnoreCase("accept", head.name)) {
             accept = head.value;
         } else if (eqlIgnoreCase("host", head.name)) {
