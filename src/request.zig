@@ -17,16 +17,21 @@ cookie_jar: Cookies.Jar,
 /// POST or QUERY data
 data: Data,
 /// TODO this is unstable and likely to be removed
-raw: RawReq,
+raw: DownstreamGateway,
 
 const Request = @This();
 
 pub const Data = @import("request-data.zig");
 pub const UserAgent = @import("user-agent.zig");
 
-pub const RawReq = union(enum) {
+pub const DownstreamGateway = union(Downstream) {
     zwsgi: *zWSGIRequest,
     http: *std.http.Server.Request,
+};
+
+const Downstream = enum {
+    zwsgi,
+    http,
 };
 
 pub const Host = []const u8;
@@ -130,7 +135,7 @@ fn initCommon(
     cookies: ?[]const u8,
     proto: []const u8,
     data: Data,
-    raw: RawReq,
+    raw: DownstreamGateway,
     secure: bool,
 ) !Request {
     var method = _method;
