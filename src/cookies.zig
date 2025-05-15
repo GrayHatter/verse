@@ -161,16 +161,15 @@ pub const Jar = struct {
     cookies: ArrayListUnmanaged(Cookie),
 
     /// Creates a new jar.
-    pub fn init(a: Allocator) !Jar {
-        const cookies = try ArrayListUnmanaged(Cookie).initCapacity(a, 8);
+    pub fn init(a: Allocator) Jar {
         return .{
             .alloc = a,
-            .cookies = cookies,
+            .cookies = .{},
         };
     }
 
     pub fn initFromHeader(a: Allocator, header: []const u8) !Jar {
-        var jar = try init(a);
+        var jar: Jar = .init(a);
         var cookies = splitSequence(u8, header, "; ");
         while (cookies.next()) |cookie| {
             try jar.add(Cookie.fromHeader(cookie));
@@ -235,7 +234,7 @@ pub const Jar = struct {
 
 test Jar {
     const a = std.testing.allocator;
-    var j = try Jar.init(a);
+    var j: Jar = .init(a);
     defer j.raze();
 
     const cookies = [_]Cookie{

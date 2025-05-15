@@ -143,7 +143,7 @@ fn initCommon(
         .accept = accept,
         .accept_encoding = accept_encoding,
         .authorization = authorization,
-        .cookie_jar = if (cookies) |ch| try Cookies.Jar.initFromHeader(a, ch) else try Cookies.Jar.init(a),
+        .cookie_jar = if (cookies) |ch| try .initFromHeader(a, ch) else .init(a),
         .data = data,
         .headers = headers,
         .host = host,
