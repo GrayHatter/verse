@@ -25,8 +25,7 @@ pub const ANOMALY_MAX: f16 = 0.5;
 pub const BOT_DEVIANCE: f16 = 0.2;
 
 pub fn init(r: *const Request) BotDetection {
-    if (r.user_agent == null) return .default_malicious;
-    const ua = r.user_agent.?;
+    const ua: UA = r.user_agent orelse return .default_malicious;
 
     var bot: BotDetection = .default;
 

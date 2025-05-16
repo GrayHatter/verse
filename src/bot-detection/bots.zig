@@ -40,6 +40,7 @@ pub const Identity = struct {
 
 pub const Bots = enum {
     googlebot,
+    malicious,
     unknown,
 
     pub const fields = @typeInfo(Bots).@"enum".fields;
@@ -58,6 +59,7 @@ pub const bots: std.EnumArray(Bots, Identity) = .{
                 },
             },
         },
+        .{ .bot = .malicious, .network = null },
         .{ .bot = .unknown, .network = null },
     },
 };

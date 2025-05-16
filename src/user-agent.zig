@@ -5,13 +5,16 @@
 //! TODO write doc comments
 string: []const u8,
 resolved: Resolved,
+bot_validation: if (BOTDETC_ENABLED) ?BotDetection else ?void = null,
 
 const UserAgent = @This();
+
+pub const BotDetection = @import("bot-detection.zig");
 
 pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
     if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
 
-    const bd: BotDetection = .init(r);
+    const bd: BotDetection = ua.bot_validation orelse .init(r);
     //std.debug.print("ua detection: {s} \n", .{ua.string});
     std.debug.print("ua detection: {} \n", .{ua.resolved});
     std.debug.print("bot detection: {} \n", .{bd});
@@ -26,6 +29,10 @@ pub const Resolved = union(enum) {
     browser: Browser,
     script: Script,
     unknown: Other,
+
+    pub const malicious: Resolved = .{
+        .bot = .malicious,
+    };
 
     pub fn init(str: []const u8) Resolved {
         if (startsWith(u8, str, "Mozilla/")) {
@@ -188,6 +195,7 @@ pub const Bot = struct {
     pub const Bots = BotDetection.bots.Bots;
 
     pub const unknown: Bot = .{ .name = .unknown };
+    pub const malicious: Bot = .{ .name = .malicious };
 };
 
 pub const Browser = struct {
@@ -237,11 +245,20 @@ pub fn init(ua_str: []const u8) UserAgent {
     return .{
         .string = ua_str,
         .resolved = .init(ua_str),
+        .bot_validation = null,
     };
 }
 
-const Request = @import("request.zig");
-pub const BotDetection = @import("bot-detection.zig");
+pub fn validate(ua: *UserAgent, r: *const Request) !bool {
+    if (!BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
+    ua.bot_validation = .init(r);
+
+    if (ua.bot_validation.?.malicious) {
+        ua.resolved = .malicious;
+        return false;
+    }
+    return true;
+}
 
 const BOTDETC_ENABLED: bool = verse_buildopts.botdetection or builtin.is_test;
 
@@ -249,6 +266,8 @@ test UserAgent {
     std.testing.refAllDecls(@This());
     _ = &BotDetection;
 }
+
+const Request = @import("request.zig");
 
 const std = @import("std");
 const log = std.log.scoped(.botdetection);
