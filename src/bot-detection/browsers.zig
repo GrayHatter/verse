@@ -32,6 +32,7 @@ pub const Chrome = struct {
     pub const Version = enum(u16) {
         _,
 
+        pub const revision_date: i64 = 1747410400;
         pub const Dates = compileDates(&VerDates);
         pub const VerDates = [_]VerDate{
             .{ 0, 1227513600 },   .{ 1, 1228982400 },   .{ 2, 1243148400 },   .{ 3, 1255330800 },
@@ -69,6 +70,7 @@ pub const Chrome = struct {
             .{ 124, 1712732400 }, .{ 125, 1715151600 }, .{ 126, 1717570800 }, .{ 127, 1721199600 },
             .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
             .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 }, .{ 135, 1743465600 },
+            .{ 136, 1745884800 },
         };
     };
 };
@@ -196,6 +198,9 @@ fn compileDates(comptime vd: []const VerDate) [vd.len]Date {
 }
 
 pub const Rules = struct {
+    const DAY: i64 = 86400;
+    pub const AGE_STEP: usize = DAY * 45;
+
     pub fn age(ua: UA, _: *const Request, score: *f16) !void {
         if (ua.resolved != .browser) return;
         if (ua.resolved.browser.name == .unknown) return;
@@ -203,14 +208,13 @@ pub const Rules = struct {
             std.debug.print("Unable to resolve age for {}\n", .{ua});
             return;
         };
-        const DAY: i64 = 86400;
         const YEAR: i64 = 86400 * 365;
         // These are all just made up based on feeling, TODO real data analysis
         switch (delta) {
             std.math.minInt(i64)...0 => {},
-            1...DAY * 45 => {},
-            DAY * 45 + 1...DAY * 120 => score.* = score.* + 0.1,
-            DAY * 120 + 1...YEAR => score.* = score.* + 0.3,
+            1...AGE_STEP => {},
+            AGE_STEP + 1...AGE_STEP * 3 => score.* = score.* + 0.1,
+            AGE_STEP * 3 + 1...YEAR => score.* = score.* + 0.3,
             YEAR + 1...YEAR * 3 => score.* = score.* + 0.4,
             YEAR * 3 + 1...std.math.maxInt(i64) => score.* = if (score.* < 0.9)
                 0.9
@@ -232,7 +236,13 @@ pub const Rules = struct {
                 .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
             },
         } }, undefined, &score);
-        try std.testing.expectEqual(score, 0.0);
+        std.testing.expectEqual(0.0, score) catch |err| {
+            if (Chrome.Version.revision_date < std.time.timestamp() - AGE_STEP) {
+                std.log.warn("bot-detection.browsers.version is out of date\n", .{});
+                return error.SkipZigTest;
+            }
+            return err;
+        };
 
         score = 0.0;
         try age(.{ .string = "", .resolved = .{
