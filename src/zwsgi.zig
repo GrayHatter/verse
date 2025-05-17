@@ -111,7 +111,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
                 request.remote_addr,
                 request.method,
                 @intFromEnum(frame.status orelse .ok),
-                request.uri,
+                zreq.known.get(.REQUEST_URI) orelse "[ERROR: URI EMPTY]",
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
         );
