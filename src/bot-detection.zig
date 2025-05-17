@@ -92,17 +92,45 @@ test BotDetection {
     _ = &browsers;
 }
 
+pub const RobotOptions = struct {
+    default_allow: bool,
+    delay: u16,
+    extra_rules: ?[]const u8,
+    customized: bool,
+
+    pub const default: RobotOptions = .{
+        .default_allow = true,
+        .delay = 10,
+        .extra_rules = null,
+        .customized = false,
+    };
+};
+
 pub fn robotsTxt(
-    comptime default_allow: bool,
-    delay_int: comptime_int,
     comptime robots: []const bots.TxtRules,
+    comptime options: RobotOptions,
 ) Router.Match {
     const EP = struct {
-        const delay = std.fmt.comptimePrint("Crawl-delay: {}\n", .{delay_int});
+        const delay = std.fmt.comptimePrint("Crawl-delay: {}\n", .{options.delay});
+        const robot_rules: [robots.len + 1][]const u8 = brk: {
+            var compiled: [robots.len + 1][]const u8 = undefined;
+            for (robots, 1..) |each, i| {
+                compiled[i] = "User-agent: " ++ each.name ++ "\n" ++
+                    (if (each.allow) "Allow" else "Disallow") ++ ": /\n" ++
+                    (if (options.extra_rules) |er| er else "") ++
+                    (if (each.delay) "Crawl-delay: 4\n\n" else "\n");
+            } else {
+                compiled[0] = "User-agent: *\n" ++
+                    (if (options.delay > 0) delay else "") ++
+                    (if (options.extra_rules) |er| er else "") ++
+                    (if (options.default_allow) "Allow: /\n\n" else "Disallow: /\n\n");
+            }
+            break :brk compiled;
+        };
         const robots_txt: []const u8 = brk: {
             var compiled: []const u8 = "User-agent: *\n" ++
-                (if (delay_int > 0) delay else "") ++
-                (if (default_allow) "Allow: /\n\n" else "Disallow: /\n\n");
+                (if (options.delay > 0) delay else "") ++
+                (if (options.default_allow) "Allow: /\n\n" else "Disallow: /\n\n");
             for (robots) |each| {
                 compiled = compiled ++
                     "User-agent: " ++ each.name ++ "\n" ++
@@ -113,7 +141,7 @@ pub fn robotsTxt(
             break :brk compiled;
         };
 
-        pub fn endpoint(f: *Frame) Router.Error!void {
+        fn respond(f: *Frame, text: []const u8) Router.Error!void {
             f.status = .ok;
             f.content_type = .@"text/plain";
             f.sendHeaders() catch |err| switch (err) {
@@ -122,16 +150,27 @@ pub fn robotsTxt(
             };
 
             try f.sendRawSlice("\r\n");
-            try f.sendRawSlice(robots_txt);
+            try f.sendRawSlice(text);
+        }
+
+        pub fn endpoint(f: *Frame) Router.Error!void {
+            return respond(f, robots_txt);
+        }
+
+        pub fn endpointCustomized(f: *Frame) Router.Error!void {
+            return respond(f, robots_txt);
         }
     };
 
-    return Router.ANY("robots.txt", EP.endpoint);
+    return Router.ANY(
+        "robots.txt",
+        if (comptime options.customized) EP.endpointCustomized else EP.endpoint,
+    );
 }
 
 test robotsTxt {
     // TODO mock a full request frame
-    _ = robotsTxt(true, 4, &[_]bots.TxtRules{.{ .name = "googlebot", .allow = false }});
+    _ = robotsTxt(&[_]bots.TxtRules{.{ .name = "googlebot", .allow = false }}, .default);
 }
 
 pub const browsers = @import("bot-detection/browsers.zig");
