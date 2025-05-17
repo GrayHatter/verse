@@ -118,6 +118,7 @@ pub fn robotsTxt(
                 compiled[i] = "User-agent: " ++ each.name ++ "\n" ++
                     (if (each.allow) "Allow" else "Disallow") ++ ": /\n" ++
                     (if (options.extra_rules) |er| er else "") ++
+                    (if (each.extra) |ex| ex else "") ++
                     (if (each.delay) "Crawl-delay: 4\n\n" else "\n");
             } else {
                 compiled[0] = "User-agent: *\n" ++
@@ -137,6 +138,7 @@ pub fn robotsTxt(
                     "User-agent: " ++ each.name ++ "\n" ++
                     (if (each.allow) "Allow" else "Disallow") ++ ": /\n" ++
                     (if (options.extra_rules) |er| er else "") ++
+                    (if (each.extra) |ex| ex else "") ++
                     (if (each.delay) "Crawl-delay: 4\n\n" else "\n");
             }
 
