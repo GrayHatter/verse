@@ -93,10 +93,10 @@ test BotDetection {
 }
 
 pub const RobotOptions = struct {
-    default_allow: bool,
-    delay: u16,
+    default_allow: bool = true,
+    delay: u16 = 0,
     extra_rules: ?[]const u8,
-    customized: bool,
+    customized: bool = false,
 
     pub const default: RobotOptions = .{
         .default_allow = true,
