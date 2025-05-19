@@ -22,7 +22,7 @@ pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
         if (std.mem.eql(u8, enabled.list[0], "SUCCESS")) {
             success = true;
         }
-    }
+    } else log.debug("MTLS not enabled", .{});
 
     if (!success) return error.UnknownUser;
 
@@ -33,7 +33,7 @@ pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
             // mTLS fingerprint
             if (enabled.list.len > 1) return error.InvalidAuth;
             return base.lookupUser(enabled.list[0]);
-        }
+        } else log.debug("MTLS fingerprint missing", .{});
     }
     return .{ .user_ptr = null };
 }
@@ -91,6 +91,7 @@ test MTLS {
 }
 
 const std = @import("std");
+const log = std.log.scoped(.verse);
 const Provider = @import("provider.zig");
 const User = @import("user.zig");
 const Error = @import("../auth.zig").Error;

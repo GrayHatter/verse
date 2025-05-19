@@ -119,6 +119,7 @@ pub const Protocol = union(enum) {
 const Headers = @import("headers.zig");
 const Cookies = @import("cookies.zig");
 const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
+const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 
 fn initCommon(
     a: Allocator,
@@ -184,6 +185,10 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     var headers = Headers.init();
     for (zwsgi.vars.items) |v| {
         try headers.addCustom(a, v.key, v.val);
+    }
+    // TODO replace this hack with better header support
+    for ([_]zWSGIParam{ .MTLS_ENABLED, .MTLS_FINGERPRINT }) |key| {
+        try headers.addCustom(a, @tagName(key), zwsgi.known.get(key).?);
     }
 
     return initCommon(
