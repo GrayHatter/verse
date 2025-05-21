@@ -10,9 +10,6 @@
 alloc: Allocator,
 /// Base Request object from the client.
 request: *const Request,
-/// downsteam writer based on which ever server accepted the client request and
-/// created this Frame
-downstream: Downstream,
 /// Request URI as received by Verse
 uri: Router.UriIterator,
 
@@ -48,16 +45,6 @@ pub const SendError = error{
     HeadersFinished,
 } || NetworkError;
 
-pub const Downstream = union(enum) {
-    buffer: Buffered,
-    http: Stream,
-    zwsgi: Stream,
-
-    pub const Error = Stream.WriteError || Buffered.Error;
-
-    const Buffered = std.io.BufferedWriter(ONESHOT_SIZE, Stream.Writer);
-};
-
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
 pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
@@ -70,31 +57,28 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 
     try frame.sendRawSlice("\r\n");
 
-    switch (frame.downstream) {
-        .http, .zwsgi => |stream| {
-            var vec_s: [2048]IOVec = @splat(undefined);
-            var vecs: []IOVec = vec_s[0..];
-            const required = page.iovecCountAll();
-            if (required > vec_s.len) {
-                vecs = frame.alloc.alloc(IOVec, required) catch @panic("OOM");
-            }
-            var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
-            const stkalloc = stkfb.get();
-            const vec = page.ioVec(vecs, stkalloc) catch |iovec_err| {
-                log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
-                const w = stream.writer();
-                page.format("{}", .{}, w) catch |err| switch (err) {
-                    else => log.err("Page Build Error {}", .{err}),
-                };
-                return;
-            };
-            stream.writevAll(@ptrCast(vec)) catch |err| switch (err) {
-                else => log.err("iovec write error Error {} len {}", .{ err, vec.len }),
-            };
-            if (required > 2048) frame.alloc.free(vecs);
-        },
-        .buffer => @panic("not implemented"),
+    const stream = frame.request.downstream;
+
+    var vec_s: [2048]IOVec = @splat(undefined);
+    var vecs: []IOVec = vec_s[0..];
+    const required = page.iovecCountAll();
+    if (required > vec_s.len) {
+        vecs = frame.alloc.alloc(IOVec, required) catch @panic("OOM");
     }
+    var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
+    const stkalloc = stkfb.get();
+    const vec = page.ioVec(vecs, stkalloc) catch |iovec_err| {
+        log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
+        const w = stream.writer();
+        page.format("{}", .{}, w) catch |err| switch (err) {
+            else => log.err("Page Build Error {}", .{err}),
+        };
+        return;
+    };
+    stream.writevAll(@ptrCast(vec)) catch |err| switch (err) {
+        else => log.err("iovec write error Error {} len {}", .{ err, vec.len }),
+    };
+    if (required > 2048) frame.alloc.free(vecs);
 }
 
 /// sendRawSlice will allow you to send data directly to the client. It will not
@@ -189,10 +173,6 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
         .request = req,
-        .downstream = switch (req.raw) {
-            .zwsgi => |z| .{ .zwsgi = z.*.conn.stream },
-            .http => .{ .http = req.raw.http.server.connection.stream },
-        },
         .uri = try splitUri(req.uri),
         .auth_provider = auth,
         .headers = Headers.init(),
@@ -225,54 +205,50 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
         return SendError.HeadersFinished;
     }
 
-    switch (vrs.downstream) {
-        .http, .zwsgi => |stream| {
-            var vect = VecList(HEADER_VEC_COUNT).init();
+    const stream = vrs.request.downstream;
+    var vect = VecList(HEADER_VEC_COUNT).init();
 
-            const h_resp = vrs.HttpHeader("HTTP/1.1");
-            try vect.append(h_resp);
+    const h_resp = vrs.HttpHeader("HTTP/1.1");
+    try vect.append(h_resp);
 
-            // Default headers
-            const s_name = "Server: verse/" ++ build_version ++ "\r\n";
-            try vect.append(s_name);
+    // Default headers
+    const s_name = "Server: verse/" ++ build_version ++ "\r\n";
+    try vect.append(s_name);
 
-            if (vrs.content_type) |ct| {
-                try vect.append("Content-Type: ");
-                switch (ct.base) {
-                    inline else => |tag, name| {
-                        try vect.append(@tagName(name));
-                        try vect.append("/");
-                        try vect.append(@tagName(tag));
-                    },
-                }
-                if (ct.parameter) |param| {
-                    const pre = "; charset=";
-                    try vect.append(pre);
-                    const tag = @tagName(param);
-                    try vect.append(tag);
-                }
-                try vect.append("\r\n");
-                //"text/html; charset=utf-8"); // Firefox is trash
-            }
-
-            var itr = vrs.headers.iterator();
-            while (itr.next()) |header| {
-                try vect.append(header.name);
-                try vect.append(": ");
-                try vect.append(header.value);
-                try vect.append("\r\n");
-            }
-
-            for (vrs.cookie_jar.cookies.items) |cookie| {
-                const used = try cookie.writeVec(vect.vect[vect.length..]);
-                vect.length += used;
-                try vect.append("\r\n");
-            }
-
-            stream.writevAll(@ptrCast(vect.vect[0..vect.length])) catch return error.IOWriteFailure;
-        },
-        .buffer => @panic("not implemented"),
+    if (vrs.content_type) |ct| {
+        try vect.append("Content-Type: ");
+        switch (ct.base) {
+            inline else => |tag, name| {
+                try vect.append(@tagName(name));
+                try vect.append("/");
+                try vect.append(@tagName(tag));
+            },
+        }
+        if (ct.parameter) |param| {
+            const pre = "; charset=";
+            try vect.append(pre);
+            const tag = @tagName(param);
+            try vect.append(tag);
+        }
+        try vect.append("\r\n");
+        //"text/html; charset=utf-8"); // Firefox is trash
     }
+
+    var itr = vrs.headers.iterator();
+    while (itr.next()) |header| {
+        try vect.append(header.name);
+        try vect.append(": ");
+        try vect.append(header.value);
+        try vect.append("\r\n");
+    }
+
+    for (vrs.cookie_jar.cookies.items) |cookie| {
+        const used = try cookie.writeVec(vect.vect[vect.length..]);
+        vect.length += used;
+        try vect.append("\r\n");
+    }
+
+    stream.writevAll(@ptrCast(vect.vect[0..vect.length])) catch return error.IOWriteFailure;
 
     vrs.headers_done = true;
 }
@@ -305,27 +281,17 @@ fn writeAll(vrs: Frame, data: []const u8) !void {
     }
 }
 
-fn writevAll(vrs: Frame, vect: []IOVec) !void {
-    switch (vrs.downstream) {
-        .zwsgi, .http => |stream| try stream.writevAll(@ptrCast(vect)),
-        .buffer => @panic("not implemented"),
-    }
+fn writevAll(f: Frame, vect: []IOVec) !void {
+    return f.request.downstream.writevAll(vect);
 }
 
 // Raw writer, use with caution!
 fn write(vrs: Frame, data: []const u8) Downstream.Error!usize {
-    return switch (vrs.downstream) {
-        .zwsgi => |*w| try w.write(data),
-        .http => |*w| try w.write(data),
-        .buffer => try vrs.write(data),
-    };
+    return vrs.request.downstream.write(data);
 }
 
-fn flush(vrs: *Frame) Downstream.Error!void {
-    switch (vrs.downstream) {
-        .buffer => |*w| try w.flush(),
-        .http, .zwsgi => {},
-    }
+fn flush(f: *Frame) Downstream.Error!void {
+    return f.request.downstream.flush();
 }
 
 fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
@@ -359,7 +325,7 @@ fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
 }
 
 pub fn dumpDebugData(frame: *const Frame) void {
-    switch (frame.request.raw) {
+    switch (frame.request.downstream) {
         .zwsgi => |zw| {
             var itr = zw.known.iterator();
             while (itr.next()) |entry| {
@@ -378,6 +344,7 @@ pub fn dumpDebugData(frame: *const Frame) void {
                 std.debug.print("DumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
             }
         },
+        .buffer => |_| @panic("not implemented"),
     }
     if (frame.request.data.post) |post_data| {
         std.debug.print("post data => '''{s}'''\n", .{post_data.rawpost});
@@ -402,6 +369,7 @@ const IOVec = @import("iovec.zig").IOVec;
 
 const Server = @import("server.zig");
 const Request = @import("request.zig");
+pub const Downstream = Request.DownstreamGateway;
 const RequestData = @import("request-data.zig");
 const Template = @import("template.zig");
 const Router = @import("router.zig");

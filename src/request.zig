@@ -16,22 +16,73 @@ headers: Headers,
 cookie_jar: Cookies.Jar,
 /// POST or QUERY data
 data: Data,
-/// TODO this is unstable and likely to be removed
-raw: DownstreamGateway,
+/// downstream connection to the client.
+downstream: DownstreamGateway,
 
 const Request = @This();
 
 pub const Data = @import("request-data.zig");
 pub const UserAgent = @import("user-agent.zig");
+const Headers = @import("headers.zig");
+const Cookies = @import("cookies.zig");
+const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
+const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 
 pub const DownstreamGateway = union(Downstream) {
     zwsgi: *zWSGIRequest,
     http: *std.http.Server.Request,
+    buffer: *std.io.FixedBufferStream([]u8),
+
+    pub const Error = std.net.Stream.WriteError || std.io.FixedBufferStream([]u8).WriteError;
+    pub const Writer = std.io.GenericWriter(DownstreamGateway, Error, write);
+
+    pub fn writer(ds: DownstreamGateway) Writer {
+        return .{
+            .context = ds,
+        };
+    }
+
+    fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) anyerror!usize {
+        const ds: *const DownstreamGateway = @alignCast(@ptrCast(ptr));
+        return try ds.write(bytes);
+    }
+
+    pub fn writeAll(ds: DownstreamGateway, data: []const u8) Error!void {
+        var index: usize = 0;
+        while (index < data.len) {
+            index += try write(ds, data[index..]);
+        }
+    }
+
+    pub fn writevAll(ds: DownstreamGateway, vect: []IOVec) Error!void {
+        switch (ds) {
+            .zwsgi => |z| try z.conn.stream.writevAll(@ptrCast(vect)),
+            .http => |h| try h.server.connection.stream.writevAll(@ptrCast(vect)),
+            .buffer => @panic("not implemented"),
+        }
+    }
+
+    // Raw writer, use with caution!
+    pub fn write(ds: DownstreamGateway, data: []const u8) Error!usize {
+        return switch (ds) {
+            .zwsgi => |z| try z.conn.stream.write(data),
+            .http => |h| try h.server.connection.stream.write(data),
+            .buffer => try ds.write(data),
+        };
+    }
+
+    pub fn flush(ds: DownstreamGateway) Error!void {
+        switch (ds) {
+            .buffer => |_| {}, // TODO implement flush for buffered writer
+            .http, .zwsgi => {},
+        }
+    }
 };
 
 const Downstream = enum {
     zwsgi,
     http,
+    buffer,
 };
 
 pub const Host = []const u8;
@@ -116,11 +167,6 @@ pub const Protocol = union(enum) {
     pub const default: Protocol = .{ .http = .@"1.1" };
 };
 
-const Headers = @import("headers.zig");
-const Cookies = @import("cookies.zig");
-const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
-const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
-
 fn initCommon(
     a: Allocator,
     remote_addr: RemoteAddr,
@@ -136,7 +182,7 @@ fn initCommon(
     cookies: ?[]const u8,
     proto: []const u8,
     data: Data,
-    raw: DownstreamGateway,
+    downstream: DownstreamGateway,
     secure: bool,
 ) !Request {
     var method = _method;
@@ -154,7 +200,7 @@ fn initCommon(
         .headers = headers,
         .host = host,
         .method = method,
-        .raw = raw,
+        .downstream = downstream,
         .referer = referer,
         .remote_addr = remote_addr,
         .uri = uri,
@@ -298,3 +344,5 @@ const eql = std.mem.eql;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 const allocPrint = std.fmt.allocPrint;
 const bufPrint = std.fmt.bufPrint;
+
+const IOVec = @import("iovec.zig").IOVec;

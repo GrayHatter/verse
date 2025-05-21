@@ -353,10 +353,11 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
                 // dumping the information is likely to help with debugging the
                 // error.
                 log.err("Abusive {} because {}\n", .{ vrs.request, err });
-                var itr = vrs.request.raw.http.iterateHeaders();
-                while (itr.next()) |vars| {
-                    log.err("Abusive var '{s}' => '''{s}'''\n", .{ vars.name, vars.value });
-                }
+                // TODO fix me
+                //var itr = vrs.request.raw.http.iterateHeaders();
+                //while (itr.next()) |vars| {
+                //    log.err("Abusive var '{s}' => '''{s}'''\n", .{ vars.name, vars.value });
+                //}
             },
         }
     };

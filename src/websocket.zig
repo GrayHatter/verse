@@ -50,15 +50,17 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
 pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
     const m = Message.init(msg, .text);
 
-    _ = switch (ws.frame.downstream) {
-        .zwsgi, .http => |stream| stream.writev(m.toVec()[0..3]),
-        else => unreachable,
-    } catch return error.IOWriteFailure;
+    return ws.frame.request.downstream.writevAll(
+        @ptrCast(@constCast(m.toVec()[0..3])),
+    ) catch |err| switch (err) {
+        else => return error.IOWriteFailure,
+    };
 }
 
 pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
-    var reader = switch (ws.frame.downstream) {
-        .zwsgi, .http => |stream| stream.reader(),
+    var reader = switch (ws.frame.request.downstream) {
+        .zwsgi => |z| z.conn.stream.reader(),
+        .http => |h| h.server.connection.stream.reader(),
         else => unreachable,
     };
     return Message.read(reader.any(), buffer) catch error.IOReadFailure;
