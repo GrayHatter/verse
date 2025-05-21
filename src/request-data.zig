@@ -121,7 +121,6 @@ pub const PostData = struct {
 };
 
 pub const QueryData = struct {
-    alloc: Allocator,
     rawquery: []const u8,
     items: []DataItem,
 
@@ -135,7 +134,6 @@ pub const QueryData = struct {
         }
 
         return QueryData{
-            .alloc = a,
             .rawquery = query,
             .items = items,
         };

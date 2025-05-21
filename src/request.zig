@@ -31,7 +31,7 @@ const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 pub const DownstreamGateway = union(Downstream) {
     zwsgi: *zWSGIRequest,
     http: *std.http.Server.Request,
-    buffer: *std.io.FixedBufferStream([]u8),
+    buffer: std.io.FixedBufferStream([]u8),
 
     pub const Error = std.net.Stream.WriteError || std.io.FixedBufferStream([]u8).WriteError;
     pub const Writer = std.io.GenericWriter(DownstreamGateway, Error, write);
