@@ -75,11 +75,7 @@ test {
 
     const fof = Router.defaultResponse(.not_found);
 
-    const not_found =
-        "HTTP/1.1 404 Not Found\r\n" ++
-        "Server: verse/0.1.0-pre-123-g3c23a3f-dirty\r\n" ++
-        "Content-Type: text/html; charset=utf-8\r\n" ++
-        "\r\n" ++
+    const not_found_body =
         \\<!DOCTYPE html>
         \\<html>
         \\  <head>
@@ -107,11 +103,25 @@ test {
         \\</html>
         \\
         \\
-        ;
+    ;
     try fof(&fc.frame);
 
-    try std.testing.expectEqual(@as(usize, 806), fc.frame.request.downstream.buffer.pos);
-    try std.testing.expectEqualSlices(u8, not_found, fc.buffer[0..fc.frame.request.downstream.buffer.pos]);
+    const hidx = std.mem.lastIndexOf(u8, fc.buffer, "\r\n") orelse return error.InvalidHtml;
+
+    try std.testing.expect(std.mem.startsWith(
+        u8,
+        fc.buffer,
+        "HTTP/1.1 404 Not Found\r\nServer: verse/",
+    ));
+
+    try std.testing.expect(std.mem.endsWith(
+        u8,
+        fc.buffer[0 .. hidx + 2],
+        "\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
+    ));
+
+    try std.testing.expect(800 <= fc.frame.request.downstream.buffer.pos);
+    try std.testing.expectEqualSlices(u8, not_found_body, fc.buffer[hidx + 2 .. fc.frame.request.downstream.buffer.pos]);
 }
 
 const std = @import("std");
