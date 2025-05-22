@@ -30,6 +30,9 @@ pub const RouteFn = *const fn (*Frame) RoutingError!BuildFn;
 
 pub const FallbackRouter = *const fn (*Frame, RouteFn) BuildFn;
 
+pub const Errors = @import("errors.zig");
+pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkError;
+
 /// The Verse router will scan through an array of Match structs looking for a
 /// given name. Verse doesn't assert that the given name will match a director
 /// or endpoint/page specifically. e.g. `/uri/page` and `/uri/page/` will both
@@ -460,5 +463,3 @@ const eql = std.mem.eql;
 const Frame = @import("frame.zig");
 const Request = @import("request.zig");
 const StaticFile = @import("static-file.zig");
-pub const Errors = @import("errors.zig");
-pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkError;

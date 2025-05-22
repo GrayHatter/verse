@@ -1,15 +1,19 @@
 pub fn headers() Headers {
     return .{
-        .known = undefined,
-        .extended = undefined,
+        .known = .{},
+        .extended = .{},
     };
 }
 
 const Buffer = std.io.FixedBufferStream([]u8);
 const DEFAULT_SIZE = 0x1000000;
 
-pub fn request(a: std.mem.Allocator, buf: []u8) Request {
-    return .{
+pub fn request(a: std.mem.Allocator, buf: []u8) *Request {
+    const fba = a.create(Buffer) catch @panic("OOM");
+    fba.* = .{ .buffer = buf, .pos = 0 };
+
+    const self = a.create(Request) catch @panic("OOM");
+    self.* = .{
         .accept = "*/*",
         .authorization = null,
         .cookie_jar = .init(a),
@@ -21,49 +25,93 @@ pub fn request(a: std.mem.Allocator, buf: []u8) Request {
         .host = "localhost",
         .method = .GET,
         .protocol = .default,
-        .downstream = .{ .buffer = .{ .buffer = buf, .pos = 0 } },
+        .downstream = .{ .buffer = fba },
         .referer = null,
         .remote_addr = "127.0.0.1",
         .secure = true,
         .uri = "/",
         .user_agent = .init("Verse Internal Testing/0.0"),
     };
+    return self;
 }
 
 pub const FrameCtx = struct {
-    arena: std.heap.ArenaAllocator,
+    arena: *std.heap.ArenaAllocator,
     frame: Frame,
     buffer: []u8,
 
-    pub fn init() !FrameCtx {
-        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        defer arena.deinit();
-        const buffer = try arena.allocator().alloc(u8, DEFAULT_SIZE);
-        const req = request(arena.allocator(), buffer);
+    pub fn init(alloc: std.mem.Allocator) !FrameCtx {
+        var arena = try alloc.create(std.heap.ArenaAllocator);
+        arena.* = std.heap.ArenaAllocator.init(alloc);
+
+        const a = arena.allocator();
+        const buffer = try a.alloc(u8, DEFAULT_SIZE / 0x1000);
         return .{
             .arena = arena,
             .frame = .{
-                .cookie_jar = .init(arena.allocator()),
+                .cookie_jar = .init(a),
                 // todo lifetime
-                .alloc = arena.allocator(),
+                .alloc = a,
                 // todo lifetime
-                .request = &req,
+                .request = request(a, buffer),
                 .uri = splitUri("/") catch unreachable,
-                .auth_provider = undefined,
-                .response_data = .init(arena.allocator()),
+                .auth_provider = .invalid,
+                .response_data = .init(a),
                 .headers = headers(),
             },
             .buffer = buffer,
         };
     }
 
-    pub fn raze(fc: FrameCtx) void {
+    pub fn raze(fc: FrameCtx, a: std.mem.Allocator) void {
         fc.arena.deinit();
+        a.destroy(fc.arena);
     }
 };
 
 test {
-    _ = try FrameCtx.init();
+    var fc = try FrameCtx.init(std.testing.allocator);
+    defer fc.raze(std.testing.allocator);
+
+    const fof = Router.defaultResponse(.not_found);
+
+    const not_found =
+        "HTTP/1.1 404 Not Found\r\n" ++
+        "Server: verse/0.1.0-pre-123-g3c23a3f-dirty\r\n" ++
+        "Content-Type: text/html; charset=utf-8\r\n" ++
+        "\r\n" ++
+        \\<!DOCTYPE html>
+        \\<html>
+        \\  <head>
+        \\    <title>404: Not Found</title>
+        \\    <style>
+        \\      html {
+        \\        color-scheme: light dark;
+        \\        min-height: 100%;
+        \\      }
+        \\      body {
+        \\        width: 35em;
+        \\        margin: 0 auto;
+        \\        font-family: Tahoma, Verdana, Arial, sans-serif;
+        \\      }
+        \\    </style>
+        \\  </head>
+        \\  <body>
+        \\    <h1>404: Wrong Castle</h1>
+        \\    <p>The page you're looking for is in another castle :(<br/>
+        \\      Please try again repeatedly... surely it'll work this time!</p>
+        \\    <p>If you are the system administrator you should already know why <br/>
+        \\      it's broken what are you still reading this for?!</p>
+        \\    <p><em>Faithfully yours, Geoff from Accounting.</em></p>
+        \\  </body>
+        \\</html>
+        \\
+        \\
+        ;
+    try fof(&fc.frame);
+
+    try std.testing.expectEqual(@as(usize, 806), fc.frame.request.downstream.buffer.pos);
+    try std.testing.expectEqualSlices(u8, not_found, fc.buffer[0..fc.frame.request.downstream.buffer.pos]);
 }
 
 const std = @import("std");

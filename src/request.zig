@@ -31,7 +31,7 @@ const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 pub const DownstreamGateway = union(Downstream) {
     zwsgi: *zWSGIRequest,
     http: *std.http.Server.Request,
-    buffer: std.io.FixedBufferStream([]u8),
+    buffer: *std.io.FixedBufferStream([]u8),
 
     pub const Error = std.net.Stream.WriteError || std.io.FixedBufferStream([]u8).WriteError;
     pub const Writer = std.io.GenericWriter(DownstreamGateway, Error, write);
@@ -50,7 +50,7 @@ pub const DownstreamGateway = union(Downstream) {
     pub fn writeAll(ds: DownstreamGateway, data: []const u8) Error!void {
         var index: usize = 0;
         while (index < data.len) {
-            index += try write(ds, data[index..]);
+            index += try ds.write(data[index..]);
         }
     }
 
@@ -58,7 +58,11 @@ pub const DownstreamGateway = union(Downstream) {
         switch (ds) {
             .zwsgi => |z| try z.conn.stream.writevAll(@ptrCast(vect)),
             .http => |h| try h.server.connection.stream.writevAll(@ptrCast(vect)),
-            .buffer => @panic("not implemented"),
+            .buffer => {
+                for (vect) |v| {
+                    try ds.writeAll(v.base[0..v.len]);
+                }
+            },
         }
     }
 
@@ -67,7 +71,7 @@ pub const DownstreamGateway = union(Downstream) {
         return switch (ds) {
             .zwsgi => |z| try z.conn.stream.write(data),
             .http => |h| try h.server.connection.stream.write(data),
-            .buffer => try ds.write(data),
+            .buffer => |b| try b.write(data),
         };
     }
 
