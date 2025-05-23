@@ -44,6 +44,10 @@ pub fn Endpoints(endpoints: anytype) type {
             var server = try Server.init(self.alloc, router, options);
             try server.serve();
         }
+
+        pub fn smokeTest(a: Allocator) !void {
+            try testing.smokeTest(a, &Self.routes, .default);
+        }
     };
 }
 
@@ -298,3 +302,4 @@ const Frame = @import("frame.zig");
 const Auth = @import("auth.zig");
 const Server = @import("server.zig");
 const Router = @import("router.zig");
+const testing = @import("testing.zig");

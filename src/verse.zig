@@ -35,9 +35,11 @@ comptime {
     _ = &@This();
 }
 
+pub const testing = @import("testing.zig");
+
 test {
     std.testing.refAllDecls(@This());
-    _ = @import("testing.zig");
+    _ = &testing;
 }
 
 const std = @import("std");

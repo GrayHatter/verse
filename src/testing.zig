@@ -1,3 +1,56 @@
+pub const SmokeTestOptions = struct {
+    soft_errors: []const Router.Error,
+    recurse: bool,
+
+    pub const default: SmokeTestOptions = .{
+        .recurse = true,
+        .soft_errors = &[_]Router.Error{
+            // By default, the two soft errors are BadData, [because smokeTest
+            // is unable to generate the default expected data], and Unrouteable
+            // [for the same reason, smokeTest is unlikely to be able to
+            // generate the required routing information]
+            error.BadData,
+            error.Unrouteable,
+        },
+    };
+};
+
+pub fn smokeTest(
+    a: Allocator,
+    comptime routes: []const Router.Match,
+    comptime opts: SmokeTestOptions,
+) !void {
+    inline for (routes) |route| {
+        inline for (@typeInfo(Request.Methods).@"enum".fields) |field| {
+            if (comptime !Request.Methods.readOnly(@enumFromInt(field.value))) continue;
+            if (comptime route.target(@enumFromInt(field.value))) |trgt| {
+                switch (trgt) {
+                    .build => |func| {
+                        var fc: FrameCtx = try .init(a);
+                        defer fc.raze(a);
+                        if (func(&fc.frame)) {} else |err| {
+                            for (opts.soft_errors) |serr| {
+                                if (err == serr) break;
+                            } else {
+                                std.debug.print(
+                                    "Smoke test error for endpoint Match {s} : {}\n",
+                                    .{ route.name, func },
+                                );
+                                return err;
+                            }
+                        }
+                    },
+                    .simple => |smp| {
+                        if (!opts.recurse) continue;
+                        try smokeTest(a, smp, opts);
+                    },
+                    else => {},
+                }
+            }
+        }
+    }
+}
+
 pub fn headers() Headers {
     return .{
         .known = .{},
@@ -8,7 +61,7 @@ pub fn headers() Headers {
 const Buffer = std.io.FixedBufferStream([]u8);
 const DEFAULT_SIZE = 0x1000000;
 
-pub fn request(a: std.mem.Allocator, buf: []u8) *Request {
+pub fn request(a: Allocator, buf: []u8) *Request {
     const fba = a.create(Buffer) catch @panic("OOM");
     fba.* = .{ .buffer = buf, .pos = 0 };
 
@@ -40,12 +93,12 @@ pub const FrameCtx = struct {
     frame: Frame,
     buffer: []u8,
 
-    pub fn init(alloc: std.mem.Allocator) !FrameCtx {
+    pub fn init(alloc: Allocator) !FrameCtx {
         var arena = try alloc.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(alloc);
 
         const a = arena.allocator();
-        const buffer = try a.alloc(u8, DEFAULT_SIZE / 0x1000);
+        const buffer = try a.alloc(u8, DEFAULT_SIZE);
         return .{
             .arena = arena,
             .frame = .{
@@ -125,6 +178,7 @@ test {
 }
 
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const Headers = @import("headers.zig");
 const Request = @import("request.zig");
 const Frame = @import("frame.zig");

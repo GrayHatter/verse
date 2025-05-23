@@ -401,7 +401,7 @@ fn fallbackRouter(frame: *Frame, routefn: RouteFn) BuildFn {
 }
 
 const root_with_static = root ++ [_]Match{
-    ROUTE("static", StaticFile.file),
+    ROUTE("static", StaticFile.fileOnDisk),
 };
 
 fn defaultRouterHtml(frame: *Frame, routefn: RouteFn) Error!void {
@@ -413,6 +413,12 @@ fn defaultRouterHtml(frame: *Frame, routefn: RouteFn) Error!void {
 }
 
 pub const TestingRouter: Router = Routes(&root);
+
+test "smoke" {
+    const a = std.testing.allocator;
+    try testing.smokeTest(a, &root, .default);
+    try testing.smokeTest(a, &root_with_static, .default);
+}
 
 test "uri" {
     const uri_file = "/root/first/second/third";
@@ -463,3 +469,4 @@ const eql = std.mem.eql;
 const Frame = @import("frame.zig");
 const Request = @import("request.zig");
 const StaticFile = @import("static-file.zig");
+const testing = @import("testing.zig");
