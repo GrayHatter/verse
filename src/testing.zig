@@ -51,6 +51,27 @@ pub fn smokeTest(
     }
 }
 
+pub fn fuzzTest(trgt: Router.Target) !void {
+    const Context = struct {
+        target: Router.Target,
+
+        fn testOne(context: @This(), input: []const u8) anyerror!void {
+            var fc = try FrameCtx.initRequest(
+                std.testing.allocator,
+                .{ .query_data = input },
+            );
+            defer fc.raze(std.testing.allocator);
+
+            try context.target.build(&fc.frame);
+        }
+    };
+    try std.testing.fuzz(
+        Context{ .target = trgt },
+        Context.testOne,
+        .{},
+    );
+}
+
 pub fn headers() Headers {
     return .{
         .known = .{},
@@ -61,7 +82,12 @@ pub fn headers() Headers {
 const Buffer = std.io.FixedBufferStream([]u8);
 const DEFAULT_SIZE = 0x1000000;
 
-pub fn request(a: Allocator, buf: []u8) *Request {
+pub const RequestOptions = struct {
+    uri: []const u8 = "/",
+    query_data: []const u8 = "",
+};
+
+pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
     const fba = a.create(Buffer) catch @panic("OOM");
     fba.* = .{ .buffer = buf, .pos = 0 };
 
@@ -72,7 +98,7 @@ pub fn request(a: Allocator, buf: []u8) *Request {
         .cookie_jar = .init(a),
         .data = .{
             .post = null,
-            .query = Request.Data.QueryData.init(a, "") catch unreachable,
+            .query = Request.Data.QueryData.init(a, opt.query_data) catch unreachable,
         },
         .headers = headers(),
         .host = "localhost",
@@ -82,7 +108,7 @@ pub fn request(a: Allocator, buf: []u8) *Request {
         .referer = null,
         .remote_addr = "127.0.0.1",
         .secure = true,
-        .uri = "/",
+        .uri = opt.uri,
         .user_agent = .init("Verse Internal Testing/0.0"),
     };
     return self;
@@ -93,7 +119,7 @@ pub const FrameCtx = struct {
     frame: Frame,
     buffer: []u8,
 
-    pub fn init(alloc: Allocator) !FrameCtx {
+    pub fn initRequest(alloc: Allocator, ropt: RequestOptions) !FrameCtx {
         var arena = try alloc.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(alloc);
 
@@ -106,7 +132,7 @@ pub const FrameCtx = struct {
                 // todo lifetime
                 .alloc = a,
                 // todo lifetime
-                .request = request(a, buffer),
+                .request = request(a, buffer, ropt),
                 .uri = splitUri("/") catch unreachable,
                 .auth_provider = .invalid,
                 .response_data = .init(a),
@@ -114,6 +140,10 @@ pub const FrameCtx = struct {
             },
             .buffer = buffer,
         };
+    }
+
+    pub fn init(alloc: Allocator) !FrameCtx {
+        return initRequest(alloc, .{});
     }
 
     pub fn raze(fc: FrameCtx, a: std.mem.Allocator) void {
