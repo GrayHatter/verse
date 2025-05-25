@@ -133,89 +133,68 @@ fn routeCount(endpoints: anytype) usize {
 
 test routeCount {
     comptime {
-        try std.testing.expectEqual(
-            0,
-            routeCount(.{
-                struct {
-                    const verse_name = .testing;
-                },
-            }),
-        );
-        try std.testing.expectEqual(
-            1,
-            routeCount(.{
-                struct {
-                    const verse_name = .testing;
-                    pub fn index() void {}
-                },
-            }),
-        );
-        try std.testing.expectEqual(
-            2,
-            routeCount(.{
-                struct {
-                    const verse_name = .testing;
-                    const verse_endpoints = Endpoints(.{
-                        struct {
-                            pub const verse_name = .sub_testing;
-                            pub fn index() void {}
-                        },
-                    });
-                    pub fn index() void {}
-                },
-            }),
-        );
-        try std.testing.expectEqual(
-            3,
-            routeCount(.{
-                struct {
-                    const verse_name = .testing;
-                    const verse_routes = .{
-                        Router.ROUTE("first", empty),
-                        Router.ROUTE("second", empty),
-                        Router.ROUTE("third", empty),
-                    };
-                    pub fn empty(_: *Frame) Router.Error!void {}
-                },
-            }),
-        );
-        try std.testing.expectEqual(
-            1,
-            routeCount(.{
-                struct {
-                    const verse_name = .testing;
-                    const verse_router = &router;
-                    pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
-                },
-            }),
-        );
-        try std.testing.expectEqual(
-            1,
-            routeCount(.{
-                struct {
-                    const verse_name = .testing;
-                    const verse_router = &router;
-                    pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
-                    pub fn index() void {}
-                },
-            }),
-        );
+        try std.testing.expectEqual(0, routeCount(.{
+            struct {
+                const verse_name = .testing;
+            },
+        }));
+        try std.testing.expectEqual(1, routeCount(.{
+            struct {
+                const verse_name = .testing;
+                pub fn index() void {}
+            },
+        }));
+        try std.testing.expectEqual(2, routeCount(.{
+            struct {
+                const verse_name = .testing;
+                const verse_endpoints = Endpoints(.{
+                    struct {
+                        pub const verse_name = .sub_testing;
+                        pub fn index() void {}
+                    },
+                });
+                pub fn index() void {}
+            },
+        }));
+        try std.testing.expectEqual(3, routeCount(.{
+            struct {
+                const verse_name = .testing;
+                const verse_routes = .{
+                    Router.ROUTE("first", empty),
+                    Router.ROUTE("second", empty),
+                    Router.ROUTE("third", empty),
+                };
+                pub fn empty(_: *Frame) Router.Error!void {}
+            },
+        }));
+        try std.testing.expectEqual(1, routeCount(.{
+            struct {
+                const verse_name = .testing;
+                const verse_router = &router;
+                pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
+            },
+        }));
+        try std.testing.expectEqual(1, routeCount(.{
+            struct {
+                const verse_name = .testing;
+                const verse_router = &router;
+                pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
+                pub fn index() void {}
+            },
+        }));
         // TODO test verse_router doesn't include verse_endpoints
-        try std.testing.expectEqual(
-            1,
-            routeCount(.{
-                // TODO expand this test in include a root struct
-                struct {
-                    const verse_name = .testing;
-                    const verse_alias = .{
-                        // everyone has testing infra, we're not lucky enough to
-                        // have dedicated infra reserved for prod
-                        .prod,
-                    };
-                    pub fn index() void {}
-                },
-            }),
-        );
+        try std.testing.expectEqual(1, routeCount(.{
+            // TODO expand this test in include a root struct
+            struct {
+                const verse_name = .testing;
+                const verse_alias = .{
+                    // everyone has testing infra, we're not lucky enough to
+                    // have dedicated infra reserved for prod
+                    .prod,
+                };
+                pub fn index() void {}
+            },
+        }));
     }
 }
 
