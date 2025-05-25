@@ -39,8 +39,8 @@ pub fn build(b: *std.Build) !void {
     var compiler = Compiler.init(b);
     compiler.addDir(template_path);
 
-    if (std.fs.cwd().access("src/fallback_html/index.html", .{})) {
-        compiler.addDir(b.path("src/fallback_html/"));
+    if (std.fs.cwd().access("src/builtin-html/index.html", .{})) {
+        compiler.addDir(b.path("src/builtin-html/"));
     } else |_| {}
 
     compiler.collect() catch @panic("unreachable");

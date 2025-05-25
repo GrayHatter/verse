@@ -53,7 +53,7 @@ pub fn smokeTest(
 
 pub fn fuzzTest(trgt: Router.Target) !void {
     const Context = struct {
-        target: Router.Target,
+        target: *Router.Target,
 
         fn testOne(context: @This(), input: []const u8) anyerror!void {
             var fc = try FrameCtx.initRequest(
@@ -66,7 +66,7 @@ pub fn fuzzTest(trgt: Router.Target) !void {
         }
     };
     try std.testing.fuzz(
-        Context{ .target = trgt },
+        Context{ .target = &trgt },
         Context.testOne,
         .{},
     );

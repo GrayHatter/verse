@@ -175,13 +175,13 @@ test findPageType {
 test "load templates" {
     const a = std.testing.allocator;
 
-    initDynamic(a, "src/fallback_html/");
+    initDynamic(a, "src/builtin-html/");
     defer raze(a);
 
     //try std.testing.expectEqual(3, builtin.len);
     for (builtin) |bi| {
-        if (std.mem.eql(u8, bi.name, "fallback_html/index.html")) {
-            try std.testing.expectEqualStrings("fallback_html/index.html", bi.name);
+        if (std.mem.eql(u8, bi.name, "builtin-html/index.html")) {
+            try std.testing.expectEqualStrings("builtin-html/index.html", bi.name);
             try std.testing.expectEqualStrings("<!DOCTYPE html>", bi.blob[0..15]);
             break;
         }
@@ -191,8 +191,8 @@ test "load templates" {
 }
 
 test findTemplate {
-    const tmpl = findTemplate("fallback_html/index.html");
-    try std.testing.expectEqualStrings("fallback_html/index.html", tmpl.name);
+    const tmpl = findTemplate("builtin-html/index.html");
+    try std.testing.expectEqualStrings("builtin-html/index.html", tmpl.name);
 }
 
 test "directive something" {

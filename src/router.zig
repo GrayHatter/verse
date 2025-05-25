@@ -243,22 +243,22 @@ pub fn defaultResponse(comptime code: std.http.Status) BuildFn {
 }
 
 fn notFound(frame: *Frame) Error!void {
-    const E404 = @embedFile("fallback_html/404.html");
+    const E404 = @embedFile("builtin-html/404.html");
     return frame.sendHTML(.not_found, E404);
 }
 
 fn internalServerError(vrs: *Frame) Error!void {
-    const E500 = @embedFile("fallback_html/500.html");
+    const E500 = @embedFile("builtin-html/500.html");
     return vrs.sendHTML(.internal_server_error, E500);
 }
 
 fn methodNotAllowed(frame: *Frame) Error!void {
-    const E405 = @embedFile("fallback_html/405.html");
+    const E405 = @embedFile("builtin-html/405.html");
     return frame.sendHTML(.method_not_allowed, E405);
 }
 
 fn default(frame: *Frame) Error!void {
-    const index = @embedFile("fallback_html/index.html");
+    const index = @embedFile("builtin-html/index.html");
     return frame.sendHTML(.ok, index);
 }
 

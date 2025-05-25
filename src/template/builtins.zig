@@ -8,18 +8,20 @@ pub fn findTemplate(comptime name: []const u8) Template {
         if (comptime eql(u8, bi.name, name)) {
             return bi;
         }
-    }
-
-    var errstr: [:0]const u8 = "Template " ++ name ++ " not found!";
-    inline for (builtin) |bi| {
-        if (comptime endsWith(u8, bi.name, name)) {
-            errstr = errstr ++ "\nDid you mean" ++ " " ++ bi.name ++ "?";
+    } else {
+        comptime {
+            var errstr: [:0]const u8 = "Template " ++ name ++ " not found!";
+            for (builtin) |bi| {
+                if (endsWith(u8, bi.name, name)) {
+                    errstr = errstr ++ "\nDid you mean" ++ " " ++ bi.name ++ "?";
+                }
+            }
+            // If you're reading this, it's probably because your template.html is
+            // either missing, not included in the build.zig search dirs, or typo'd.
+            // But it's important for you to know... I hope you have a good day :)
+            @compileError(errstr);
         }
     }
-    // If you're reading this, it's probably because your template.html is
-    // either missing, not included in the build.zig search dirs, or typo'd.
-    // But it's important for you to know... I hope you have a good day :)
-    @compileError(errstr);
 }
 
 fn constructTemplates() []const Template {
