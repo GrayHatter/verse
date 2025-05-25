@@ -41,6 +41,8 @@ headers_done: bool = false,
 
 const Frame = @This();
 
+pub const Downstream = Request.DownstreamGateway;
+
 pub const SendError = error{
     HeadersFinished,
 } || NetworkError;
@@ -369,7 +371,6 @@ const IOVec = @import("iovec.zig").IOVec;
 
 const Server = @import("server.zig");
 const Request = @import("request.zig");
-pub const Downstream = Request.DownstreamGateway;
 const RequestData = @import("request-data.zig");
 const Template = @import("template.zig");
 const Router = @import("router.zig");

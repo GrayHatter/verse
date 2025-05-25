@@ -21,7 +21,7 @@ pub const Options = struct {
     port: u16 = 8080,
 };
 
-pub fn init(a: Allocator, router: Router, opts: Options, sopts: VServer.Options) !HTTP {
+pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) !HTTP {
     return .{
         .alloc = a,
         .router = router,
@@ -155,7 +155,7 @@ test HTTP {
 }
 
 const Auth = @import("auth.zig");
-const VServer = @import("server.zig");
+const Server = @import("server.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Request = @import("request.zig");
@@ -165,4 +165,4 @@ const std = @import("std");
 const net = std.net;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Verse);
-const Server = std.http.Server;
+const HttpServer = std.http.Server;

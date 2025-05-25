@@ -1,4 +1,3 @@
-alloc: Allocator,
 router: Router,
 interface: Interface,
 
@@ -30,7 +29,6 @@ pub const Options = struct {
 
 pub fn init(a: Allocator, router: Router, opts: Options) !Server {
     return .{
-        .alloc = a,
         .router = router,
         .interface = switch (opts.mode) {
             .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, router, z, opts) },
