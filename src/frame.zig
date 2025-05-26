@@ -39,6 +39,9 @@ status: ?std.http.Status = null,
 
 headers_done: bool = false,
 
+/// Unstable API; may be altered or removed in the future
+server: *const Server,
+
 const Frame = @This();
 
 pub const Downstream = Request.DownstreamGateway;
@@ -171,7 +174,7 @@ pub fn acceptWebsocket(frame: *Frame) !Websocket {
     return Websocket.accept(frame);
 }
 
-pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
+pub fn init(a: Allocator, srv: *const Server, req: *const Request, auth: Auth.Provider) !Frame {
     return .{
         .alloc = a,
         .request = req,
@@ -181,6 +184,7 @@ pub fn init(a: Allocator, req: *const Request, auth: Auth.Provider) !Frame {
         .user = auth.authenticate(&req.headers) catch null,
         .cookie_jar = .init(a),
         .response_data = ResponseData.init(a),
+        .server = @ptrCast(srv),
     };
 }
 

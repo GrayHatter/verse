@@ -72,14 +72,19 @@ pub fn validateEndpoint(EP: anytype) void {
         }
     }
 
-    if (@hasDecl(EP, "verse_routes")) {
-        inline for (EP.verse_routes, 0..) |route, i| {
-            if (@TypeOf(route) != Router.Match) {
-                @compileError("the `verse_routes` decl is reserved for a list of pre-constructed " ++
-                    "`Match` targets. " ++ @typeName(route) ++ " at position " ++ i ++ " is invalid.");
-            }
-        }
-    }
+    // TODO figure out why this causes a dependency loop and reenable
+    //if (@hasDecl(EP, "verse_routes")) {
+    //    if (@TypeOf(EP.verse_routes) != []Router.Match) {
+    //        @compileError("the `verse_routes` decl is reserved for a list of pre-constructed " ++
+    //            "`Match` targets. expected []Router.Match but found " ++ @typeName(@TypeOf(EP.verse_routes)) ++ ".");
+    //    }
+    //    //inline for (EP.verse_routes, 0..) |route, i| {
+    //    //    if (@TypeOf(route) != Router.Match) {
+    //    //        @compileError("the `verse_routes` decl is reserved for a list of pre-constructed " ++
+    //    //            "`Match` targets. " ++ @typeName(route) ++ " at position " ++ i ++ " is invalid.");
+    //    //    }
+    //    //}
+    //}
 
     if (@hasDecl(EP, "verse_builder")) {
         if (@TypeOf(EP.verse_builder) != Router.Builder) {

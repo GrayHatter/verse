@@ -2,6 +2,15 @@
 <html>
   <head>
     <title>Verse Stats</title>
+    <style>
+      .verse-stats-contents {
+        display: block;
+        width: 100%;
+      }
+      .verse-stats-line {
+        display: block;
+      }
+    </style>
   </head>
   <body>
     <div class="verse-stats-header">
@@ -12,7 +21,10 @@
 
     <div class="verse-stats-contents">
       <For StatsList>
-        <span class="verse-stats-line"><Uri /> - <Time /> - <Size /> </span>
+        <span class="verse-stats-line"><Number type="usize" /> : <Uri /> - <Time type="usize" /> - <Size type="usize" /> <Us type="usize" /></span>
+      </For>
+      <For StatsListLast>
+        <span class="verse-stats-line"><Number type="usize" /> : <Uri /> - <Time type="usize" /> - <Size type="usize" /> <Us type="usize" /></span>
       </For>
     </div>
   </body>

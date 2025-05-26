@@ -1,6 +1,5 @@
 //! Verse zwsgi server
 //! Speaks the uwsgi protocol
-
 alloc: Allocator,
 router: Router,
 options: Options,
@@ -101,7 +100,11 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
     var zreq = try zWSGIRequest.init(a, &conn);
     const request_data = try requestData(a, &zreq);
     const request = try Request.initZWSGI(a, &zreq, request_data);
-    var frame = try Frame.init(a, &request, z.auth);
+
+    const ifc: *const Server.Interface = @fieldParentPtr("zwsgi", z);
+    const srvr: *Server = @constCast(@fieldParentPtr("interface", ifc));
+
+    var frame: Frame = try .init(a, srvr, &request, z.auth);
 
     defer {
         const lap = timer.lap() / 1000;
@@ -116,8 +119,6 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
         );
-        const ifc: *const Server.Interface = @fieldParentPtr("zwsgi", z);
-        const srvr: *Server = @constCast(@fieldParentPtr("interface", ifc));
         if (srvr.stats) |*stats| {
             stats.log(.{
                 .uri = request.uri,

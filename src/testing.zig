@@ -137,6 +137,7 @@ pub const FrameCtx = struct {
                 .auth_provider = .invalid,
                 .response_data = .init(a),
                 .headers = headers(),
+                .server = undefined,
             },
             .buffer = buffer,
         };
@@ -213,4 +214,5 @@ const Headers = @import("headers.zig");
 const Request = @import("request.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
+const Server = @import("server.zig");
 const splitUri = Router.splitUri;

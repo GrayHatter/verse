@@ -1,5 +1,4 @@
 //! Verse HTTP server
-
 alloc: Allocator,
 router: Router,
 auth: Auth.Provider,
@@ -85,7 +84,10 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     const reqdata = try requestData(a, &hreq);
     const req = try Request.initHttp(a, &hreq, reqdata);
 
-    var frame = try Frame.init(a, &req, http.auth);
+    const ifc: *Server.Interface = @fieldParentPtr("http", http);
+    const srvr: *Server = @fieldParentPtr("interface", ifc);
+
+    var frame: Frame = try .init(a, srvr, &req, http.auth);
 
     errdefer comptime unreachable;
 
@@ -93,8 +95,6 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     http.router.builder(&frame, callable);
 
     const lap = timer.lap();
-    const ifc: *Server.Interface = @fieldParentPtr("http", http);
-    const srvr: *Server = @fieldParentPtr("interface", ifc);
     if (srvr.stats) |*stats| {
         stats.log(.{
             .uri = req.uri,
@@ -149,7 +149,6 @@ test HTTP {
     const a = std.testing.allocator;
 
     var server: Server = .{
-        .router = undefined,
         .interface = .{ .http = try init(a, Router.TestingRouter, .{ .port = 9345 }, .{}) },
         .stats = null,
     };

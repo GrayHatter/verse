@@ -1,4 +1,3 @@
-router: Router,
 interface: Interface,
 stats: ?Stats,
 
@@ -34,7 +33,6 @@ pub const Options = struct {
 
 pub fn init(a: Allocator, router: Router, opts: Options) !Server {
     return .{
-        .router = router,
         .interface = switch (opts.mode) {
             .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, router, z, opts) },
             .http => |h| .{ .http = try Http.init(a, router, h, opts) },
@@ -45,7 +43,6 @@ pub fn init(a: Allocator, router: Router, opts: Options) !Server {
 }
 
 pub fn serve(srv: *Server) !void {
-    if (srv.stats) |_| stats_.active_stats = &srv.stats.?;
     switch (srv.interface) {
         .zwsgi => |*zw| try zw.serve(),
         .http => |*ht| try ht.serve(),
