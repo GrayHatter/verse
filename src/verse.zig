@@ -3,6 +3,7 @@
 pub const auth = @import("auth.zig");
 pub const abx = @import("antibiotic.zig");
 pub const template = @import("template.zig");
+pub const stats = @import("stats.zig");
 
 pub const ContentType = @import("content-type.zig");
 pub const Frame = @import("frame.zig");

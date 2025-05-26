@@ -68,6 +68,8 @@ fn onceThreaded(http: *HTTP, acpt: net.Server.Connection) void {
 }
 
 pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
+    var timer = try std.time.Timer.start();
+
     var conn = sconn;
     defer conn.stream.close();
 
@@ -85,8 +87,20 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
 
     var frame = try Frame.init(a, &req, http.auth);
 
+    errdefer comptime unreachable;
+
     const callable = http.router.fallback(&frame, http.router.route);
     http.router.builder(&frame, callable);
+
+    const lap = timer.lap();
+    const ifc: *Server.Interface = @fieldParentPtr("http", http);
+    const srvr: *Server = @fieldParentPtr("interface", ifc);
+    if (srvr.stats) |*stats| {
+        stats.log(.{
+            .uri = req.uri,
+            .us = lap / 1000,
+        });
+    }
 }
 
 fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
@@ -134,16 +148,21 @@ fn threadFn(server: *HTTP) void {
 test HTTP {
     const a = std.testing.allocator;
 
-    var server = try init(a, Router.TestingRouter, .{ .port = 9345 }, .{});
-    var thread = try std.Thread.spawn(.{}, threadFn, .{&server});
+    var server: Server = .{
+        .router = undefined,
+        .interface = .{ .http = try init(a, Router.TestingRouter, .{ .port = 9345 }, .{}) },
+        .stats = null,
+    };
+
+    var thread = try std.Thread.spawn(.{}, threadFn, .{&server.interface.http});
 
     var client = std.http.Client{ .allocator = a };
     defer client.deinit();
-    while (!server.alive) {}
+    while (!server.interface.http.alive) {}
 
     var list = std.ArrayList(u8).init(a);
     defer list.clearAndFree();
-    server.running = false;
+    server.interface.http.running = false;
     const fetch = try client.fetch(.{
         .response_storage = .{ .dynamic = &list },
         .location = .{ .url = "http://localhost:9345/" },

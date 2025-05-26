@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Verse Stats</title>
+  </head>
+  <body>
+    <div class="verse-stats-header">
+      <span>Uptime: <Uptime type="usize" /></span>
+      <span>Count: <Count type="usize" /></span>
+      <span>Mean Response Time: <MeanRespTime type="usize" /></span>
+    </div>
+
+    <div class="verse-stats-contents">
+      <For StatsList>
+        <span class="verse-stats-line"><Uri /> - <Time /> - <Size /> </span>
+      </For>
+    </div>
+  </body>
+</html>

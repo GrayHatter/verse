@@ -75,6 +75,7 @@ pub fn build(b: *std.Build) !void {
         "request-userdata",
         "api",
         "websocket",
+        "stats",
     };
     inline for (examples) |example| {
         const example_exe = b.addExecutable(.{

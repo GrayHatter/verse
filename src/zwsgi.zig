@@ -14,6 +14,7 @@ const zWSGI = @This();
 pub const Options = struct {
     file: []const u8 = "./zwsgi_file.sock",
     chmod: ?std.posix.mode_t = null,
+    stats: bool = false,
 };
 
 pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) zWSGI {
@@ -103,11 +104,11 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
     var frame = try Frame.init(a, &request, z.auth);
 
     defer {
-        const lap = @as(f64, @floatFromInt(timer.lap())) / 1000000.0;
+        const lap = timer.lap() / 1000;
         log.err(
             "zWSGI: [{d:.3}] {s} - {s}:{} {s} -- \"{s}\"",
             .{
-                lap,
+                @as(f64, @floatFromInt(lap)) / 1000.0,
                 request.remote_addr,
                 request.method,
                 @intFromEnum(frame.status orelse .ok),
@@ -115,6 +116,14 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
         );
+        const ifc: *const Server.Interface = @fieldParentPtr("zwsgi", z);
+        const srvr: *Server = @constCast(@fieldParentPtr("interface", ifc));
+        if (srvr.stats) |*stats| {
+            stats.log(.{
+                .uri = request.uri,
+                .us = lap,
+            });
+        }
     }
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);
