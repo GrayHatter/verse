@@ -6,7 +6,6 @@ pub fn build(b: *std.Build) !void {
     const use_llvm = false;
 
     //if (b.args) |args| for (args) |arg| std.debug.print("arg {s}\n", .{arg});
-
     //std.debug.print("default: {s}\n", .{b.default_step.name});
 
     // root build options
@@ -42,6 +41,7 @@ pub fn build(b: *std.Build) !void {
     if (std.fs.cwd().access("src/builtin-html/index.html", .{})) {
         compiler.addDir(b.path("src/builtin-html/"));
     } else |_| {}
+    compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
 
     compiler.collect() catch @panic("unreachable");
     const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
@@ -108,20 +108,15 @@ const ThisBuild = @This();
 
 const Compiler = struct {
     b: *std.Build,
-    dirs: std.ArrayList(std.Build.LazyPath),
-    files: std.ArrayList([]const u8),
-    collected: std.ArrayList(std.Build.LazyPath),
+    dirs: std.ArrayListUnmanaged(std.Build.LazyPath),
+    files: std.ArrayListUnmanaged(std.Build.LazyPath),
+    collected: std.ArrayListUnmanaged(std.Build.LazyPath),
     templates: ?*std.Build.Module = null,
     structs: ?*std.Build.Module = null,
     debugging: bool = false,
 
     pub fn init(b: *std.Build) Compiler {
-        return .{
-            .b = b,
-            .dirs = std.ArrayList(std.Build.LazyPath).init(b.allocator),
-            .files = std.ArrayList([]const u8).init(b.allocator),
-            .collected = std.ArrayList(std.Build.LazyPath).init(b.allocator),
-        };
+        return .{ .b = b, .dirs = .{}, .files = .{}, .collected = .{} };
     }
 
     pub fn raze(self: Compiler) void {
@@ -141,23 +136,19 @@ const Compiler = struct {
     }
 
     pub fn addDir(self: *Compiler, dir: std.Build.LazyPath) void {
-        //const copy = self.b.allocator.dupe(u8, dir) catch @panic("OOM");
-        self.dirs.append(dir) catch @panic("OOM");
+        self.dirs.append(self.b.allocator, dir) catch @panic("OOM");
         self.templates = null;
         self.structs = null;
     }
 
-    pub fn addFile(self: *Compiler, file: []const u8) void {
-        const copy = self.b.allocator.dupe(u8, file) catch @panic("OOM");
-        self.files.append(copy) catch @panic("OOM");
+    pub fn addFile(self: *Compiler, file: std.Build.LazyPath) void {
+        self.files.append(self.b.allocator, file) catch @panic("OOM");
         self.templates = null;
         self.structs = null;
     }
 
     pub fn buildTemplates(self: *Compiler) !*std.Build.Module {
         if (self.templates) |t| return t;
-
-        //std.debug.print("building for {}\n", .{self.collected.items.len});
         const compiled = self.b.createModule(.{
             .root_source_file = self.depPath("src/template/comptime.zig"),
         });
@@ -167,10 +158,6 @@ const Compiler = struct {
 
         for (self.collected.items, names) |lpath, *name| {
             name.* = lpath.getPath3(self.b, null).sub_path;
-            //std.debug.print("builder {s}\n", .{name.*});
-            //const base = lpath.getPath3(self.b, null).basename();
-            //const file = try lpath.getPath3(self.b, null).toString(self.b.allocator);
-            //name.* = try lpath.getPath3(self.b, null).toString(self.b.allocator);
             _ = compiled.addAnonymousImport(name.*, .{
                 .root_source_file = lpath,
             });
@@ -217,11 +204,11 @@ const Compiler = struct {
             var itr = idir.iterate();
             while (try itr.next()) |file| {
                 if (!std.mem.endsWith(u8, file.name, ".html")) continue;
-                try self.collected.append(srcdir.path(self.b, file.name));
+                try self.collected.append(self.b.allocator, srcdir.path(self.b, file.name));
             }
         }
         for (self.files.items) |file| {
-            try self.collected.append(self.b.path(file));
+            try self.collected.append(self.b.allocator, file);
         }
     }
 };

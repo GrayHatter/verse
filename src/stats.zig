@@ -88,28 +88,27 @@ pub const Endpoint = struct {
     const S = @import("template.zig").Structs;
     pub const verse_name = .stats;
 
-    const StatsPage = PageData("builtin-html/stats.html");
+    const StatsPage = PageData("builtin-html/verse-stats.html");
 
     pub const stats = index;
 
     pub fn index(f: *Frame) Router.Error!void {
-        var data: [30]S.StatsList = @splat(.{
-            .number = 0,
-            .size = 0,
-            .time = 0,
-            .uri = "null",
-            .us = 0,
-        });
+        var data: [30]S.VerseStatsList = @splat(
+            .{ .number = 0, .size = 0, .time = 0, .uri = "null", .us = 0 },
+        );
         var count: usize = 0;
         var uptime = std.time.timestamp();
         var mean_time: u64 = 0;
 
-        if (f.server.stats) |active| {
+        if (@as(*Server, @ptrCast(@constCast(f.server))).stats) |active| {
             count = active.count;
             uptime -|= active.start_time;
             mean_time = active.mean.mean(@truncate(count));
-            for (&data, &active.rows) |*dst, *src| {
-                dst.* = .{
+            for (0..30) |i| {
+                if (i >= count) break;
+                const idx = count - i - 1;
+                const src = &active.rows[idx % active.rows.len];
+                data[i] = .{
                     .number = src.number,
                     .size = src.size,
                     .time = src.time,
@@ -119,20 +118,11 @@ pub const Endpoint = struct {
             }
         }
 
-        var first = data[0..@min(count % data.len, data.len)];
-        var last = data[count % data.len .. @min(count, data.len)];
-
-        if (count > data.len) {
-            last = first;
-            first = data[count % data.len .. @min(count, data.len)];
-        }
-
         const page = StatsPage.init(.{
             .uptime = @intCast(uptime),
             .count = count,
             .mean_resp_time = mean_time,
-            .stats_list = first,
-            .stats_list_last = @ptrCast(last),
+            .verse_stats_list = data[0..@min(count, data.len)],
         });
         return f.sendPage(&page);
     }
@@ -142,3 +132,4 @@ pub const Endpoint = struct {
 
 const std = @import("std");
 const Frame = @import("frame.zig");
+const Server = @import("server.zig");

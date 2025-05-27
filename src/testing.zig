@@ -53,7 +53,7 @@ pub fn smokeTest(
 
 pub fn fuzzTest(trgt: Router.Target) !void {
     const Context = struct {
-        target: *Router.Target,
+        target: *const Router.Target,
 
         fn testOne(context: @This(), input: []const u8) anyerror!void {
             var fc = try FrameCtx.initRequest(
@@ -137,7 +137,10 @@ pub const FrameCtx = struct {
                 .auth_provider = .invalid,
                 .response_data = .init(a),
                 .headers = headers(),
-                .server = undefined,
+                .server = &Server{
+                    .interface = undefined,
+                    .stats = null,
+                },
             },
             .buffer = buffer,
         };
