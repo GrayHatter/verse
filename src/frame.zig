@@ -260,7 +260,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
 }
 
 /// Helper function to return a default error page for a given http status code.
-pub fn sendError(vrs: *Frame, comptime code: std.http.Status) !void {
+pub fn sendDefaultErrorPage(vrs: *Frame, comptime code: std.http.Status) !void {
     return Router.defaultResponse(code)(vrs);
 }
 
