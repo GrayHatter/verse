@@ -141,5 +141,4 @@ pub const Endpoint = struct {
 };
 
 const std = @import("std");
-const Server = @import("server.zig");
 const Frame = @import("frame.zig");
