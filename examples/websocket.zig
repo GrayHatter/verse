@@ -70,9 +70,8 @@ pub fn main() !void {
     const Endpoints = verse.Endpoints(.{
         Root,
     });
-    var endpoints = Endpoints.init(std.heap.page_allocator);
 
-    endpoints.serve(.{
+    Endpoints.serve(std.heap.page_allocator, .{
         .mode = .{ .http = .{ .port = 8088 } },
     }) catch |err| {
         std.log.err("Unable to serve endpoints! err: [{}]", .{err});

@@ -5,11 +5,13 @@ const Endpoints = verse.Endpoints(.{
 });
 
 pub fn main() !void {
-    var endpoints = Endpoints.init(std.heap.page_allocator);
-    endpoints.serve(.{
-        .mode = .{ .http = .{ .port = 8088 } },
-        .stats = true,
-    }) catch |err| {
+    Endpoints.serve(
+        std.heap.page_allocator,
+        .{
+            .mode = .{ .http = .{ .port = 8088 } },
+            .stats = true,
+        },
+    ) catch |err| {
         std.log.err("Unable to serve stats err: [{}]", .{err});
         @panic("endpoint error");
     };

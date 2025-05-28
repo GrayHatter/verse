@@ -17,8 +17,6 @@ pub fn Endpoints(endpoints: anytype) type {
     }
 
     return struct {
-        alloc: Allocator,
-
         pub const Self = @This();
         pub const Endpoints = endpoints;
 
@@ -34,14 +32,8 @@ pub fn Endpoints(endpoints: anytype) type {
             break :brk rtr;
         };
 
-        pub fn init(a: Allocator) Self {
-            return .{
-                .alloc = a,
-            };
-        }
-
-        pub fn serve(self: *Self, options: Options) !void {
-            var server = try Server.init(self.alloc, router, options);
+        pub fn serve(a: Allocator, options: Options) !void {
+            var server = try Server.init(a, router, options);
             try server.serve();
         }
 
@@ -138,6 +130,7 @@ fn routeCount(endpoints: anytype) usize {
 
 test routeCount {
     comptime {
+        const Frame = @import("frame.zig");
         try std.testing.expectEqual(0, routeCount(.{
             struct {
                 const verse_name = .testing;
@@ -262,6 +255,7 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
 
 test Endpoints {
     const Example = struct {
+        const Frame = @import("frame.zig");
         pub fn nopEndpoint(_: *Frame) Router.Error!void {}
     };
 
@@ -282,7 +276,6 @@ test Endpoints {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
-const Frame = @import("frame.zig");
 const Auth = @import("auth.zig");
 const Server = @import("server.zig");
 const Router = @import("router.zig");
