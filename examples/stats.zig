@@ -9,7 +9,9 @@ pub fn main() !void {
         std.heap.page_allocator,
         .{
             .mode = .{ .http = .{ .port = 8088 } },
-            .stats = true,
+            .stats = .{
+                .auth_mode = .open,
+            },
         },
     ) catch |err| {
         std.log.err("Unable to serve stats err: [{}]", .{err});

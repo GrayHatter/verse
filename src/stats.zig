@@ -1,3 +1,19 @@
+pub const Options = struct {
+    auth_mode: AuthMode,
+
+    pub const AuthMode = enum {
+        auth_required,
+        sensitive,
+        open,
+    };
+
+    pub const default: Options = .{
+        .auth_mode = .sensitive,
+    };
+};
+
+pub var options: Options = .default;
+
 pub const Stats = struct {
     mutex: ?std.Thread.Mutex,
     start_time: i64,
@@ -105,6 +121,19 @@ pub const Endpoint = struct {
     pub const stats = index;
 
     pub fn index(f: *Frame) Router.Error!void {
+        var include_ip: bool = false;
+        switch (options.auth_mode) {
+            .auth_required => {
+                if (f.auth_provider.vtable.valid == null) return f.sendDefaultErrorPage(.not_implemented);
+            },
+            .sensitive => {
+                if (f.user) |user| if (f.auth_provider.valid(&user)) {
+                    include_ip = true;
+                };
+            },
+            .open => include_ip = true,
+        }
+
         var data: [60]S.VerseStatsList = @splat(
             .{
                 .ip_address = "",
@@ -145,7 +174,7 @@ pub const Endpoint = struct {
                     null;
 
                 data[i] = .{
-                    .ip_address = src.addr.slice(),
+                    .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
                     .number = src.number,
                     .size = src.size,
                     .time = src.time,

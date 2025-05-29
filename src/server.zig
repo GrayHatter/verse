@@ -28,17 +28,20 @@ pub const Options = struct {
     mode: RunMode = .{ .http = .{} },
     auth: Auth.Provider = .invalid,
     threads: ?u16 = null,
-    stats: bool = false,
+    stats: ?stats_.Options = null,
 };
 
 pub fn init(a: Allocator, router: Router, opts: Options) !Server {
+    if (opts.stats) |so| {
+        stats_.options = so;
+    }
     return .{
         .interface = switch (opts.mode) {
             .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, router, z, opts) },
             .http => |h| .{ .http = try Http.init(a, router, h, opts) },
             .other => unreachable,
         },
-        .stats = if (opts.stats) .init(opts.threads != null) else null,
+        .stats = if (opts.stats) |_| .init(opts.threads != null) else null,
     };
 }
 

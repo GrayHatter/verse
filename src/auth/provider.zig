@@ -21,7 +21,7 @@ pub const VTable = struct {
     pub const CreateSessionFn = *const fn (*anyopaque, *User) Error!void;
     pub const GetCookieFn = *const fn (*anyopaque, User) Error!?RequestCookie;
 
-    pub const Empty: VTable = .{
+    pub const empty: VTable = .{
         .authenticate = null,
         .lookup_user = null,
         .valid = null,
@@ -77,7 +77,7 @@ test "Provider" {
     const std = @import("std");
     const p = Provider{
         .ctx = undefined,
-        .vtable = VTable.Empty,
+        .vtable = .empty,
     };
 
     try std.testing.expectError(error.NotProvided, p.authenticate(undefined));
