@@ -3,7 +3,7 @@ pub const Stats = struct {
     start_time: i64,
     count: usize,
     mean: Mean,
-    rows: [30]Line,
+    rows: [256]Line,
 
     const Mean = struct {
         time: [256]u64 = undefined,
@@ -31,33 +31,43 @@ pub const Stats = struct {
 
     pub const Line = struct {
         number: usize,
-        size: usize,
         time: u64,
-        uri: Array,
+        addr: Addr,
+        size: usize,
+        uri: Uri,
         us: usize,
+        ua: ?UserAgent,
 
-        const Array = std.BoundedArray(u8, 2048);
+        pub const Size = 2048;
+        // These are different because I haven't finalized the expected type
+        // and size yet.
+        const Uri = std.BoundedArray(u8, Size);
+        const Addr = std.BoundedArray(u8, Size);
         pub const empty: Line = .{
+            .addr = .{},
             .number = 0,
             .size = 0,
             .time = 0,
             .uri = .{},
+            .ua = null,
             .us = 0,
         };
     };
 
     pub const Data = struct {
+        addr: []const u8,
         uri: []const u8,
         us: u64,
+        ua: ?UserAgent,
     };
 
     pub fn init(threaded: bool) Stats {
         return .{
-            .mutex = if (threaded) .{} else null,
-            .start_time = std.time.timestamp(),
             .count = 0,
             .mean = .{},
+            .mutex = if (threaded) .{} else null,
             .rows = @splat(.empty),
+            .start_time = std.time.timestamp(),
         };
     }
 
@@ -66,10 +76,12 @@ pub const Stats = struct {
         defer if (stats.mutex) |*mx| mx.unlock();
 
         stats.rows[stats.count % stats.rows.len] = .{
+            .addr = Line.Addr.fromSlice(data.addr[0..@min(data.addr.len, Line.Size)]) catch unreachable,
             .number = stats.count,
             .size = 0,
             .time = @intCast(std.time.timestamp()),
-            .uri = Line.Array.fromSlice(data.uri[0..@min(data.uri.len, 2048)]) catch unreachable,
+            .uri = Line.Uri.fromSlice(data.uri[0..@min(data.uri.len, Line.Size)]) catch unreachable,
+            .ua = data.ua,
             .us = data.us,
         };
         stats.count += 1;
@@ -93,8 +105,16 @@ pub const Endpoint = struct {
     pub const stats = index;
 
     pub fn index(f: *Frame) Router.Error!void {
-        var data: [30]S.VerseStatsList = @splat(
-            .{ .number = 0, .size = 0, .time = 0, .uri = "null", .us = 0 },
+        var data: [60]S.VerseStatsList = @splat(
+            .{
+                .ip_address = "",
+                .number = 0,
+                .size = 0,
+                .time = 0,
+                .uri = "null",
+                .verse_user_agent = null,
+                .us = 0,
+            },
         );
         var count: usize = 0;
         var uptime = std.time.timestamp();
@@ -104,15 +124,37 @@ pub const Endpoint = struct {
             count = active.count;
             uptime -|= active.start_time;
             mean_time = active.mean.mean(@truncate(count));
-            for (0..30) |i| {
+            for (0..data.len) |i| {
                 if (i >= count) break;
                 const idx = count - i - 1;
                 const src = &active.rows[idx % active.rows.len];
+                const ua: ?S.VerseUserAgent = if (src.ua) |sua|
+                    switch (sua.resolved) {
+                        .bot => |b| .{
+                            .name = @tagName(b.name),
+                            .version = 0,
+                        },
+                        .browser => |b| .{
+                            .name = @tagName(b.name),
+                            .version = b.version,
+                        },
+                        .script => |s| .{ .name = @tagName(s), .version = null },
+                        .unknown => .{ .name = "[unknown]", .version = null },
+                    }
+                else
+                    null;
+
                 data[i] = .{
+                    .ip_address = src.addr.slice(),
                     .number = src.number,
                     .size = src.size,
                     .time = src.time,
                     .uri = src.uri.slice(),
+                    .verse_user_agent = ua orelse .{
+                        .name = "[No User Agent Provided]",
+                        .version = 0,
+                    },
+                    .is_bot = if (src.ua) |sua| if (sua.resolved == .bot) " bot" else null else null,
                     .us = src.us,
                 };
             }
@@ -133,3 +175,4 @@ pub const Endpoint = struct {
 const std = @import("std");
 const Frame = @import("frame.zig");
 const Server = @import("server.zig");
+const UserAgent = @import("user-agent.zig");

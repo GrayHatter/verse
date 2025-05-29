@@ -204,7 +204,10 @@ pub const Browser = struct {
     version: u32,
     version_string: []const u8 = "",
 
-    pub const unknown: Browser = .{ .name = .unknown, .version = 0 };
+    pub const unknown: Browser = .{
+        .name = .unknown,
+        .version = 0,
+    };
 
     pub const Name = enum {
         brave,

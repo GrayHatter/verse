@@ -4,7 +4,6 @@
     <title>Verse Stats</title>
     <style>
       .verse-stats-contents { display: block; width: 100%; }
-      .verse-stats-line { display: block; }
     </style>
     <link href="/static/main.css" rel="stylesheet">
   </head>
@@ -15,10 +14,27 @@
       <span>Mean Response Time: <MeanRespTime type="usize" /></span>
     </div>
 
-    <div class="verse-stats-contents">
+    <table class="verse-stats-contents">
+      <tr>
+        <th>#</th>
+        <th>Time</th>
+        <th>IP Address</th>
+        <th>URI</th>
+        <th>Size</th>
+        <th>μseconds</th>
+        <th>User Agent</th>
+      </tr>
       <For VerseStatsList>
-        <span class="verse-stats-line"><Number type="usize" /> : <Uri /> - <Time type="usize" /> - <Size type="usize" /> <Us type="usize" /></span>
+      <tr class="verse-stats-line<IsBot ornull/>">
+        <td><Number type="usize" /></td>
+        <td><Time type="usize" /></td>
+        <td><IpAddress /></td>
+        <td><Uri /></td>
+        <td><Size type="usize" /> </td>
+        <td><Us type="usize" /></td>
+        <td><With VerseUserAgent><Name /> <Version type="?usize" /></With></td>
+      </tr>
       </For>
-    </div>
+    </table>
   </body>
 </html>

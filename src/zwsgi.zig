@@ -121,8 +121,10 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
         );
         if (srvr.stats) |*stats| {
             stats.log(.{
+                .addr = request.remote_addr,
                 .uri = request.uri,
                 .us = lap,
+                .ua = request.user_agent,
             });
         }
     }

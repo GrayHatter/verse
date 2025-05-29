@@ -40,7 +40,7 @@ status: ?std.http.Status = null,
 headers_done: bool = false,
 
 /// Unstable API; may be altered or removed in the future
-server: *align(8) const anyopaque,
+server: if (false) *const Server else *align(8) const anyopaque,
 
 const Frame = @This();
 
