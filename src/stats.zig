@@ -173,6 +173,15 @@ pub const Endpoint = struct {
                 else
                     null;
 
+                var is_bot: ?[]const u8 = null;
+                if (src.ua) |sua| {
+                    if (sua.resolved == .bot) is_bot = " bot";
+                    if (@TypeOf(sua.bot_validation) != ?void) {
+                        const bv: UserAgent.BotDetection = sua.bot_validation orelse .init(f.request);
+                        if (bv.malicious or bv.bot and sua.resolved != .bot) is_bot = " bot-malicious";
+                    }
+                }
+
                 data[i] = .{
                     .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
                     .number = src.number,
@@ -183,7 +192,7 @@ pub const Endpoint = struct {
                         .name = "[No User Agent Provided]",
                         .version = 0,
                     },
-                    .is_bot = if (src.ua) |sua| if (sua.resolved == .bot) " bot" else null else null,
+                    .is_bot = is_bot,
                     .us = src.us,
                 };
             }
