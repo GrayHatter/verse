@@ -260,8 +260,11 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
 }
 
 /// Helper function to return a default error page for a given http status code.
-pub fn sendDefaultErrorPage(vrs: *Frame, comptime code: std.http.Status) !void {
-    return Router.defaultResponse(code)(vrs);
+pub fn sendDefaultErrorPage(vrs: *Frame, comptime code: std.http.Status) void {
+    return Router.defaultResponse(code)(vrs) catch |err| {
+        log.err("Unable to generate default error page! {}", .{err});
+        @panic("internal verse error");
+    };
 }
 
 const ONESHOT_SIZE = 14720;
