@@ -13,9 +13,9 @@ pub fn build(b: *std.Build) !void {
     const bot_detection = b.option(bool, "bot-detection", "path for the templates generated at comptime") orelse
         false;
 
-    const ver = version(b);
     const options = b.addOptions();
 
+    const ver = version(b);
     options.addOption([]const u8, "version", ver);
     options.addOption(bool, "botdetection", bot_detection);
 
