@@ -98,9 +98,11 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     if (srvr.stats) |*stats| {
         stats.log(.{
             .addr = req.remote_addr,
+            .page_size = 0,
+            .rss = arena.queryCapacity(),
+            .ua = req.user_agent,
             .uri = req.uri,
             .us = lap / 1000,
-            .ua = req.user_agent,
         });
     }
 }

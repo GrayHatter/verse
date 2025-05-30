@@ -46,13 +46,14 @@ pub const Stats = struct {
     };
 
     pub const Line = struct {
-        number: usize,
-        time: u64,
         addr: Addr,
-        size: usize,
+        number: usize,
+        page_size: usize,
+        rss: usize,
+        time: u64,
+        ua: ?UserAgent,
         uri: Uri,
         us: usize,
-        ua: ?UserAgent,
 
         pub const Size = 2048;
         // These are different because I haven't finalized the expected type
@@ -62,19 +63,22 @@ pub const Stats = struct {
         pub const empty: Line = .{
             .addr = .{},
             .number = 0,
-            .size = 0,
+            .page_size = 0,
+            .rss = 0,
             .time = 0,
-            .uri = .{},
             .ua = null,
+            .uri = .{},
             .us = 0,
         };
     };
 
     pub const Data = struct {
         addr: []const u8,
+        page_size: usize,
+        rss: usize,
+        ua: ?UserAgent,
         uri: []const u8,
         us: u64,
-        ua: ?UserAgent,
     };
 
     pub fn init(threaded: bool) Stats {
@@ -94,10 +98,11 @@ pub const Stats = struct {
         stats.rows[stats.count % stats.rows.len] = .{
             .addr = Line.Addr.fromSlice(data.addr[0..@min(data.addr.len, Line.Size)]) catch unreachable,
             .number = stats.count,
-            .size = 0,
+            .page_size = data.page_size,
+            .rss = data.rss,
             .time = @intCast(std.time.timestamp()),
-            .uri = Line.Uri.fromSlice(data.uri[0..@min(data.uri.len, Line.Size)]) catch unreachable,
             .ua = data.ua,
+            .uri = Line.Uri.fromSlice(data.uri[0..@min(data.uri.len, Line.Size)]) catch unreachable,
             .us = data.us,
         };
         stats.count += 1;
@@ -138,11 +143,12 @@ pub const Endpoint = struct {
             .{
                 .ip_address = "",
                 .number = 0,
-                .size = 0,
+                .page_size = 0,
+                .rss = 0,
                 .time = 0,
                 .uri = "null",
-                .verse_user_agent = null,
                 .us = 0,
+                .verse_user_agent = null,
             },
         );
         var count: usize = 0;
@@ -185,7 +191,8 @@ pub const Endpoint = struct {
                 data[i] = .{
                     .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
                     .number = src.number,
-                    .size = src.size,
+                    .rss = src.rss,
+                    .page_size = src.page_size,
                     .time = src.time,
                     .uri = src.uri.slice(),
                     .verse_user_agent = ua orelse .{
