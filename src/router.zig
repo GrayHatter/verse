@@ -344,8 +344,9 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
             },
             // This is an implementation error by the page. So we crash. If
             // you've reached this, something is wrong with your site.
-            error.NotImplemented => @panic("Not Implemented Error"),
-            error.Unknown => @panic("Unreachable Error"),
+            error.NotImplemented => @panic("Verse Default Router Error: NotImplemented (unreachable)"),
+            error.Unknown => @panic("Verse Default Router Error: Unknown (unreachable)"),
+            error.ServerFault => @panic("Verse Default Router Error: ServerFault (unreachable)"),
             error.InvalidURI => log.err("Unexpected error '{}'\n", .{err}),
             error.Abusive,
             error.Unauthenticated,

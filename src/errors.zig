@@ -5,6 +5,7 @@ pub const ServerError = error{
     NoSpaceLeft,
     NotImplemented,
     Unknown,
+    ServerFault,
 };
 
 /// Errors resulting from data from the client preventing verse, or an endpoint
