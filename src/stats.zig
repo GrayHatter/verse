@@ -47,6 +47,7 @@ pub const Stats = struct {
 
     pub const Line = struct {
         addr: Addr,
+        code: std.http.Status,
         number: usize,
         page_size: usize,
         rss: usize,
@@ -62,6 +63,7 @@ pub const Stats = struct {
         const Addr = std.BoundedArray(u8, Size);
         pub const empty: Line = .{
             .addr = .{},
+            .code = .internal_server_error,
             .number = 0,
             .page_size = 0,
             .rss = 0,
@@ -74,6 +76,7 @@ pub const Stats = struct {
 
     pub const Data = struct {
         addr: []const u8,
+        code: std.http.Status,
         page_size: usize,
         rss: usize,
         ua: ?UserAgent,
@@ -96,6 +99,7 @@ pub const Stats = struct {
         defer if (stats.mutex) |*mx| mx.unlock();
 
         stats.rows[stats.count % stats.rows.len] = .{
+            .code = data.code,
             .addr = Line.Addr.fromSlice(data.addr[0..@min(data.addr.len, Line.Size)]) catch unreachable,
             .number = stats.count,
             .page_size = data.page_size,
@@ -125,6 +129,16 @@ pub const Endpoint = struct {
 
     pub const stats = index;
 
+    fn codeSlice(code: std.http.Status) []const u8 {
+        return switch (code) {
+            inline .ok,
+            .not_found,
+            .internal_server_error,
+            => |c| std.fmt.comptimePrint("{}: {s}", .{ @as(usize, @intFromEnum(c)), @tagName(c) }),
+            else => "status code not implemented",
+        };
+    }
+
     pub fn index(f: *Frame) Router.Error!void {
         var include_ip: bool = false;
         switch (options.auth_mode) {
@@ -141,6 +155,7 @@ pub const Endpoint = struct {
 
         var data: [60]S.VerseStatsList = @splat(
             .{
+                .code = "",
                 .ip_address = "",
                 .number = 0,
                 .page_size = 0,
@@ -189,6 +204,7 @@ pub const Endpoint = struct {
                 }
 
                 data[i] = .{
+                    .code = codeSlice(src.code),
                     .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
                     .number = src.number,
                     .rss = src.rss,

@@ -122,6 +122,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
         if (srvr.stats) |*stats| {
             stats.log(.{
                 .addr = request.remote_addr,
+                .code = frame.status orelse .internal_server_error,
                 .page_size = 0,
                 .rss = arena.queryCapacity(),
                 .ua = request.user_agent,

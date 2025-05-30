@@ -98,6 +98,7 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     if (srvr.stats) |*stats| {
         stats.log(.{
             .addr = req.remote_addr,
+            .code = frame.status orelse .internal_server_error,
             .page_size = 0,
             .rss = arena.queryCapacity(),
             .ua = req.user_agent,
