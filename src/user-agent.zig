@@ -37,8 +37,8 @@ pub const Resolved = union(enum) {
     pub fn init(str: []const u8) Resolved {
         if (startsWith(u8, str, "Mozilla/")) {
             return .mozilla(str);
-        } else if (startsWith(u8, str, "curl/")) {
-            return .{ .script = .curl };
+        } else if (asScript(str)) |scrpt| {
+            return scrpt;
         }
         return .{ .unknown = .{} };
     }
@@ -56,6 +56,20 @@ pub const Resolved = union(enum) {
             }
         }
         return asBrowser(str);
+    }
+
+    fn asScript(str: []const u8) ?Resolved {
+        if (startsWith(u8, str, "curl/")) {
+            return .{ .script = .{
+                .name = .curl,
+                .version = parseVersion(str, "curl/") catch return null,
+            } };
+        } else if (startsWith(u8, str, "git/")) {
+            return .{ .script = .{
+                .name = .git,
+                .version = parseVersion(str, "git/") catch return null,
+            } };
+        } else return null;
     }
 
     fn asBot(str: []const u8) Resolved {
@@ -187,6 +201,15 @@ test Resolved {
         } },
         Resolved.init(msie),
     );
+
+    const git = "git/2.49.0";
+    try std.testing.expectEqualDeep(
+        Resolved{ .script = .{
+            .name = .git,
+            .version = 2,
+        } },
+        Resolved.init(git),
+    );
 }
 
 pub const Bot = struct {
@@ -238,8 +261,14 @@ pub const Browser = struct {
     }
 };
 
-pub const Script = enum {
-    curl,
+pub const Script = struct {
+    name: Name,
+    version: u32,
+
+    pub const Name = enum {
+        curl,
+        git,
+    };
 };
 
 pub const Other = struct {};

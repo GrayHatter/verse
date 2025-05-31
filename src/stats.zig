@@ -188,7 +188,7 @@ pub const Endpoint = struct {
                             .name = @tagName(b.name),
                             .version = b.version,
                         },
-                        .script => |s| .{ .name = @tagName(s), .version = null },
+                        .script => |s| .{ .name = @tagName(s.name), .version = s.version },
                         .unknown => .{ .name = "[unknown]", .version = null },
                     }
                 else
