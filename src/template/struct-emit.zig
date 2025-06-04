@@ -252,14 +252,30 @@ fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
                             .variable => unreachable,
                             .foreach => {
                                 var buffer: [0xFF]u8 = undefined;
-                                if (drct.otherwise == .exact) {
-                                    const kind = try bufPrint(&buffer, ": [{}]{s},\n", .{ drct.otherwise.exact, s_name });
-                                    try root.append(f_name, kind);
-                                    try emitSourceVars(a, drct.tag_block_body.?, this);
-                                } else {
-                                    const kind = try bufPrint(&buffer, ": []const {s},\n", .{s_name});
-                                    try root.append(f_name, kind);
-                                    try emitSourceVars(a, drct.tag_block_body.?, this);
+                                switch (drct.otherwise) {
+                                    .exact => |exact| {
+                                        const kind = try bufPrint(
+                                            &buffer,
+                                            ": [{}]{s},\n",
+                                            .{ exact, s_name },
+                                        );
+                                        try root.append(f_name, kind);
+                                        try emitSourceVars(a, drct.tag_block_body.?, this);
+                                    },
+                                    .template => |template| {
+                                        const kind = try bufPrint(
+                                            &buffer,
+                                            ": []const {s},\n",
+                                            .{s_name},
+                                        );
+                                        try root.append(f_name, kind);
+                                        try emitSourceVars(a, template.blob, this);
+                                    },
+                                    else => {
+                                        const kind = try bufPrint(&buffer, ": []const {s},\n", .{s_name});
+                                        try root.append(f_name, kind);
+                                        try emitSourceVars(a, drct.tag_block_body.?, this);
+                                    },
                                 }
                             },
                             .split => {
