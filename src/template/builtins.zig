@@ -1,5 +1,6 @@
 const Template = @import("Template.zig");
 const compiled = @import("comptime_templates");
+const zig_builtin = @import("builtin");
 
 pub const builtin: []const Template = constructTemplates();
 
@@ -9,6 +10,15 @@ pub fn findTemplate(comptime name: []const u8) Template {
             return bi;
         }
     } else {
+        if (comptime zig_builtin.is_test) {
+            const test_builtins = @import("builtins_tests.zig");
+            inline for (test_builtins.extras) |bi| {
+                if (comptime eql(u8, bi.name, name)) {
+                    return bi;
+                }
+            }
+        }
+
         comptime {
             var errstr: [:0]const u8 = "Template " ++ name ++ " not found!";
             for (builtin) |bi| {

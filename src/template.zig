@@ -845,8 +845,6 @@ test "For exact" {
     };
 
     const PgType = comptimeStruct(blob);
-    //@compileLog(@typeInfo(PgType));
-    //@compileLog(@typeInfo(PgType).@"struct".fields);
 
     const ctx = PgType{
         .loop = .{
@@ -860,6 +858,55 @@ test "For exact" {
 
     const p = try allocPrint(a, "{}", .{pg});
     defer a.free(p);
+    try std.testing.expectEqualStrings(expected, p);
+}
+
+test "For use=" {
+    var a = std.testing.allocator;
+    const FE = struct {
+        const This = struct {
+            name: []const u8,
+        };
+        loop: []const This,
+    };
+
+    const t = Template{
+        .name = "test",
+        .blob =
+        \\<div>
+        \\<For Loop use="_For_Use_template.html"></For>
+        \\</div>
+        ,
+    };
+
+    const slice = FE{
+        .loop = &[4]FE.This{
+            .{ .name = "Alice" },
+            .{ .name = "Bob" },
+            .{ .name = "Charlie" },
+            .{ .name = "Eve" },
+        },
+    };
+
+    const page = Page(t, FE);
+    const pg = page.init(slice);
+    const p = try allocPrint(a, "{}", .{pg});
+    defer a.free(p);
+
+    const expected: []const u8 =
+        \\<div>
+        \\Alice
+        \\
+        \\Bob
+        \\
+        \\Charlie
+        \\
+        \\Eve
+        \\
+        \\
+        \\</div>
+    ;
+
     try std.testing.expectEqualStrings(expected, p);
 }
 

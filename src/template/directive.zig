@@ -155,12 +155,15 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
     const name = noun[1..name_end];
 
     var exact: ?usize = null;
+    var use: ?[]const u8 = null;
 
     var rem_attr: []const u8 = noun[1 + name.len ..];
     while (indexOfScalar(u8, rem_attr, '=') != null) {
         if (findAttribute(rem_attr)) |attr| {
             if (eql(u8, attr.name, "exact")) {
                 exact = std.fmt.parseInt(usize, attr.value, 10) catch null;
+            } else if (eql(u8, attr.name, "use")) {
+                use = attr.value;
             } else {
                 std.debug.print("attr {s}\n", .{attr.name});
                 unreachable;
@@ -178,7 +181,14 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
     return .{
         .verb = word,
         .noun = name,
-        .otherwise = if (exact) |e| .{ .exact = e } else .required,
+        .otherwise = if (exact != null and use != null)
+            @panic("use & exact not implemented")
+        else if (exact) |e|
+            .{ .exact = e }
+        else if (use) |u|
+            .{ .template = getBuiltin(u) orelse @panic("built in missing") }
+        else
+            .required,
         .tag_block = blob[0..end.?],
         .tag_block_body = tag_block_body,
         .tag_block_skip = body_start,

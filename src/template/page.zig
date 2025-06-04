@@ -163,7 +163,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                 },
                 else => switch (@typeInfo(T)) {
                     .pointer => |ptr| {
-                        std.debug.assert(ptr.size == .slice);
+                        comptime std.debug.assert(ptr.size == .slice);
                         for (data) |each| try formatDirective(ptr.child, each, ofs, html, out);
                     },
                     .optional => |opt| {
@@ -174,7 +174,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         for (data) |each| try formatDirective(array.child, each, ofs, html, out);
                     },
                     else => {
-                        std.debug.print("unexpected type {s}\n", .{@typeName(T)});
+                        @compileLog("unexpected type {s}\n", .{@typeName(T)});
                         comptime unreachable;
                     },
                 },

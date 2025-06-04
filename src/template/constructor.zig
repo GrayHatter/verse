@@ -240,19 +240,21 @@ fn validateDirective(
         },
         .foreach, .with => {
             const FieldT = fieldType(BlockType, drct.noun);
-            const os = Offset{
-                .start = index,
-                .end = index + end,
-                .kind = .{
-                    .directive = .{
-                        .kind = FieldT,
-                        .data_offset = data_offset,
-                        .d = drct,
+            if (drct.otherwise == .template) {
+                const BaseT = baseType(BlockType, drct.noun);
+                const loop = validateBlock(drct.otherwise.template.blob, BaseT, 0);
+                return &[_]Offset{.{
+                    .start = index,
+                    .end = index + end,
+                    .kind = .{
+                        .component = .{
+                            .kind = FieldT,
+                            .data_offset = data_offset,
+                            .len = loop.len,
+                        },
                     },
-                },
-            };
-            // left in for testing
-            if (drct.tag_block_body) |body| {
+                }} ++ loop;
+            } else if (drct.tag_block_body) |body| {
                 // The code as written descends into the type.
                 // if the call stack flattens out, it might be
                 // better to calculate the offset from root.
@@ -270,7 +272,17 @@ fn validateDirective(
                     },
                 }} ++ loop;
             } else {
-                return &[_]Offset{os};
+                return &[_]Offset{.{
+                    .start = index,
+                    .end = index + end,
+                    .kind = .{
+                        .directive = .{
+                            .kind = FieldT,
+                            .data_offset = data_offset,
+                            .d = drct,
+                        },
+                    },
+                }};
             }
         },
         .build => {
