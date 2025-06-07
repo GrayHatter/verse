@@ -205,7 +205,6 @@ pub const Rules = struct {
         if (ua.resolved != .browser) return;
         if (ua.resolved.browser.name == .unknown) return;
         const delta: i64 = ua.resolved.browser.age() catch {
-            std.debug.print("Unable to resolve age for {}\n", .{ua});
             return;
         };
         const YEAR: i64 = 86400 * 365;
