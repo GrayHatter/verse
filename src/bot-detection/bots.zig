@@ -40,9 +40,20 @@ pub const Identity = struct {
 };
 
 pub const Bots = enum {
+    claudbot,
     googlebot,
+
     malicious,
     unknown,
+
+    pub fn resolve(str: []const u8) ?Bots {
+        if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
+            return .googlebot;
+        } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
+            return .claudbot;
+        }
+        return null;
+    }
 
     pub const fields = @typeInfo(Bots).@"enum".fields;
     pub const len = fields.len;
@@ -50,6 +61,7 @@ pub const Bots = enum {
 
 pub const bots: std.EnumArray(Bots, Identity) = .{
     .values = [Bots.len]Identity{
+        .{ .bot = .claudbot, .network = null },
         .{
             .bot = .googlebot,
             .network = Network{
@@ -65,7 +77,15 @@ pub const bots: std.EnumArray(Bots, Identity) = .{
     },
 };
 
+test "bot ident order" {
+    inline for (Bots.fields) |bot| {
+        const bot_: Bots = @enumFromInt(bot.value);
+        try std.testing.expectEqual(bot_, bots.get(bot_).bot);
+    }
+}
+
 const UA = @import("../user-agent.zig");
 const Request = @import("../request.zig");
 const std = @import("std");
 const startsWith = std.mem.startsWith;
+const endsWith = std.mem.endsWith;

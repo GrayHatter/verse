@@ -73,9 +73,10 @@ pub const Resolved = union(enum) {
     }
 
     fn asBot(str: []const u8) Resolved {
-        if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
-            return .{ .bot = .{ .name = .googlebot } };
+        if (Bot.Bots.resolve(str)) |bot| {
+            return .{ .bot = .{ .name = bot } };
         }
+
         return .{ .bot = .{ .name = .unknown } };
     }
 
