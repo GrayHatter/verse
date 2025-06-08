@@ -164,6 +164,7 @@ pub const Endpoint = struct {
                 .uri = "null",
                 .us = 0,
                 .verse_user_agent = null,
+                .status_class = "",
             },
         );
         var count: usize = 0;
@@ -196,12 +197,25 @@ pub const Endpoint = struct {
 
                 var is_bot: ?[]const u8 = null;
                 if (src.ua) |sua| {
-                    if (sua.resolved == .bot) is_bot = " bot";
+                    if (sua.resolved == .bot) is_bot = " verse-bot";
                     if (@TypeOf(sua.bot_validation) != ?void) {
                         const bv: UserAgent.BotDetection = sua.bot_validation orelse .init(f.request);
-                        if (bv.malicious or bv.bot and sua.resolved != .bot) is_bot = " bot-malicious";
+                        if (bv.malicious or bv.bot and sua.resolved != .bot) is_bot = " verse-bot-malicious";
                     }
                 }
+
+                const status_class = switch (src.code) {
+                    .ok => " verse-stats-200",
+                    .moved_permanently => " verse-stats-301",
+                    .found => " verse-stats-302",
+                    .see_other => " verse-stats-303",
+                    .bad_request => " verse-stats-400",
+                    .unauthorized => " verse-stats-401",
+                    .forbidden => " verse-stats-403",
+                    .not_found => " verse-stats-404",
+                    .internal_server_error => " verse-stats-500",
+                    else => "",
+                };
 
                 data[i] = .{
                     .code = codeSlice(src.code),
@@ -216,6 +230,7 @@ pub const Endpoint = struct {
                         .version = 0,
                     },
                     .is_bot = is_bot,
+                    .status_class = status_class,
                     .us = src.us,
                 };
             }
