@@ -44,17 +44,8 @@ pub const Resolved = union(enum) {
     }
 
     fn mozilla(str: []const u8) Resolved {
-        const idx: ?usize = indexOf(u8, str, "bot") orelse indexOf(u8, str, "Bot");
-
-        if (idx) |i| {
-            if (str.len == i + 3 or (str.len > i + 4 and (str[i + 3] == '/' or
-                str[i + 3] == '.' or
-                str[i + 3] == ';' or
-                str[i + 3] == ')')))
-            {
-                return asBot(str);
-            }
-        }
+        const idx: ?usize = indexOf(u8, str, "Bot/") orelse indexOf(u8, str, "bot/");
+        if (idx != null) return asBot(str);
         return asBrowser(str);
     }
 

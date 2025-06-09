@@ -40,7 +40,7 @@ pub const Identity = struct {
 };
 
 pub const Bots = enum {
-    claudbot,
+    claudebot,
     googlebot,
 
     malicious,
@@ -50,7 +50,7 @@ pub const Bots = enum {
         if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
             return .googlebot;
         } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
-            return .claudbot;
+            return .claudebot;
         }
         return null;
     }
@@ -61,7 +61,7 @@ pub const Bots = enum {
 
 pub const bots: std.EnumArray(Bots, Identity) = .{
     .values = [Bots.len]Identity{
-        .{ .bot = .claudbot, .network = null },
+        .{ .bot = .claudebot, .network = null },
         .{
             .bot = .googlebot,
             .network = Network{
