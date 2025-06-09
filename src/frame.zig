@@ -333,15 +333,21 @@ fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
     };
 }
 
-pub fn dumpDebugData(frame: *const Frame) void {
+pub const DumpDebugOptions = struct {
+    print_empty: bool = false,
+    print_post_data: bool = true,
+};
+
+pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     switch (frame.request.downstream) {
         .zwsgi => |zw| {
             var itr = zw.known.iterator();
             while (itr.next()) |entry| {
-                std.debug.print(
-                    "DumpDebug '{s}' => '{s}'\n",
-                    .{ @tagName(entry.key), entry.value.* orelse "[empty]" },
-                );
+                if (entry.value.*) |value| {
+                    std.debug.print("DumpDebug '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
+                } else if (comptime opt.print_empty) {
+                    std.debug.print("DumpDebug '{s}' => '[empty]\n", .{@tagName(entry.key)});
+                }
             }
             for (zw.vars.items) |varr| {
                 std.debug.print("DumpDebug '{s}' => '{s}'\n", .{ varr.key, varr.val });
@@ -355,8 +361,10 @@ pub fn dumpDebugData(frame: *const Frame) void {
         },
         .buffer => |_| @panic("not implemented"),
     }
-    if (frame.request.data.post) |post_data| {
-        std.debug.print("post data => '''{s}'''\n", .{post_data.rawpost});
+    if (comptime opt.print_post_data) {
+        if (frame.request.data.post) |post_data| {
+            std.debug.print("post data => '''{s}'''\n", .{post_data.rawpost});
+        }
     }
 }
 
