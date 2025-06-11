@@ -40,6 +40,7 @@ pub const Identity = struct {
 };
 
 pub const Bots = enum {
+    bingbot,
     claudebot,
     googlebot,
 
@@ -51,6 +52,8 @@ pub const Bots = enum {
             return .googlebot;
         } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
             return .claudebot;
+        } else if (indexOf(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
+            return .bingbot;
         }
         return null;
     }
@@ -61,6 +64,7 @@ pub const Bots = enum {
 
 pub const bots: std.EnumArray(Bots, Identity) = .{
     .values = [Bots.len]Identity{
+        .{ .bot = .bingbot, .network = null },
         .{ .bot = .claudebot, .network = null },
         .{
             .bot = .googlebot,
@@ -89,3 +93,4 @@ const Request = @import("../request.zig");
 const std = @import("std");
 const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
+const indexOf = std.mem.indexOf;
