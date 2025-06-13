@@ -344,26 +344,26 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
             var itr = zw.known.iterator();
             while (itr.next()) |entry| {
                 if (entry.value.*) |value| {
-                    std.debug.print("DumpDebug '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
+                    std.debug.print("\tDumpDebug '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
                 } else if (comptime opt.print_empty) {
-                    std.debug.print("DumpDebug '{s}' => '[empty]\n", .{@tagName(entry.key)});
+                    std.debug.print("\tDumpDebug '{s}' => '[empty]\n", .{@tagName(entry.key)});
                 }
             }
             for (zw.vars.items) |varr| {
-                std.debug.print("DumpDebug '{s}' => '{s}'\n", .{ varr.key, varr.val });
+                std.debug.print("\tDumpDebug '{s}' => '{s}'\n", .{ varr.key, varr.val });
             }
         },
         .http => |http| {
             var itr_headers = http.iterateHeaders();
             while (itr_headers.next()) |header| {
-                std.debug.print("DumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
+                std.debug.print("\tDumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
             }
         },
         .buffer => |_| @panic("not implemented"),
     }
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
-            std.debug.print("post data => '''{s}'''\n", .{post_data.rawpost});
+            std.debug.print("\tpost data => '''{s}'''\n", .{post_data.rawpost});
         }
     }
 }
