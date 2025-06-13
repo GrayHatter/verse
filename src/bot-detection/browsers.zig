@@ -32,7 +32,7 @@ pub const Chrome = struct {
     pub const Version = enum(u16) {
         _,
 
-        pub const revision_date: i64 = 1747410400;
+        pub const revision_date: i64 = 1749531600;
         pub const Dates = compileDates(&VerDates);
         pub const VerDates = [_]VerDate{
             .{ 0, 1227513600 },   .{ 1, 1228982400 },   .{ 2, 1243148400 },   .{ 3, 1255330800 },
@@ -70,7 +70,7 @@ pub const Chrome = struct {
             .{ 124, 1712732400 }, .{ 125, 1715151600 }, .{ 126, 1717570800 }, .{ 127, 1721199600 },
             .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
             .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 }, .{ 135, 1743465600 },
-            .{ 136, 1745884800 },
+            .{ 136, 1745884800 }, .{ 137, 1749531600 },
         };
     };
 };
@@ -90,6 +90,7 @@ pub const Firefox = struct {
     pub const Version = enum(u16) {
         _,
 
+        pub const revision_date: i64 = 1748322000;
         pub const Dates = compileDates(&VerDates);
         pub const VerDates = [_]VerDate{
             .{ 0, 1099980000 },   .{ 1, 1099987200 },   .{ 2, 1161673200 },   .{ 3, 1213686000 },
@@ -126,7 +127,7 @@ pub const Firefox = struct {
             .{ 124, 1710831600 }, .{ 125, 1713250800 }, .{ 126, 1715670000 }, .{ 127, 1718089200 },
             .{ 128, 1720508400 }, .{ 129, 1722927600 }, .{ 130, 1725346800 }, .{ 131, 1727766000 },
             .{ 132, 1730185200 }, .{ 133, 1732608000 }, .{ 134, 1736236800 }, .{ 135, 1738656000 },
-            .{ 136, 1741075200 }, .{ 137, 1743490800 },
+            .{ 136, 1741075200 }, .{ 137, 1743490800 }, .{ 138, 1745902800 }, .{ 139, 1748322000 },
         };
     };
 };
@@ -237,7 +238,7 @@ pub const Rules = struct {
         } }, undefined, &score);
         std.testing.expectEqual(0.0, score) catch |err| {
             if (Chrome.Version.revision_date < std.time.timestamp() - AGE_STEP) {
-                std.log.warn("bot-detection.browsers.version is out of date\n", .{});
+                std.debug.print("bot-detection.browsers.version is out of date\n", .{});
                 return error.SkipZigTest;
             }
             return err;
