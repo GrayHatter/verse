@@ -24,6 +24,8 @@ pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
     }
 }
 
+pub const Bot = BotDetection.bots.Bot;
+
 pub const Resolved = union(enum) {
     bot: Bot,
     browser: Browser,
@@ -64,11 +66,11 @@ pub const Resolved = union(enum) {
     }
 
     fn asBot(str: []const u8) Resolved {
-        if (Bot.Bots.resolve(str)) |bot| {
-            return .{ .bot = .{ .name = bot } };
+        if (Bot.resolve(str)) |bot| {
+            return .{ .bot = bot };
         }
 
-        return .{ .bot = .{ .name = .unknown } };
+        return .{ .bot = .unknown };
     }
 
     fn parseVersion(str: []const u8, target: []const u8) error{Invalid}!u32 {
@@ -159,7 +161,7 @@ test Resolved {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36 " ++
         "(compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
     try std.testing.expectEqualDeep(
-        Resolved{ .bot = .{ .name = .googlebot } },
+        Resolved{ .bot = .{ .name = .googlebot, .version = 2 } },
         Resolved.init(google_bot),
     );
 
@@ -203,15 +205,6 @@ test Resolved {
         Resolved.init(git),
     );
 }
-
-pub const Bot = struct {
-    name: Bots = .unknown,
-
-    pub const Bots = BotDetection.bots.Bots;
-
-    pub const unknown: Bot = .{ .name = .unknown };
-    pub const malicious: Bot = .{ .name = .malicious };
-};
 
 pub const Browser = struct {
     name: Name,

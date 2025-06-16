@@ -34,36 +34,54 @@ pub const Network = struct {
     exaustive: bool = true,
 };
 
-pub const Identity = struct {
-    bot: Bots,
-    network: ?Network,
-};
+pub const Bot = struct {
+    name: Name,
+    version: u32,
 
-pub const Bots = enum {
-    bingbot,
-    claudebot,
-    googlebot,
+    pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
+    pub const malicious: Bot = .{ .name = .malicious, .version = 0 };
 
-    malicious,
-    unknown,
+    pub const Name = enum {
+        bingbot,
+        claudebot,
+        googlebot,
 
-    pub fn resolve(str: []const u8) ?Bots {
+        malicious,
+        unknown,
+
+        pub const fields = @typeInfo(Name).@"enum".fields;
+        pub const len = fields.len;
+    };
+
+    pub fn resolve(str: []const u8) ?Bot {
         if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
-            return .googlebot;
+            return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
         } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
-            return .claudebot;
+            return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
         } else if (indexOf(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
-            return .bingbot;
+            return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
         }
         return null;
     }
 
-    pub const fields = @typeInfo(Bots).@"enum".fields;
-    pub const len = fields.len;
+    fn parseVersion(str: []const u8, target: []const u8) error{Invalid}!u32 {
+        if (indexOf(u8, str, target)) |idx| {
+            const start = idx + target.len;
+            // 3 is the minimum reasonable tail for a version
+            if (str.len < start + 3) return error.Invalid;
+            const end = indexOfScalarPos(u8, str, start, '.') orelse return error.Invalid;
+            return parseInt(u32, str[start..end], 10) catch return error.Invalid;
+        } else return error.Invalid;
+    }
 };
 
-pub const bots: std.EnumArray(Bots, Identity) = .{
-    .values = [Bots.len]Identity{
+pub const Identity = struct {
+    bot: Bot.Name,
+    network: ?Network,
+};
+
+pub const bots: std.EnumArray(Bot.Name, Identity) = .{
+    .values = [Bot.Name.len]Identity{
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claudebot, .network = null },
         .{
@@ -82,8 +100,8 @@ pub const bots: std.EnumArray(Bots, Identity) = .{
 };
 
 test "bot ident order" {
-    inline for (Bots.fields) |bot| {
-        const bot_: Bots = @enumFromInt(bot.value);
+    inline for (Bot.Name.fields) |bot| {
+        const bot_: Bot.Name = @enumFromInt(bot.value);
         try std.testing.expectEqual(bot_, bots.get(bot_).bot);
     }
 }
@@ -94,3 +112,5 @@ const std = @import("std");
 const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
 const indexOf = std.mem.indexOf;
+const indexOfScalarPos = std.mem.indexOfScalarPos;
+const parseInt = std.fmt.parseInt;
