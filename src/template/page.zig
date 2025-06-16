@@ -226,31 +226,35 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         fn ioVecDirective(T: type, data: T, drct: Directive, vec: []IOVec, a: Allocator) !usize {
             std.debug.assert(drct.verb == .variable);
             switch (T) {
-                []const u8 => vec[0] = .fromSlice(data),
-                ?[]const u8 => if (data) |d| {
-                    vec[0] = .fromSlice(d);
-                } else if (drct.otherwise == .default) {
-                    vec[0] = .fromSlice(drct.otherwise.default);
-                } else {
-                    vec[0] = .empty;
-                    return 0;
+                []const u8 => {
+                    vec[0] = .fromSlice(data);
+                    return if (vec[0].len > 0) 1 else 0;
+                },
+                ?[]const u8 => {
+                    if (data) |d| {
+                        vec[0] = .fromSlice(d);
+                        return if (vec[0].len > 0) 1 else 0;
+                    } else if (drct.otherwise == .default) {
+                        vec[0] = .fromSlice(drct.otherwise.default);
+                        return if (vec[0].len > 0) 1 else 0;
+                    } else {
+                        return 0;
+                    }
                 },
                 usize, isize => {
                     const int = try allocPrint(a, "{}", .{data});
                     vec[0] = .fromSlice(int);
+                    return 1;
                 },
                 ?usize => {
                     if (data) |us| {
                         const int = try allocPrint(a, "{}", .{us});
                         vec[0] = .fromSlice(int);
-                    }
+                        return 1;
+                    } else return 1;
                 },
-                else => {
-                    std.debug.print("ignored directive {} {s}\n", .{ drct.verb, drct.noun });
-                    return 0;
-                },
+                else => comptime unreachable,
             }
-            return if (vec[0].len > 0) 1 else 0;
         }
 
         fn ioVecArray(T: type, data: T, comptime ofs: []const Offset, vec: []IOVec, a: Allocator) !usize {
