@@ -251,7 +251,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         const int = try allocPrint(a, "{}", .{us});
                         vec[0] = .fromSlice(int);
                         return 1;
-                    } else return 1;
+                    } else return 0;
                 },
                 else => comptime unreachable,
             }
