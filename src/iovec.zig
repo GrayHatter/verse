@@ -8,3 +8,7 @@ pub const IOVec = extern struct {
         return .{ .base = s.ptr, .len = s.len };
     }
 };
+
+pub const IOVArray = std.ArrayListUnmanaged(IOVec);
+
+const std = @import("std");

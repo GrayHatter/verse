@@ -64,15 +64,18 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 
     const stream = frame.request.downstream;
 
-    var vec_s: [2048]IOVec = @splat(undefined);
-    var vecs: []IOVec = vec_s[0..];
+    var vec_buffer: [2048]IOVec = @splat(undefined);
+    var varr: IOVArray = .initBuffer(&vec_buffer);
     const required = page.iovecCountAll();
-    if (required > vec_s.len) {
-        vecs = frame.alloc.alloc(IOVec, required) catch @panic("OOM");
+    if (required > varr.capacity) {
+        varr = IOVArray.initCapacity(frame.alloc, required) catch @panic("OOM");
     }
+    defer if (varr.capacity > vec_buffer.len) varr.deinit(frame.alloc);
+
     var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
     const stkalloc = stkfb.get();
-    const vec = page.ioVec(vecs, stkalloc) catch |iovec_err| {
+
+    page.ioVec(&varr, stkalloc) catch |iovec_err| {
         log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
         const w = stream.writer();
         page.format("{}", .{}, w) catch |err| switch (err) {
@@ -80,10 +83,9 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
         };
         return;
     };
-    stream.writevAll(@ptrCast(vec)) catch |err| switch (err) {
-        else => log.err("iovec write error Error {} len {}", .{ err, vec.len }),
+    stream.writevAll(@ptrCast(varr.items)) catch |err| switch (err) {
+        else => log.err("iovec write error Error {} len {}", .{ err, varr.items.len }),
     };
-    if (required > 2048) frame.alloc.free(vecs);
 }
 
 /// sendRawSlice will allow you to send data directly to the client. It will not
@@ -382,7 +384,9 @@ const allocPrint = std.fmt.allocPrint;
 const splitScalar = std.mem.splitScalar;
 const log = std.log.scoped(.Verse);
 
-const IOVec = @import("iovec.zig").IOVec;
+const iov = @import("iovec.zig");
+const IOVec = iov.IOVec;
+const IOVArray = iov.IOVArray;
 
 const Server = @import("server.zig");
 const Request = @import("request.zig");

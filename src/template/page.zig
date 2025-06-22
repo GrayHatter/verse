@@ -223,53 +223,43 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             }
         }
 
-        fn ioVecDirective(T: type, data: T, drct: Directive, vec: []IOVec, a: Allocator) !usize {
+        fn ioVecDirective(T: type, data: T, drct: Directive, varr: *IOVArray, a: Allocator) !void {
             std.debug.assert(drct.verb == .variable);
             switch (T) {
                 []const u8 => {
-                    vec[0] = .fromSlice(data);
-                    return if (vec[0].len > 0) 1 else 0;
+                    varr.appendAssumeCapacity(.fromSlice(data));
                 },
                 ?[]const u8 => {
                     if (data) |d| {
-                        vec[0] = .fromSlice(d);
-                        return if (vec[0].len > 0) 1 else 0;
+                        varr.appendAssumeCapacity(.fromSlice(d));
                     } else if (drct.otherwise == .default) {
-                        vec[0] = .fromSlice(drct.otherwise.default);
-                        return if (vec[0].len > 0) 1 else 0;
-                    } else {
-                        return 0;
+                        varr.appendAssumeCapacity(.fromSlice(drct.otherwise.default));
                     }
                 },
                 usize, isize => {
                     const int = try allocPrint(a, "{}", .{data});
-                    vec[0] = .fromSlice(int);
-                    return 1;
+                    varr.appendAssumeCapacity(.fromSlice(int));
                 },
                 ?usize => {
                     if (data) |us| {
                         const int = try allocPrint(a, "{}", .{us});
-                        vec[0] = .fromSlice(int);
-                        return 1;
-                    } else return 0;
+                        varr.appendAssumeCapacity(.fromSlice(int));
+                    }
                 },
                 else => comptime unreachable,
             }
         }
 
-        fn ioVecArray(T: type, data: T, comptime ofs: []const Offset, vec: []IOVec, a: Allocator) !usize {
-            var idx: usize = 0;
+        fn ioVecArray(T: type, data: T, comptime ofs: []const Offset, varr: *IOVArray, a: Allocator) !void {
             switch (T) {
                 []const u8, u8 => comptime unreachable,
                 []const []const u8 => {
                     for (data) |each| {
-                        vec[idx] = .fromSlice(each);
-                        idx += 1;
+                        varr.appendAssumeCapacity(.fromSlice(each));
                         // I should find a better way to write this hack
                         if (ofs.len == 2) {
                             if (ofs[1].kind == .slice and ofs[1].kind.slice.len > 0) {
-                                vec[idx] = .fromSlice(ofs[1].kind.slice);
-                                idx += 1;
+                                varr.appendAssumeCapacity(.fromSlice(ofs[1].kind.slice));
                             }
                         }
                     }
@@ -277,20 +267,20 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                 else => switch (@typeInfo(T)) {
                     .pointer => |ptr| {
                         std.debug.assert(ptr.size == .slice);
-                        for (data) |each| idx += try ioVecCore(ptr.child, each, ofs, vec[idx..], a);
+                        for (data) |each| try ioVecCore(ptr.child, each, ofs, varr, a);
                     },
                     .optional => |opt| {
                         if (opt.child == []const u8) unreachable;
                         switch (@typeInfo(opt.child)) {
                             .int => std.debug.print("skipped int\n", .{}),
                             .@"struct" => {
-                                if (data) |d| return try ioVecCore(opt.child, d, ofs, vec, a);
+                                if (data) |d| return try ioVecCore(opt.child, d, ofs, varr, a);
                             },
                             else => unreachable,
                         }
                     },
                     .array => |array| {
-                        for (data) |each| idx += try ioVecCore(array.child, each, ofs, vec[idx..], a);
+                        for (data) |each| try ioVecCore(array.child, each, ofs, varr, a);
                     },
                     else => {
                         std.debug.print("unexpected type {s}\n", .{@typeName(T)});
@@ -298,29 +288,26 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     },
                 },
             }
-            return idx;
         }
 
-        pub fn ioVecCore(T: type, data: T, ofs: []const Offset, vec: []IOVec, a: Allocator) !usize {
+        pub fn ioVecCore(T: type, data: T, ofs: []const Offset, varr: *IOVArray, a: Allocator) !void {
             var skip: usize = 0;
-            var vec_idx: usize = 0;
             inline for (ofs, 1..) |os, os_idx| {
                 if (skip > 0) {
                     skip -|= 1;
                 } else switch (os.kind) {
                     .slice => |slice| {
-                        vec[vec_idx] = .fromSlice(slice);
-                        vec_idx += 1;
+                        varr.appendAssumeCapacity(.fromSlice(slice));
                     },
                     .component => |comp| {
                         const child_data = os.getData(comp.kind, @ptrCast(&data));
-                        vec_idx += try ioVecArray(comp.kind, child_data.*, ofs[os_idx..][0..comp.len], vec[vec_idx..], a);
+                        try ioVecArray(comp.kind, child_data.*, ofs[os_idx..][0..comp.len], varr, a);
                         skip = comp.len;
                     },
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {
                             const child_data = os.getData(directive.kind, @ptrCast(&data));
-                            vec_idx += try ioVecDirective(directive.kind, child_data.*, directive.d, vec[vec_idx..], a);
+                            try ioVecDirective(directive.kind, child_data.*, directive.d, varr, a);
                         },
                         else => {
                             std.debug.print("directive skipped {} {}\n", .{ directive.d.verb, ofs.len });
@@ -328,20 +315,19 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     },
                     .template => |tmpl| {
                         const child_data = os.getData(tmpl.kind, @ptrCast(&data));
-                        vec_idx += try ioVecCore(tmpl.kind, child_data.*, ofs[os_idx..][0..tmpl.len], vec[vec_idx..], a);
+                        try ioVecCore(tmpl.kind, child_data.*, ofs[os_idx..][0..tmpl.len], varr, a);
                         skip = tmpl.len;
                     },
                 }
             }
-            return vec_idx;
         }
 
         /// Caller must
         /// 0. provide a vec that is large enough for the entire page.
         /// 1. provide an allocator that's able to track allocations outside of
         ///    this function (e.g. an ArenaAllocator) This unintentionally leaks by design.
-        pub fn ioVec(self: Self, vec: []IOVec, a: Allocator) ![]IOVec {
-            return vec[0..try ioVecCore(PageDataType, self.data, Self.DataOffsets[0..], vec[0..], a)];
+        pub fn ioVec(self: Self, vec: *IOVArray, a: Allocator) !void {
+            return try ioVecCore(PageDataType, self.data, Self.DataOffsets[0..], vec, a);
         }
 
         pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
@@ -363,6 +349,7 @@ test Page {
     const PUT = Templates.PageData("templates/example.html");
 
     var vecbuf = [_]IOVec{undefined} ** 128;
+    var varr: IOVArray = .initBuffer(&vecbuf);
 
     const page = PUT.init(.{
         .simple_variable = " ",
@@ -381,11 +368,11 @@ test Page {
         .empty_vars = .{},
     });
 
-    const vec = try page.ioVec(vecbuf[0..], a);
+    try page.ioVec(&varr, a);
 
-    try std.testing.expect(vec.len < page.iovecCountAll());
+    try std.testing.expect(varr.items.len < page.iovecCountAll());
     // The following two numbers weren't validated in anyway.
-    try std.testing.expectEqual(49, vec.len);
+    try std.testing.expectEqual(49, varr.items.len);
     try std.testing.expectEqual(56, page.iovecCountAll());
 }
 
@@ -407,7 +394,9 @@ const is_test = @import("builtin").is_test;
 const log = std.log.scoped(.Verse);
 const Allocator = std.mem.Allocator;
 
-pub const IOVec = @import("../iovec.zig").IOVec;
+const iov = @import("../iovec.zig");
+const IOVec = iov.IOVec;
+const IOVArray = iov.IOVArray;
 
 const indexOfScalar = std.mem.indexOfScalar;
 const indexOfPosLinear = std.mem.indexOfPosLinear;
