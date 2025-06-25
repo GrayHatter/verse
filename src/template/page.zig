@@ -231,9 +231,10 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                 },
                 ?[]const u8 => {
                     if (data) |d| {
-                        varr.appendAssumeCapacity(.fromSlice(d));
+                        if (d.len > 0) varr.appendAssumeCapacity(.fromSlice(d));
                     } else if (drct.otherwise == .default) {
-                        varr.appendAssumeCapacity(.fromSlice(drct.otherwise.default));
+                        if (drct.otherwise.default.len > 0)
+                            varr.appendAssumeCapacity(.fromSlice(drct.otherwise.default));
                     }
                 },
                 usize, isize => {
