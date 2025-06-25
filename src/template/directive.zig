@@ -431,12 +431,6 @@ fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
     return null;
 }
 
-pub fn format(d: Directive, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
-    _ = d;
-    _ = out;
-    unreachable;
-}
-
 pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
     switch (d.verb) {
         .variable => {
