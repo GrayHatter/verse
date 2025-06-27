@@ -245,7 +245,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     }
     // TODO replace this hack with better header support
     for ([_]zWSGIParam{ .MTLS_ENABLED, .MTLS_FINGERPRINT }) |key| {
-        try headers.addCustom(a, @tagName(key), zwsgi.known.get(key).?);
+        try headers.addCustom(a, @tagName(key), zwsgi.known.get(key) orelse continue);
     }
 
     return initCommon(
