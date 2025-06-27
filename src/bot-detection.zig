@@ -131,8 +131,9 @@ pub fn robotsTxt(
         const robots_txt: []const u8 = brk: {
             var compiled: []const u8 = "User-agent: *\n" ++
                 (if (options.delay > 0) delay else "") ++
-                (if (options.default_allow) "Allow: /\n\n" else "Disallow: /\n\n") ++
-                (if (options.extra_rules) |er| er else "");
+                (if (options.default_allow) "Allow: /\n" else "Disallow: /\n") ++
+                (if (options.extra_rules) |er| er else "") ++
+                "\n";
             for (robots) |each| {
                 compiled = compiled ++
                     "User-agent: " ++ each.name ++ "\n" ++
