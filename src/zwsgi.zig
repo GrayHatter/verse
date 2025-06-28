@@ -69,6 +69,7 @@ pub fn serve(z: *zWSGI) !void {
     if (z.threads) |thread_count| {
         try thr_pool.init(.{ .allocator = z.alloc, .n_jobs = thread_count });
     }
+    defer thr_pool.deinit();
 
     while (running) {
         var pollfds = [1]std.os.linux.pollfd{
