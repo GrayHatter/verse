@@ -397,7 +397,7 @@ fn fallbackRouter(frame: *Frame, routefn: RouteFn) BuildFn {
     return routefn(frame) catch |err| switch (err) {
         error.MethodNotAllowed => methodNotAllowed,
         error.NotFound => notFound,
-        error.Unrouteable => internalServerError,
+        error.Unrouteable => notFound,
     };
 }
 
