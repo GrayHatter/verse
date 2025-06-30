@@ -15,10 +15,13 @@ uri: Router.UriIterator,
 
 // TODO fix this unstable API
 auth_provider: Auth.Provider,
+
 /// user is set to exactly what is provided directly by the active
 /// Auth.Provider. It's possible for an Auth.Provider to return a User that is
 /// invalid. Depending on the need for any given use, users should always verify
 /// the validity in addition to the existence of this user field.
+/// e.g. it's possible to identify a banned, or other user that should have less
+/// than public access.
 user: ?Auth.User = null,
 
 /// The ResponseData API is currently unstable, and may change in the future.
