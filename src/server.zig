@@ -29,6 +29,7 @@ pub const Options = struct {
     auth: Auth.Provider = .invalid,
     threads: ?u16 = null,
     stats: ?stats_.Options = null,
+    logging: Logging = .stdout,
 };
 
 pub fn init(a: Allocator, router: Router, opts: Options) !Server {
@@ -66,4 +67,5 @@ const Allocator = std.mem.Allocator;
 const Auth = @import("auth.zig");
 const Router = @import("router.zig");
 const stats_ = @import("stats.zig");
+const Logging = @import("Logging.zig");
 const Stats = stats_.Stats;
