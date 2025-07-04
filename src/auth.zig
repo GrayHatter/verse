@@ -17,9 +17,21 @@ pub const Error = error{
     UnknownUser,
 };
 
-const TestingAuth = struct {
+pub const TestingAuth = struct {
+    _provider: Provider = undefined,
+
     pub fn init() TestingAuth {
         return .{};
+    }
+
+    pub fn getValidUser(ta: *TestingAuth) User {
+        ta._provider = ta.provider();
+        return .{
+            .origin_provider = &ta._provider,
+            .unique_id = "_force_valid_user",
+            .user_ptr = @constCast(@ptrCast("_force_valid_user")),
+            .authenticated = true,
+        };
     }
 
     fn lookupUser(_: *const TestingAuth, user_id: []const u8) Error!User {
@@ -34,8 +46,13 @@ const TestingAuth = struct {
     }
 
     pub fn lookupUserUntyped(self: *const anyopaque, user_id: []const u8) Error!User {
-        const typed: *const TestingAuth = @ptrCast(self);
+        const typed: *const TestingAuth = @ptrCast(@alignCast(self));
         return typed.lookupUser(user_id);
+    }
+
+    pub fn valid(_: *const anyopaque, u: *const User) bool {
+        return (unsafeEql(u8, u.unique_id orelse return false, "_force_valid_user") and
+            unsafeEql(u8, @as(*const [17:0]u8, @ptrCast(u.user_ptr orelse return false)), "_force_valid_user"));
     }
 
     pub fn provider(self: *TestingAuth) Provider {
@@ -43,7 +60,7 @@ const TestingAuth = struct {
             .ctx = self,
             .vtable = .{
                 .authenticate = null,
-                .valid = null,
+                .valid = valid,
                 .lookup_user = lookupUserUntyped,
                 .create_session = null,
                 .get_cookie = null,

@@ -37,8 +37,8 @@ pub fn Endpoints(endpoints: anytype) type {
             try server.serve();
         }
 
-        pub fn smokeTest(a: Allocator) !void {
-            try testing.smokeTest(a, &Self.routes, .default, "");
+        pub fn smokeTest(a: Allocator, comptime opts: testing.SmokeTestOptions) !void {
+            try testing.smokeTest(a, &Self.routes, opts, "");
         }
     };
 }

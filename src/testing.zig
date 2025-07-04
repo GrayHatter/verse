@@ -1,6 +1,7 @@
 pub const SmokeTestOptions = struct {
     soft_errors: []const Router.Error,
     recurse: bool,
+    retry_with_fake_user: bool,
 
     pub const default: SmokeTestOptions = .{
         .recurse = true,
@@ -13,6 +14,7 @@ pub const SmokeTestOptions = struct {
             error.DataMissing,
             error.Unrouteable,
         },
+        .retry_with_fake_user = false,
     };
 };
 
@@ -31,17 +33,30 @@ pub fn smokeTest(
                     .build => |func| {
                         var fc: FrameCtx = try .init(a);
                         defer fc.raze(a);
-                        if (func(&fc.frame)) {} else |err| {
-                            for (opts.soft_errors) |serr| {
-                                if (err == serr) break;
+                        func(&fc.frame) catch |err| {
+                            for (opts.soft_errors) |soft| {
+                                if (err == soft) break;
                             } else {
-                                std.debug.print(
-                                    "Smoke test error for endpoint '{s}':\n    Match {}\n",
-                                    .{ name, func },
-                                );
-                                return err;
+                                if (opts.retry_with_fake_user and
+                                    (err == error.Unauthenticated or err == error.Unauthorized))
+                                {
+                                    var provider = auth.TestingAuth.init();
+
+                                    fc.frame.user = provider.getValidUser();
+                                    func(&fc.frame) catch |err2| {
+                                        for (opts.soft_errors) |soft| {
+                                            if (err2 == soft) break;
+                                        } else return err2;
+                                    };
+                                } else {
+                                    std.debug.print(
+                                        "Smoke test error for endpoint '{s}':\n    Match {}\n",
+                                        .{ name, func },
+                                    );
+                                    return err;
+                                }
                             }
-                        }
+                        };
                     },
                     .simple => |smp| {
                         if (!opts.recurse) continue;
@@ -221,4 +236,5 @@ const Request = @import("request.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Server = @import("server.zig");
+const auth = @import("auth.zig");
 const splitUri = Router.splitUri;
