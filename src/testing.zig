@@ -20,8 +20,10 @@ pub fn smokeTest(
     a: Allocator,
     comptime routes: []const Router.Match,
     comptime opts: SmokeTestOptions,
+    comptime root_name: []const u8,
 ) !void {
     inline for (routes) |route| {
+        const name = root_name ++ "/" ++ route.name;
         inline for (@typeInfo(Request.Methods).@"enum".fields) |field| {
             if (comptime !Request.Methods.readOnly(@enumFromInt(field.value))) continue;
             if (comptime route.target(@enumFromInt(field.value))) |trgt| {
@@ -34,8 +36,8 @@ pub fn smokeTest(
                                 if (err == serr) break;
                             } else {
                                 std.debug.print(
-                                    "Smoke test error for endpoint Match {s} : {}\n",
-                                    .{ route.name, func },
+                                    "Smoke test error for endpoint '{s}':\n    Match {}\n",
+                                    .{ name, func },
                                 );
                                 return err;
                             }
@@ -43,7 +45,7 @@ pub fn smokeTest(
                     },
                     .simple => |smp| {
                         if (!opts.recurse) continue;
-                        try smokeTest(a, smp, opts);
+                        try smokeTest(a, smp, opts, name);
                     },
                     else => {},
                 }

@@ -38,7 +38,7 @@ pub fn Endpoints(endpoints: anytype) type {
         }
 
         pub fn smokeTest(a: Allocator) !void {
-            try testing.smokeTest(a, &Self.routes, .default);
+            try testing.smokeTest(a, &Self.routes, .default, "");
         }
     };
 }
