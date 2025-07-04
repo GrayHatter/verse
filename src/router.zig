@@ -348,15 +348,16 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
             error.Unknown => @panic("Verse Default Router Error: Unknown (unreachable)"),
             error.ServerFault => @panic("Verse Default Router Error: ServerFault (unreachable)"),
             error.InvalidURI => log.err("Unexpected error '{}'\n", .{err}),
-            error.Abusive,
+            error.Abuse,
             error.Unauthenticated,
-            error.BadData,
+            error.Unauthorized,
+            error.DataInvalid,
             error.DataMissing,
             => {
-                // BadData and DataMissing aren't likely to be abusive, but
+                // DataInvalid and DataMissing are unlikely to be abuse, but
                 // dumping the information is likely to help with debugging the
                 // error.
-                log.err("Abusive {} because {}\n", .{ vrs.request, err });
+                log.err("Abuse {} because {}\n", .{ vrs.request, err });
                 // TODO fix me
                 //var itr = vrs.request.raw.http.iterateHeaders();
                 //while (itr.next()) |vars| {

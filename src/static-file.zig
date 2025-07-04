@@ -9,9 +9,9 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
     if (fname.len == 0) return error.Unrouteable;
     for (fname) |c| switch (c) {
         'A'...'Z', 'a'...'z', '-', '_', '.' => continue,
-        else => return error.Abusive,
+        else => return error.Abuse,
     };
-    if (std.mem.indexOf(u8, fname, "/../")) |_| return error.Abusive;
+    if (std.mem.indexOf(u8, fname, "/../")) |_| return error.Abuse;
 
     const static = std.fs.cwd().openDir("static", .{}) catch return error.Unrouteable;
     const fdata = static.readFileAlloc(frame.alloc, fname, 0xFFFFFF) catch return error.Unknown;

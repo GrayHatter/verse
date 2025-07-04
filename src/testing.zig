@@ -5,11 +5,12 @@ pub const SmokeTestOptions = struct {
     pub const default: SmokeTestOptions = .{
         .recurse = true,
         .soft_errors = &[_]Router.Error{
-            // By default, the two soft errors are BadData, [because smokeTest
-            // is unable to generate the default expected data], and Unrouteable
-            // [for the same reason, smokeTest is unlikely to be able to
-            // generate the required routing information]
-            error.BadData,
+            // By default, the soft errors are DataMissing, DataInvalid [because
+            // smokeTest is unable to generate the default or expected data],
+            // and Unrouteable [for the same reason, smokeTest is unlikely to be
+            // able to generate the required routing information]
+            error.DataInvalid,
+            error.DataMissing,
             error.Unrouteable,
         },
     };

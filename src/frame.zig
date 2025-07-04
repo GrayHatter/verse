@@ -373,22 +373,35 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     }
 }
 
+pub fn requireValidUser(frame: *Frame) !void {
+    if (frame.user) |user| {
+        if (user.valid()) {
+            return;
+        } else {
+            return error.Unauthorized;
+        }
+    } else {
+        return error.Unauthenticated;
+    }
+    comptime unreachable;
+}
+
 test {
     std.testing.refAllDecls(@This());
 }
 
 const std = @import("std");
-const iov = @import("iovec.zig");
-const Server = @import("server.zig");
-const Request = @import("request.zig");
-const Router = @import("router.zig");
-const Headers = @import("headers.zig");
 const Auth = @import("auth.zig");
-const Cookies = @import("cookies.zig");
 const ContentType = @import("content-type.zig");
+const Cookies = @import("cookies.zig");
+const Headers = @import("headers.zig");
+const Request = @import("request.zig");
 const ResponseData = @import("response-data.zig");
+const Router = @import("router.zig");
+const Server = @import("server.zig");
 const Websocket = @import("websocket.zig");
 const errors = @import("errors.zig");
+const iov = @import("iovec.zig");
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Verse);

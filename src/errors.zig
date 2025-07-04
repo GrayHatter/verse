@@ -11,11 +11,12 @@ pub const ServerError = error{
 /// Errors resulting from data from the client preventing verse, or an endpoint
 /// from returning a valid response.
 pub const ClientError = error{
-    Abusive,
-    BadData,
+    Abuse,
+    DataInvalid,
     DataMissing,
     InvalidURI,
     Unauthenticated,
+    Unauthorized,
     Unrouteable,
 };
 
