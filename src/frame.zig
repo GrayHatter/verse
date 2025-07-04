@@ -378,35 +378,25 @@ test {
 }
 
 const std = @import("std");
-const Allocator = std.mem.Allocator;
-const eql = std.mem.eql;
-const Stream = std.net.Stream;
-const AnyWriter = std.io.AnyWriter;
-const bufPrint = std.fmt.bufPrint;
-const allocPrint = std.fmt.allocPrint;
-const splitScalar = std.mem.splitScalar;
-const log = std.log.scoped(.Verse);
-
 const iov = @import("iovec.zig");
-const IOVec = iov.IOVec;
-const IOVArray = iov.IOVArray;
-
 const Server = @import("server.zig");
 const Request = @import("request.zig");
-const RequestData = @import("request-data.zig");
-const Template = @import("template.zig");
 const Router = @import("router.zig");
-const splitUri = Router.splitUri;
-
 const Headers = @import("headers.zig");
 const Auth = @import("auth.zig");
 const Cookies = @import("cookies.zig");
 const ContentType = @import("content-type.zig");
 const ResponseData = @import("response-data.zig");
 const Websocket = @import("websocket.zig");
+const errors = @import("errors.zig");
 
-const Error = @import("errors.zig").Error;
-const NetworkError = @import("errors.zig").NetworkError;
+const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.Verse);
+const IOVec = iov.IOVec;
+const IOVArray = iov.IOVArray;
+const Error = errors.Error;
+const NetworkError = errors.NetworkError;
+const splitUri = Router.splitUri;
 
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;
