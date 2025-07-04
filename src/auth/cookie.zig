@@ -143,8 +143,8 @@ pub fn CookieAuth(HMAC: type) type {
             return error.UnknownUser;
         }
 
-        pub fn valid(ptr: *anyopaque, user: *const User) bool {
-            const ca: *Self = @ptrCast(@alignCast(ptr));
+        pub fn valid(ptr: *const anyopaque, user: *const User) bool {
+            const ca: *const Self = @ptrCast(@alignCast(ptr));
             if (ca.base) |base| return base.valid(user);
             return false;
         }
@@ -342,7 +342,7 @@ const b64_enc = std.base64.url_safe.Encoder;
 const b64_dec = std.base64.url_safe.Decoder;
 
 const auth = @import("../auth.zig");
-const Provider = @import("provider.zig");
+const Provider = @import("Provider.zig");
 const User = @import("user.zig");
 const Error = auth.Error;
 const Headers = @import("../headers.zig");

@@ -4,7 +4,7 @@ pub const cookie = @import("auth/cookie.zig");
 
 pub const Cookie = @import("auth/cookie.zig").Cookie;
 pub const MTLS = @import("auth/mtls.zig");
-pub const Provider = @import("auth/provider.zig");
+pub const Provider = @import("auth/Provider.zig");
 pub const User = @import("auth/user.zig");
 
 pub const Error = error{
@@ -27,8 +27,8 @@ const TestingAuth = struct {
         // reasonable authentication system. The specific constant time
         // comparison you should use depends strongly on the auth source.
         if (std.mem.eql(u8, "12345", user_id)) {
-            return User{
-                .user_ptr = undefined,
+            return .{
+                .unique_id = null,
             };
         } else return error.UnknownUser;
     }
@@ -53,9 +53,7 @@ const TestingAuth = struct {
 };
 
 test TestingAuth {
-    const expected_user = Auth.User{
-        .user_ptr = undefined,
-    };
+    const expected_user: Auth.User = .invalid_user;
 
     var t = TestingAuth{};
     const provider = t.provider();

@@ -17,7 +17,7 @@ pub const VTable = struct {
 
     pub const AuthenticateFn = *const fn (*anyopaque, *const Headers) Error!User;
     pub const LookupUserFn = *const fn (*anyopaque, []const u8) Error!User;
-    pub const ValidFn = *const fn (*anyopaque, *const User) bool;
+    pub const ValidFn = *const fn (*const anyopaque, *const User) bool;
     pub const CreateSessionFn = *const fn (*anyopaque, *User) Error!void;
     pub const GetCookieFn = *const fn (*anyopaque, User) Error!?RequestCookie;
 
