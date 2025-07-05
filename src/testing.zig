@@ -186,15 +186,8 @@ test {
         \\  <head>
         \\    <title>404: Not Found</title>
         \\    <style>
-        \\      html {
-        \\        color-scheme: light dark;
-        \\        min-height: 100%;
-        \\      }
-        \\      body {
-        \\        width: 35em;
-        \\        margin: 0 auto;
-        \\        font-family: Tahoma, Verdana, Arial, sans-serif;
-        \\      }
+        \\      html { color-scheme: light dark; min-height: 100%; }
+        \\      body { width: 35em; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
         \\    </style>
         \\  </head>
         \\  <body>
@@ -225,7 +218,7 @@ test {
         "\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
     ));
 
-    try std.testing.expect(800 <= fc.frame.request.downstream.buffer.pos);
+    try std.testing.expectEqual(754, fc.frame.request.downstream.buffer.pos);
     try std.testing.expectEqualSlices(u8, not_found_body, fc.buffer[hidx + 2 .. fc.frame.request.downstream.buffer.pos]);
 }
 

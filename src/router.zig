@@ -236,30 +236,42 @@ pub fn STATIC(comptime name: []const u8) Match {
 /// an error.
 pub fn defaultResponse(comptime code: std.http.Status) BuildFn {
     return switch (code) {
+        .bad_request => badRequest,
+        .unauthorized => unauthorized,
+        .forbidden => forbidden,
         .not_found => notFound,
+        .method_not_allowed => methodNotAllowed,
         .internal_server_error => internalServerError,
         else => default,
     };
 }
 
-fn notFound(frame: *Frame) Error!void {
-    const E404 = @embedFile("builtin-html/404.html");
-    return frame.sendHTML(.not_found, E404);
+fn badRequest(frame: *Frame) Error!void {
+    return frame.sendHTML(.bad_request, @embedFile("builtin-html/400.html"));
 }
 
-fn internalServerError(vrs: *Frame) Error!void {
-    const E500 = @embedFile("builtin-html/500.html");
-    return vrs.sendHTML(.internal_server_error, E500);
+fn unauthorized(frame: *Frame) Error!void {
+    return frame.sendHTML(.unauthorized, @embedFile("builtin-html/401.html"));
+}
+
+fn forbidden(frame: *Frame) Error!void {
+    return frame.sendHTML(.forbidden, @embedFile("builtin-html/403.html"));
+}
+
+fn notFound(frame: *Frame) Error!void {
+    return frame.sendHTML(.not_found, @embedFile("builtin-html/404.html"));
 }
 
 fn methodNotAllowed(frame: *Frame) Error!void {
-    const E405 = @embedFile("builtin-html/405.html");
-    return frame.sendHTML(.method_not_allowed, E405);
+    return frame.sendHTML(.method_not_allowed, @embedFile("builtin-html/405.html"));
+}
+
+fn internalServerError(vrs: *Frame) Error!void {
+    return vrs.sendHTML(.internal_server_error, @embedFile("builtin-html/500.html"));
 }
 
 fn default(frame: *Frame) Error!void {
-    const index = @embedFile("builtin-html/index.html");
-    return frame.sendHTML(.ok, index);
+    return frame.sendHTML(.ok, @embedFile("builtin-html/index.html"));
 }
 
 pub const RoutingError = error{
