@@ -89,12 +89,23 @@ pub fn validateEndpoint(EP: anytype) void {
     if (@hasDecl(EP, "verse_alias")) {
         // TODO write validation code for alias
     }
+
+    if (@hasDecl(EP, "verse_endpoint_enabled")) {
+        if (@TypeOf(EP.verse_endpoint_enabled) != bool) {
+            @compileError("The type of `verse_endpoint_enabled` decl must be bool. Instead it was " ++
+                @typeName(@TypeOf(EP.verse_builder)));
+        }
+    }
 }
 
 fn routeCount(endpoints: anytype) usize {
     var count: usize = 0;
     if (endpoints.len == 0) @compileError("Zero is not a countable number");
     for (endpoints, 0..) |ep, i| {
+        if (@hasDecl(ep, "verse_endpoint_enabled")) {
+            if (!ep.verse_endpoint_enabled) continue;
+        }
+
         if (@hasDecl(ep, "verse_router")) {
             count += 1;
         } else {
@@ -116,13 +127,20 @@ fn routeCount(endpoints: anytype) usize {
         if (i == 0 and ep.verse_name == .root) {
             // .root is a special case endpoint that gets automagically
             // flattened out
-            var alias_count: usize = 0;
+            var flatten_count: isize = 0;
             if (endpoints.len > 1) {
-                for (endpoints) |ep_alias| if (@hasDecl(ep_alias, "verse_alias")) {
-                    alias_count += ep_alias.verse_alias.len;
-                };
+                for (endpoints) |ep_alias| {
+                    if (@hasDecl(ep_alias, "verse_endpoint_enabled")) {
+                        if (!ep_alias.verse_endpoint_enabled) {
+                            flatten_count -= 1;
+                        }
+                    }
+                    if (@hasDecl(ep_alias, "verse_alias")) {
+                        flatten_count += ep_alias.verse_alias.len;
+                    }
+                }
             }
-            return count + endpoints.len - 1 + alias_count;
+            return count + endpoints.len - 1 + flatten_count;
         }
     }
     return count;
@@ -193,6 +211,45 @@ test routeCount {
                 pub fn index() void {}
             },
         }));
+        // disabled
+        try std.testing.expectEqual(2, routeCount(.{
+            // TODO expand this test in include a root struct
+            struct {
+                const verse_name = .first;
+                pub fn index() void {}
+            },
+            struct {
+                const verse_name = .second;
+                const verse_alias = .{.prod};
+                pub fn index() void {}
+            },
+        }));
+        try std.testing.expectEqual(1, routeCount(.{
+            // TODO expand this test in include a root struct
+            struct {
+                const verse_name = .first;
+                pub fn index() void {}
+            },
+            struct {
+                const verse_name = .second;
+                const verse_alias = .{.prod};
+                const verse_endpoint_enabled: bool = false;
+                pub fn index() void {}
+            },
+        }));
+        try std.testing.expectEqual(2, routeCount(.{
+            // TODO expand this test in include a root struct
+            struct {
+                const verse_name = .first;
+                pub fn index() void {}
+            },
+            struct {
+                const verse_name = .second;
+                const verse_alias = .{.prod};
+                const verse_endpoint_enabled: bool = true;
+                pub fn index() void {}
+            },
+        }));
     }
 }
 
@@ -200,6 +257,10 @@ fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
     var match: [routeCount(EPS)]Router.Match = undefined;
     var idx: usize = 0;
     for (EPS) |EP| {
+        if (@hasDecl(EP, "verse_endpoint_enabled")) {
+            if (!EP.verse_endpoint_enabled) continue;
+        }
+
         // Only flatten when the endpoint name is root
         if (EP.verse_name == .root) {
             for (buildRoutes(EP)) |r| {
