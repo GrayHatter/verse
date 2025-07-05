@@ -195,20 +195,31 @@ const Compiler = struct {
 
     pub fn collect(self: *Compiler) !void {
         for (self.dirs.items) |srcdir| {
-            var idir = srcdir.getPath3(self.b, null).openDir("", .{ .iterate = true }) catch |err| {
-                std.debug.print("template build error {} for srcdir {}\n", .{ err, srcdir });
-                return err;
-            };
-            defer idir.close();
-
-            var itr = idir.iterate();
-            while (try itr.next()) |file| {
-                if (!std.mem.endsWith(u8, file.name, ".html")) continue;
-                try self.collected.append(self.b.allocator, srcdir.path(self.b, file.name));
-            }
+            try self.collectDir(srcdir);
         }
         for (self.files.items) |file| {
             try self.collected.append(self.b.allocator, file);
+        }
+    }
+
+    fn collectDir(self: *Compiler, path: std.Build.LazyPath) !void {
+        var idir = path.getPath3(self.b, null).openDir("", .{ .iterate = true }) catch |err| {
+            std.debug.print("template build error {} for srcdir {}\n", .{ err, path });
+            return err;
+        };
+        defer idir.close();
+
+        var itr = try idir.walk(self.b.allocator);
+        while (try itr.next()) |file| {
+            switch (file.kind) {
+                .file => {
+                    if (!std.mem.endsWith(u8, file.basename, ".html")) continue;
+                    //const name = try std.mem.join(self.b.allocator, "/", &[2][]const u8{ file.path, file.basename });
+                    try self.collected.append(self.b.allocator, path.path(self.b, file.path));
+                },
+                .directory => {},
+                else => {},
+            }
         }
     }
 };
