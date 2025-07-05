@@ -46,7 +46,20 @@ pub fn smokeTest(
                                     func(&fc.frame) catch |err2| {
                                         for (opts.soft_errors) |soft| {
                                             if (err2 == soft) break;
-                                        } else return err2;
+                                        } else {
+                                            std.debug.print(
+                                                \\
+                                                \\Smoke test error for endpoint '{s}':
+                                                \\Match {}
+                                                \\Error {}
+                                                \\Retry with valid user failed. {}
+                                                \\
+                                            ,
+                                                .{ name, func, err2, fc.frame.user.? },
+                                            );
+
+                                            return err2;
+                                        }
                                     };
                                 } else {
                                     std.debug.print(
