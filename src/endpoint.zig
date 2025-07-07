@@ -59,8 +59,11 @@ pub fn validateEndpoint(EP: anytype) void {
     if (@hasDecl(EP, "verse_router")) {
         if (@TypeOf(EP.verse_router) != Router.RouteFn) {
             // TODO support `fn ...` in addition to `*const fn ...`
-            @compileError("The `verse_router` decl must be a Router.RouteFn. Instead it was " ++
-                @typeName(@TypeOf(EP.verse_router)));
+            @compileError(
+                "The `verse_router` decl must be a Router.RouteFn. Instead it was " ++
+                    @typeName(@TypeOf(EP.verse_router)) ++
+                    " (you may need to add an explicit type to the decl.)",
+            );
         }
     }
 
@@ -76,6 +79,23 @@ pub fn validateEndpoint(EP: anytype) void {
                     "`Match` targets. " ++ @typeName(route) ++ " at position " ++ i ++ " is invalid.");
             }
         }
+    }
+
+    if (@hasDecl(EP, "verse_router") and @hasDecl(EP, "verse_endpoints")) {
+        @compileError(
+            \\Unable to compile endpoints because both `verse_router` and `verse_endpoints` were provided, by
+        ++ @typeName(EP) ++
+            \\ one of these will become unreachable.
+            \\ `Endpoints.routes` can be appended to an existing route array.
+        );
+    }
+
+    if (@hasDecl(EP, "verse_router") and @hasDecl(EP, "verse_routes")) {
+        @compileError(
+            \\Unable to compile endpoints because both `verse_router` and `verse_routes` were provided, by
+        ++ @typeName(EP) ++
+            \\ one of these will become unreachable.
+        );
     }
 
     if (@hasDecl(EP, "verse_builder")) {
@@ -108,6 +128,9 @@ fn routeCount(endpoints: anytype) usize {
 
         if (@hasDecl(ep, "verse_router")) {
             count += 1;
+            if (@hasDecl(ep, "verse_alias")) {
+                count += ep.verse_alias.len;
+            }
         } else {
             if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .@"fn") {
                 count += 1;
