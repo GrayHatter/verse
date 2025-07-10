@@ -118,6 +118,20 @@ test Html {
     try std.testing.expectEqualStrings("&lt;tags not allowed&gt;", cleaned);
 }
 
+//pub const Word = struct {
+//    word: []const u8,
+//
+//    pub fn cleanAlloc(a: Allocator, in: []const u8) Error![]u8 {
+//        return try abx.cleanAlloc(.path, a, in);
+//    }
+//
+//    pub fn format(self: Path, comptime _: []const u8, _: FmtOpt, out: anytype) anyerror!void {
+//        var buffer: [256]u8 = undefined;
+//        for (self.word) |chr|
+//            try out.writeAll(buffer[0..try cleanWord(chr, &buffer)]);
+//    }
+//};
+
 pub const Path = struct {
     text: []const u8,
     path_allowed: bool = false,
