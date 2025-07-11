@@ -280,6 +280,31 @@ pub const RoutingError = error{
     NotFound,
 };
 
+pub fn targetRouter(frame: *Frame, comptime dest: []const u8, comptime routes: []const Match) RoutingError!BuildFn {
+    inline for (routes) |ep| {
+        if (comptime eql(u8, dest, ep.name)) {
+            switch (frame.request.method) {
+                inline else => |meth| {
+                    if (comptime ep.target(meth)) |target| {
+                        switch (target) {
+                            .build => |call| return call,
+                            .route => |route| return route(frame) catch |err| switch (err) {
+                                error.Unrouteable => return notFound,
+                                else => return err,
+                            },
+                            inline .simple => |simple| {
+                                _ = frame.uri.next();
+                                return defaultRouter(frame, simple);
+                            },
+                        }
+                    }
+                },
+            }
+        }
+    }
+    return error.Unrouteable;
+}
+
 /// Default routing function. This is likely the routing function you want to
 /// provide to verse with the Match array for your site. It can also be used
 /// internally within custom routing functions, that provide additional page,
