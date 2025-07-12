@@ -28,8 +28,8 @@ pub fn smokeTest(
         const name = root_name ++ "/" ++ route.name;
         inline for (@typeInfo(Request.Methods).@"enum".fields) |field| {
             if (comptime !Request.Methods.readOnly(@enumFromInt(field.value))) continue;
-            if (comptime route.target(@enumFromInt(field.value))) |trgt| {
-                switch (trgt) {
+            if (comptime route.methods.supports(@enumFromInt(field.value))) {
+                switch (route.target) {
                     .build => |func| {
                         var fc: FrameCtx = try .init(a);
                         defer fc.raze(a);

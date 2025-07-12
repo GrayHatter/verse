@@ -44,36 +44,56 @@ pub const Match = struct {
     /// The name for this resource. Names with length of 0 is valid for
     /// directories.
     name: []const u8,
-    /// Map http method to target endpoint.
+    /// target build or route function
+    target: Target,
+    /// maps target to supported http methods.
     methods: Methods,
 
     /// Separate from the http interface as this is 'internal' to the routing
     /// subsystem, where a single endpoint may respond to multiple http methods.
-    pub const Methods = struct {
-        CONNECT: ?Target = null,
-        DELETE: ?Target = null,
-        GET: ?Target = null,
-        HEAD: ?Target = null,
-        OPTIONS: ?Target = null,
-        POST: ?Target = null,
-        PUT: ?Target = null,
-        TRACE: ?Target = null,
-        WEBSOCKET: ?Target = null,
-    };
+    pub const Methods = packed struct(u9) {
+        CONNECT: bool = false,
+        DELETE: bool = false,
+        GET: bool = false,
+        HEAD: bool = false,
+        OPTIONS: bool = false,
+        POST: bool = false,
+        PUT: bool = false,
+        TRACE: bool = false,
+        WEBSOCKET: bool = false,
 
-    pub fn target(comptime self: Match, comptime req: Request.Methods) ?Target {
-        return switch (req) {
-            .CONNECT => self.methods.CONNECT,
-            .DELETE => self.methods.DELETE,
-            .GET => self.methods.GET,
-            .HEAD => self.methods.HEAD,
-            .OPTIONS => self.methods.OPTIONS,
-            .POST => self.methods.POST,
-            .PUT => self.methods.PUT,
-            .TRACE => self.methods.TRACE,
-            .WEBSOCKET => self.methods.WEBSOCKET,
+        pub fn supports(m: Methods, req: Request.Methods) bool {
+            return switch (req) {
+                .CONNECT => m.CONNECT,
+                .DELETE => m.DELETE,
+                .GET => m.GET,
+                .HEAD => m.HEAD,
+                .OPTIONS => m.OPTIONS,
+                .POST => m.POST,
+                .PUT => m.PUT,
+                .TRACE => m.TRACE,
+                .WEBSOCKET => m.WEBSOCKET,
+            };
+        }
+
+        pub const all: Methods = .{
+            .CONNECT = true,
+            .DELETE = true,
+            .GET = true,
+            .HEAD = true,
+            .OPTIONS = true,
+            .POST = true,
+            .PUT = true,
+            .TRACE = true,
+            .WEBSOCKET = true,
         };
-    }
+
+        pub const none: Methods = .{};
+        pub const delete: Methods = .{ .DELETE = true };
+        pub const get: Methods = .{ .GET = true };
+        pub const post: Methods = .{ .POST = true };
+        pub const websocket: Methods = .{ .WEBSOCKET = true };
+    };
 };
 
 pub const Target = union(enum) {
@@ -111,17 +131,8 @@ pub fn ROUTE(comptime name: []const u8, comptime match: anytype) Match {
         .build => |b| ALL(name, b),
         .route, .simple => .{ // TODO only populate if sub target handles method
             .name = name,
-            .methods = .{
-                .CONNECT = target,
-                .DELETE = target,
-                .GET = target,
-                .HEAD = target,
-                .OPTIONS = target,
-                .POST = target,
-                .PUT = target,
-                .TRACE = target,
-                .WEBSOCKET = target,
-            },
+            .target = target,
+            .methods = .all,
         },
     };
 }
@@ -150,32 +161,23 @@ fn buildTarget(comptime match: anytype) Target {
 /// Defaults to build only for GET, POST, and HEAD, and OPTIONS. Use ALL if your
 /// endpoint actually supports every known method.
 pub fn ANY(comptime name: []const u8, comptime match: BuildFn) Match {
-    const target = buildTarget(match);
     return .{
         .name = name,
+        .target = buildTarget(match),
         .methods = .{
-            .GET = target,
-            .POST = target,
-            .HEAD = target,
-            .OPTIONS = target,
+            .GET = true,
+            .POST = true,
+            .HEAD = true,
+            .OPTIONS = true,
         },
     };
 }
 
 pub fn ALL(comptime name: []const u8, comptime match: BuildFn) Match {
-    const target = buildTarget(match);
     return .{
         .name = name,
-        .methods = .{
-            .CONNECT = target,
-            .DELETE = target,
-            .GET = target,
-            .HEAD = target,
-            .OPTIONS = target,
-            .POST = target,
-            .PUT = target,
-            .TRACE = target,
-        },
+        .target = buildTarget(match),
+        .methods = .all,
     };
 }
 
@@ -183,39 +185,40 @@ pub fn ALL(comptime name: []const u8, comptime match: BuildFn) Match {
 pub fn GET(comptime name: []const u8, comptime match: BuildFn) Match {
     return .{
         .name = name,
-        .methods = .{
-            .GET = buildTarget(match),
-        },
+        .target = buildTarget(match),
+        .methods = .get,
     };
 }
 
 /// Match build helper for POST requests.
 pub fn POST(comptime name: []const u8, comptime match: BuildFn) Match {
+    var methods: Match.Methods = .none;
+    methods.POST = true;
     return .{
         .name = name,
-        .methods = .{
-            .POST = buildTarget(match),
-        },
+        .target = buildTarget(match),
+        .methods = .post,
     };
 }
 
 /// Match build helper for DELETE requests.
 pub fn DELETE(comptime name: []const u8, comptime match: BuildFn) Match {
+    var methods: Match.Methods = .none;
+    methods.GET = true;
     return .{
         .name = name,
-        .methods = .{
-            .DELETE = buildTarget(match),
-        },
+        .target = buildTarget(match),
+        .methods = .delete,
     };
 }
 
 pub fn WEBSOCKET(comptime name: []const u8, comptime match: BuildFn) Match {
+    var methods: Match.Methods = .none;
+    methods.GET = true;
     return .{
         .name = name,
-        .methods = .{
-            // TODO .GET?
-            .WEBSOCKET = buildTarget(match),
-        },
+        .target = buildTarget(match),
+        .methods = .websocket,
     };
 }
 
@@ -226,9 +229,8 @@ pub fn WEBSOCKET(comptime name: []const u8, comptime match: BuildFn) Match {
 pub fn STATIC(comptime name: []const u8) Match {
     return .{
         .name = name,
-        .methods = .{
-            .GET = buildTarget(StaticFile.fileOnDisk),
-        },
+        .target = buildTarget(StaticFile.fileOnDisk),
+        .methods = .get,
     };
 }
 
@@ -281,28 +283,29 @@ pub const RoutingError = error{
 };
 
 pub fn targetRouter(frame: *Frame, comptime dest: []const u8, comptime routes: []const Match) RoutingError!BuildFn {
+    var r_err: RoutingError = error.Unrouteable;
     inline for (routes) |ep| {
         if (comptime eql(u8, dest, ep.name)) {
-            switch (frame.request.method) {
-                inline else => |meth| {
-                    if (comptime ep.target(meth)) |target| {
-                        switch (target) {
-                            .build => |call| return call,
-                            .route => |route| return route(frame) catch |err| switch (err) {
-                                error.Unrouteable => return notFound,
-                                else => return err,
-                            },
-                            inline .simple => |simple| {
-                                _ = frame.uri.next();
-                                return defaultRouter(frame, simple);
-                            },
-                        }
-                    }
-                },
-            }
+            if (ep.methods.supports(frame.request.method)) {
+                switch (ep.target) {
+                    .build => |call| return call,
+                    .route => |route| return route(frame) catch |err| switch (err) {
+                        error.Unrouteable => return notFound,
+                        else => return err,
+                    },
+                    inline .simple => |simple| {
+                        _ = frame.uri.next();
+                        return defaultRouter(frame, simple);
+                    },
+                }
+            } else r_err = error.MethodNotAllowed;
         }
     }
-    return error.Unrouteable;
+    return r_err;
+}
+
+test targetRouter {
+    try std.testing.expectError(error.Unrouteable, targetRouter(undefined, "users", &.{}));
 }
 
 /// Default routing function. This is likely the routing function you want to
@@ -312,43 +315,38 @@ pub fn targetRouter(frame: *Frame, comptime dest: []const u8, comptime routes: [
 pub fn defaultRouter(frame: *Frame, comptime routes: []const Match) RoutingError!BuildFn {
     const search = frame.uri.peek() orelse {
         if (routes.len > 0 and routes[0].name.len == 0) {
-            switch (frame.request.method) {
-                inline else => |m| if (routes[0].target(m)) |t| return switch (t) {
-                    .build => |b| return b,
-                    .route, .simple => return error.Unrouteable,
-                },
-            }
+            return if (routes[0].methods.supports(frame.request.method)) switch (routes[0].target) {
+                .build => |b| b,
+                .route, .simple => error.Unrouteable,
+            } else error.MethodNotAllowed;
         }
 
         log.warn("No endpoint found: URI is empty.", .{});
         return error.Unrouteable;
     };
+    var r_err: RoutingError = error.Unrouteable;
     inline for (routes) |ep| {
         if (eql(u8, search, ep.name)) {
-            switch (frame.request.method) {
-                inline else => |m| {
-                    if (comptime ep.target(m)) |target| {
-                        switch (target) {
-                            .build => |call| {
-                                return call;
-                            },
-                            .route => |route| {
-                                return route(frame) catch |err| switch (err) {
-                                    error.Unrouteable => return notFound,
-                                    else => return err,
-                                };
-                            },
-                            inline .simple => |simple| {
-                                _ = frame.uri.next();
-                                return defaultRouter(frame, simple);
-                            },
-                        }
-                    } else return error.MethodNotAllowed;
-                },
-            }
+            if (ep.methods.supports(frame.request.method)) {
+                switch (ep.target) {
+                    .build => |call| {
+                        return call;
+                    },
+                    .route => |route| {
+                        return route(frame) catch |err| switch (err) {
+                            error.Unrouteable => return notFound,
+                            else => return err,
+                        };
+                    },
+                    inline .simple => |simple| {
+                        _ = frame.uri.next();
+                        return defaultRouter(frame, simple);
+                    },
+                }
+            } else r_err = error.MethodNotAllowed;
         }
     }
-    return error.Unrouteable;
+    return r_err;
 }
 
 /// This default builder is provided and handles an abbreviated set of errors.

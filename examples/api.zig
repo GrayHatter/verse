@@ -4,14 +4,9 @@
 /// route different request methods to separate functions so you can easily
 /// expose a custom REST interface/API.
 const routes = Router.Routes(&[_]Router.Match{
-    Router.Match{
-        .name = "users",
-        .methods = .{
-            .GET = .{ .build = users },
-            .POST = .{ .build = addUser },
-            .DELETE = .{ .build = deleteUser },
-        },
-    },
+    Router.GET("users", users),
+    Router.POST("users", addUser),
+    Router.DELETE("users", deleteUser),
 });
 
 const Role = enum {
