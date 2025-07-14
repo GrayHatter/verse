@@ -1,22 +1,17 @@
-const std = @import("std");
-
-const Allocator = std.mem.Allocator;
-
-const HTML = @import("../html.zig");
-
-const DOM = @This();
-
 alloc: Allocator,
-elems: std.ArrayList(HTML.E),
+elems: ElemArray,
 parent: ?*DOM = null,
 child: ?*DOM = null,
-next: ?HTML.E = null,
+opened: ?Elem = null,
+
+const DOM = @This();
+const ElemArray = std.ArrayList(Elem);
 
 pub fn create(a: Allocator) *DOM {
     const self = a.create(DOM) catch unreachable;
     self.* = DOM{
         .alloc = a,
-        .elems = std.ArrayList(HTML.E).init(a),
+        .elems = .init(a),
     };
     return self;
 }
@@ -25,11 +20,11 @@ pub fn open(self: *DOM, elem: HTML.E) *DOM {
     if (self.child) |_| @panic("DOM Already Open");
     self.child = create(self.alloc);
     self.child.?.parent = self;
-    self.child.?.next = elem;
+    self.child.?.opened = elem;
     return self.child.?;
 }
 
-pub fn pushSlice(self: *DOM, elems: []HTML.E) void {
+pub fn pushSlice(self: *DOM, elems: []const HTML.E) void {
     for (elems) |elem| self.push(elem);
 }
 
@@ -48,11 +43,8 @@ pub fn dupe(self: *DOM, elem: HTML.E) void {
 
 pub fn close(self: *DOM) *DOM {
     if (self.parent) |p| {
-        self.next.?.children = self.elems.toOwnedSlice() catch unreachable;
-        if (self.next.?.attrs) |attr| {
-            self.next.?.attrs = self.alloc.dupe(HTML.Attribute, attr) catch unreachable;
-        }
-        p.push(self.next.?);
+        self.opened.?.children = self.elems.toOwnedSlice() catch unreachable;
+        p.push(self.opened.?);
         p.child = null;
         defer self.alloc.destroy(self);
         return p;
@@ -64,6 +56,76 @@ pub fn done(self: *DOM) []HTML.E {
     if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     defer self.alloc.destroy(self);
     return self.elems.toOwnedSlice() catch unreachable;
+}
+
+fn freeChildren(a: Allocator, elems: []const Elem) void {
+    for (elems) |elem| {
+        if (elem.children) |children| {
+            freeChildren(a, children);
+            a.free(children);
+        }
+    }
+}
+
+pub fn render(self: *DOM, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
+    if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
+    defer self.alloc.destroy(self);
+
+    var html: std.ArrayListUnmanaged(u8) = .{};
+    var w = html.writer(a);
+    for (self.elems.items) |e| {
+        w.print(if (comptime style == .full) "{pretty}" else "{}", .{e}) catch unreachable;
+    }
+    freeChildren(a, self.elems.items);
+    self.elems.deinit();
+
+    return try html.toOwnedSlice(a);
+}
+
+test render {
+    const a = std.testing.allocator;
+    var dom: *DOM = .create(a);
+    dom = dom.open(HTML.form(null, &[_]HTML.Attr{
+        .{ .key = "method", .value = "POST" },
+        .{ .key = "action", .value = "/endpoint" },
+    }));
+    dom = dom.open(HTML.element("button", null, &[_]HTML.Attr{
+        .{ .key = "name", .value = "new" },
+    }));
+    dom.dupe(HTML.element("_text", "create new", null));
+    dom = dom.close();
+    dom = dom.close();
+
+    const compact = try dom.render(a, .compact);
+    defer a.free(compact);
+    const expected_compact =
+        \\<form method="POST" action="/endpoint"><button name="new">create new</button></form>
+    ;
+    try std.testing.expectEqualStrings(expected_compact, compact);
+
+    dom = .create(a);
+    dom = dom.open(HTML.form(null, &[_]HTML.Attr{
+        .{ .key = "method", .value = "POST" },
+        .{ .key = "action", .value = "/endpoint" },
+    }));
+    dom = dom.open(HTML.element("button", null, &[_]HTML.Attr{
+        .{ .key = "name", .value = "new" },
+    }));
+    dom.dupe(HTML.element("_text", "create new", null));
+    dom = dom.close();
+    dom = dom.close();
+
+    const full = try dom.render(a, .full);
+    defer a.free(full);
+    const expected_full =
+        \\<form method="POST" action="/endpoint">
+        \\<button name="new">
+        \\create new
+        \\</button>
+        \\</form>
+    ;
+
+    try std.testing.expectEqualStrings(expected_full, full);
 }
 
 test "basic" {
@@ -87,3 +149,8 @@ test "open close" {
 
     a.free(dom.done());
 }
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const HTML = @import("../html.zig");
+const Elem = HTML.E;
