@@ -45,6 +45,7 @@ fn getOffset(T: type, name: []const u8, base: usize) usize {
             const field = local[0..end];
             return @offsetOf(T, field) + base;
         },
+        .@"enum" => 0,
         else => unreachable,
     }
 }
@@ -129,7 +130,7 @@ fn fieldType(T: type, name: []const u8) type {
 }
 
 pub fn commentTag(blob: []const u8) ?usize {
-    if (blob.len > 2 and blob[1] == '!' and blob.len > 4 and blob[2] == '-' and blob[3] == '-') {
+    if (blob.len > 4 and blob[1] == '!' and blob[2] == '-' and blob[3] == '-') {
         if (indexOfPosLinear(u8, blob, 4, "-->")) |comment| {
             return comment + 3;
         }
@@ -218,6 +219,7 @@ fn validateDirective(
     const data_offset = getOffset(BlockType, drct.noun, base_offset);
     const end = drct.tag_block.len;
     switch (drct.verb) {
+        .directive => return &.{},
         .variable => {
             const FieldT = fieldType(BlockType, drct.noun);
             const os = Offset{

@@ -775,9 +775,10 @@ test "directive typed isize" {
 test "EnumLiteral" {
     var a = std.testing.allocator;
     const blob =
-        \\<li><a href="" class="<EnumLiteral type="enum" tagname="settings" text="active" />">Settings</a></li>
-        \\<li><a href="" class="<EnumLiteral type="enum" tagname="other" text="active" />">Other</a></li>
-        \\<li><a href="" class="<EnumLiteral type="enum" tagname="default" text="active" />">Default</a></li>
+        \\<Directive name="EnumLiteral" type="enum" text="active" />
+        \\<li><a href="" class="<EnumLiteral enum="settings" />">Settings</a></li>
+        \\<li><a href="" class="<EnumLiteral enum="other"  />">Other</a></li>
+        \\<li><a href="" class="<EnumLiteral enum="default"  />">Default</a></li>
         \\
     ;
     const expected: []const u8 =
@@ -792,6 +793,8 @@ test "EnumLiteral" {
             settings,
             other,
             default,
+
+            pub const VALUE = "active";
         },
     };
     const Temp = Template{ .name = "test", .blob = blob };

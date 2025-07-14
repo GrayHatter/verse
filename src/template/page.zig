@@ -161,8 +161,8 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             switch (directive.d.otherwise) {
                                 .literal => |lit| {
                                     // TODO figure out how to make this a u16 cmp instead of mem.eql
-                                    if (std.mem.eql(u8, @tagName(child_data.*), lit[0])) {
-                                        try out.writeAll(lit[1]);
+                                    if (std.mem.eql(u8, @tagName(child_data.*), lit)) {
+                                        try out.writeAll(directive.kind.VALUE);
                                     }
                                 },
                                 else => {
@@ -271,8 +271,8 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             switch (directive.d.otherwise) {
                                 .literal => |lit| {
                                     // TODO figure out how to make this a u16 cmp instead of mem.eql
-                                    if (std.mem.eql(u8, @tagName(child_data.*), lit[0])) {
-                                        varr.appendAssumeCapacity(.fromSlice(lit[1]));
+                                    if (std.mem.eql(u8, @tagName(child_data.*), lit)) {
+                                        varr.appendAssumeCapacity(.fromSlice(directive.kind.VALUE));
                                     }
                                 },
                                 else => {

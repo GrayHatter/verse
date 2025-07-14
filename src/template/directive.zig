@@ -14,16 +14,17 @@ pub const Otherwise = union(enum) {
     default: []const u8,
     template: Template,
     exact: usize,
-    literal: struct { []const u8, []const u8 },
+    literal: []const u8,
     //page: type,
 };
 
 pub const Verb = enum {
-    variable,
+    build,
+    directive,
     foreach,
     split,
+    variable,
     with,
-    build,
 };
 
 pub const HtmlType = enum {
@@ -77,7 +78,7 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
     var default_str: ?[]const u8 = null;
     var h_type: ?HtmlType = null;
     var tag_name: ?[]const u8 = null;
-    var tag_text: ?[]const u8 = null;
+    var directive: ?[]const u8 = null;
     var rem_attr: []const u8 = tag[noun.len + 1 .. tag.len - 1];
     while (indexOfScalar(u8, rem_attr, '=') != null) {
         if (findAttribute(rem_attr)) |attr| {
@@ -88,10 +89,11 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
                 };
             } else if (eql(u8, "default", attr.name)) {
                 default_str = attr.value;
-            } else if (eql(u8, "tagname", attr.name)) {
+            } else if (eql(u8, "enum", attr.name)) {
                 tag_name = attr.value;
+                h_type = .@"enum";
             } else if (eql(u8, "text", attr.name)) {
-                tag_text = attr.value;
+                directive = attr.value;
             }
 
             rem_attr = rem_attr[attr.len..];
@@ -112,13 +114,13 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
             if (htype.nullable())
                 .delete
             else if (htype == .@"enum")
-                .{ .literal = .{ tag_name orelse {
-                    std.debug.print("Tag name not given for enum type\n", .{});
-                    unreachable;
-                }, tag_text orelse {
-                    std.debug.print("Tag name not given for enum type\n", .{});
-                    unreachable;
-                } } }
+                .{ .literal = tag_name orelse b: {
+                    if (!@inComptime()) {
+                        std.debug.print("Tag name not given for enum type\n", .{});
+                        unreachable;
+                    }
+                    break :b "blah";
+                } }
             else
                 .required
         else
@@ -129,87 +131,138 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
 }
 
 pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive {
-    var end: ?usize = null;
-    var word: Verb = undefined;
+    const word: Verb = if (eql(u8, verb, "For"))
+        .foreach
+    else if (eql(u8, verb, "Directive"))
+        .directive
+    else if (eql(u8, verb, "Split"))
+        .split
+    else if (eql(u8, verb, "With"))
+        .with
+    else if (eql(u8, verb, "Build"))
+        .build
+    else
+        return null;
 
-    if (eql(u8, verb, "For")) {
-        end = calcBody("For", noun, blob) orelse return null;
-        word = .foreach;
-    } else if (eql(u8, verb, "Split")) {
-        end = calcBody("Split", noun, blob) orelse return null;
-        word = .split;
-    } else if (eql(u8, verb, "With")) {
-        end = calcBody("With", noun, blob) orelse return null;
-        word = .with;
-    } else if (eql(u8, verb, "With")) {
-        end = calcBody("With", noun, blob) orelse return null;
-        word = .with;
-    } else if (eql(u8, verb, "Build")) {
-        const b_noun = noun[1..(indexOfScalarPos(u8, noun, 1, ' ') orelse return null)];
-        const tail = noun[b_noun.len + 1 ..];
-        const b_html = tail[1..(indexOfScalarPos(u8, tail, 2, ' ') orelse return null)];
-        if (@inComptime()) {
-            if (getBuiltin(b_html)) |bi| return Directive{
-                .verb = .build,
-                .noun = b_noun,
-                .otherwise = .{ .template = bi },
-                .tag_block = blob[0 .. verb.len + 2 + noun.len],
-            };
-        } else {
-            if (getBuiltin(b_html)) |bi| {
-                return Directive{
+    switch (word) {
+        .variable => unreachable,
+        .build => {
+            const b_noun = noun[1..(indexOfScalarPos(u8, noun, 1, ' ') orelse return null)];
+            const tail = noun[b_noun.len + 1 ..];
+            const b_html = tail[1..(indexOfScalarPos(u8, tail, 2, ' ') orelse return null)];
+            if (@inComptime()) {
+                if (getBuiltin(b_html)) |bi| return Directive{
                     .verb = .build,
                     .noun = b_noun,
                     .otherwise = .{ .template = bi },
                     .tag_block = blob[0 .. verb.len + 2 + noun.len],
                 };
-            } else return null;
-        }
-    } else return null;
-
-    var name_end = (indexOfAnyPos(u8, noun, 1, " >") orelse noun.len);
-    if (noun[name_end - 1] == '/') name_end -= 1;
-    const name = noun[1..name_end];
-
-    var exact: ?usize = null;
-    var use: ?[]const u8 = null;
-
-    var rem_attr: []const u8 = noun[1 + name.len ..];
-    while (indexOfScalar(u8, rem_attr, '=') != null) {
-        if (findAttribute(rem_attr)) |attr| {
-            if (eql(u8, attr.name, "exact")) {
-                exact = std.fmt.parseInt(usize, attr.value, 10) catch null;
-            } else if (eql(u8, attr.name, "use")) {
-                use = attr.value;
             } else {
-                std.debug.print("attr {s}\n", .{attr.name});
-                unreachable;
+                if (getBuiltin(b_html)) |bi| {
+                    return Directive{
+                        .verb = .build,
+                        .noun = b_noun,
+                        .otherwise = .{ .template = bi },
+                        .tag_block = blob[0 .. verb.len + 2 + noun.len],
+                    };
+                } else return null;
             }
-            rem_attr = rem_attr[attr.len..];
-        } else |err| switch (err) {
-            error.AttrInvalid => break,
-            else => unreachable,
-        }
-    }
+        },
+        .directive => {
+            const end = calcBody("Directive", noun, blob) orelse return null;
+            const body_end: usize = end;
+            const tag_block_body = blob[0..body_end];
+            var end_idx: usize = verb.len + 2 + noun.len;
+            while (end_idx < blob.len and (blob[end_idx] == ' ' or blob[end_idx] == '\n')) end_idx += 1;
+            const tag_block = blob[0..end_idx];
 
-    const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
-    const body_end: usize = end.? - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
-    const tag_block_body = blob[body_start..body_end];
-    return .{
-        .verb = word,
-        .noun = name,
-        .otherwise = if (exact != null and use != null)
-            @panic("use & exact not implemented")
-        else if (exact) |e|
-            .{ .exact = e }
-        else if (use) |u|
-            .{ .template = getBuiltin(u) orelse @panic("built in missing") }
-        else
-            .required,
-        .tag_block = blob[0..end.?],
-        .tag_block_body = tag_block_body,
-        .tag_block_skip = body_start,
-    };
+            var name: ?[]const u8 = null;
+            var text: ?[]const u8 = null;
+            var rem_attr: []const u8 = tag_block_body["<Directive ".len..body_end];
+            while (indexOfScalar(u8, rem_attr, '=') != null) {
+                if (findAttribute(rem_attr)) |attr| {
+                    if (eql(u8, attr.name, "type")) {
+                        if (!eql(u8, "enum", attr.value)) {
+                            std.debug.print("Unable to resolve requested type '{s}'\n", .{attr.value});
+                            @panic("wut");
+                        }
+                    } else if (eql(u8, "name", attr.name)) {
+                        name = attr.value;
+                    } else if (eql(u8, "text", attr.name)) {
+                        text = attr.value;
+                    } else {
+                        unreachable;
+                    }
+                    rem_attr = rem_attr[attr.len..];
+                } else |err| switch (err) {
+                    error.AttrInvalid => break,
+                    else => unreachable,
+                }
+            }
+            std.debug.assert(std.mem.indexOf(u8, rem_attr, "name") == null);
+            return Directive{
+                .verb = .directive,
+                .noun = name orelse @panic("literal text not given for directive"),
+                .otherwise = .{ .literal = text orelse @panic("literal text not given for directive") },
+                .tag_block = tag_block,
+            };
+        },
+        .foreach,
+        .split,
+        .with,
+        => {
+            const end = switch (word) {
+                .foreach => calcBody("For", noun, blob) orelse return null,
+                .split => calcBody("Split", noun, blob) orelse return null,
+                .with => calcBody("With", noun, blob) orelse return null,
+                else => unreachable,
+            };
+
+            var name_end = (indexOfAnyPos(u8, noun, 1, " >") orelse noun.len);
+            if (noun[name_end - 1] == '/') name_end -= 1;
+            const name = noun[1..name_end];
+
+            var exact: ?usize = null;
+            var use: ?[]const u8 = null;
+
+            var rem_attr: []const u8 = noun[1 + name.len ..];
+            while (indexOfScalar(u8, rem_attr, '=') != null) {
+                if (findAttribute(rem_attr)) |attr| {
+                    if (eql(u8, attr.name, "exact")) {
+                        exact = std.fmt.parseInt(usize, attr.value, 10) catch null;
+                    } else if (eql(u8, attr.name, "use")) {
+                        use = attr.value;
+                    } else {
+                        std.debug.print("attr {s}\n", .{attr.name});
+                        unreachable;
+                    }
+                    rem_attr = rem_attr[attr.len..];
+                } else |err| switch (err) {
+                    error.AttrInvalid => break,
+                    else => unreachable,
+                }
+            }
+
+            const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
+            const body_end: usize = end - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
+            const tag_block_body = blob[body_start..body_end];
+            return .{
+                .verb = word,
+                .noun = name,
+                .otherwise = if (exact != null and use != null)
+                    @panic("use & exact not implemented")
+                else if (exact) |e|
+                    .{ .exact = e }
+                else if (use) |u|
+                    .{ .template = getBuiltin(u) orelse @panic("built in missing") }
+                else
+                    .required,
+                .tag_block = blob[0..end],
+                .tag_block_body = tag_block_body,
+                .tag_block_skip = body_start,
+            };
+        },
+    }
 }
 
 fn findTag(blob: []const u8) ![]const u8 {
