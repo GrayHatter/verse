@@ -51,11 +51,12 @@ pub fn smokeTest(
                                                 \\
                                                 \\Smoke test error for endpoint '{s}':
                                                 \\Match {}
-                                                \\Error {}
+                                                \\Error1 {}
+                                                \\Error2 {}
                                                 \\Retry with valid user failed. {}
                                                 \\
                                             ,
-                                                .{ name, func, err2, fc.frame.user.? },
+                                                .{ name, func, err, err2, fc.frame.user.? },
                                             );
 
                                             return err2;
