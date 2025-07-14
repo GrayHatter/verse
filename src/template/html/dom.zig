@@ -12,7 +12,7 @@ parent: ?*DOM = null,
 child: ?*DOM = null,
 next: ?HTML.E = null,
 
-pub fn new(a: Allocator) *DOM {
+pub fn create(a: Allocator) *DOM {
     const self = a.create(DOM) catch unreachable;
     self.* = DOM{
         .alloc = a,
@@ -23,7 +23,7 @@ pub fn new(a: Allocator) *DOM {
 
 pub fn open(self: *DOM, elem: HTML.E) *DOM {
     if (self.child) |_| @panic("DOM Already Open");
-    self.child = new(self.alloc);
+    self.child = create(self.alloc);
     self.child.?.parent = self;
     self.child.?.next = elem;
     return self.child.?;
@@ -68,14 +68,14 @@ pub fn done(self: *DOM) []HTML.E {
 
 test "basic" {
     const a = std.testing.allocator;
-    var dom = new(a);
+    var dom = create(a);
     try std.testing.expect(dom.child == null);
     _ = dom.done();
 }
 
 test "open close" {
     var a = std.testing.allocator;
-    var dom = new(a);
+    var dom = create(a);
     try std.testing.expect(dom.child == null);
 
     var new_dom = dom.open(HTML.div(null, null));
