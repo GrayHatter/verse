@@ -139,13 +139,6 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                     .otherwise = .{ .template = bi },
                     .tag_block = blob[0 .. verb.len + 2 + noun.len],
                 };
-            } else if (getDynamic(b_html)) |bi| {
-                return Directive{
-                    .verb = .build,
-                    .noun = b_noun,
-                    .otherwise = .{ .template = bi },
-                    .tag_block = blob[0 .. verb.len + 2 + noun.len],
-                };
             } else return null;
         }
     } else return null;
@@ -379,26 +372,6 @@ pub fn forEachTyped(self: Directive, T: type, data: T, out: anytype) anyerror!vo
         },
     };
     try p.format("", .{}, out);
-}
-
-pub fn withTyped(self: Directive, T: type, block: T, out: anytype) anyerror!void {
-    var p = PageRuntime(T){
-        .data = block,
-        .template = if (self.otherwise == .template) self.otherwise.template else .{
-            .name = self.noun,
-            .blob = trim(u8, self.tag_block_body.?, whitespace),
-        },
-    };
-    try p.format("", .{}, out);
-}
-
-fn getDynamic(name: []const u8) ?Template {
-    for (0..dynamic.*.len) |i| {
-        if (eql(u8, dynamic.*[i].name, name)) {
-            return dynamic.*[i];
-        }
-    }
-    return null;
 }
 
 fn getBuiltin(name: []const u8) ?Template {

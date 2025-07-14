@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) !void {
     //std.debug.print("default: {s}\n", .{b.default_step.name});
 
     // root build options
-    const template_path = b.option(std.Build.LazyPath, "template-path", "path for the templates generated at comptime") orelse b.path("examples/templates/");
+    const template_path: ?std.Build.LazyPath = b.option(std.Build.LazyPath, "template-path", "path for the templates generated at comptime");
     const bot_detection = b.option(bool, "bot-detection", "path for the templates generated at comptime") orelse
         false;
 
@@ -27,35 +27,47 @@ pub fn build(b: *std.Build) !void {
 
     verse_lib.addOptions("verse_buildopts", options);
 
-    const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/verse.zig"),
-        .target = target,
-        .optimize = optimize,
-        .use_llvm = use_llvm,
-    });
-    lib_unit_tests.root_module.addOptions("verse_buildopts", options);
-
+    // Set up template compiler
     var compiler = Compiler.init(b);
-    compiler.addDir(template_path);
-
-    if (std.fs.cwd().access("src/builtin-html/index.html", .{})) {
+    if (template_path) |path| {
+        compiler.addDir(path);
+    } else {
+        compiler.addDir(b.path("examples/templates/"));
         compiler.addDir(b.path("src/builtin-html/"));
-    } else |_| {}
+    }
     compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
-
     compiler.collect() catch @panic("unreachable");
+
     const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
-    const comptime_structs = compiler.buildStructs() catch @panic("unreachable");
+
+    const structc = b.addExecutable(.{
+        .name = "structc",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/template/struct-emit.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    structc.root_module.addImport("comptime_templates", comptime_templates);
+
+    const comptime_structs = compiler.buildStructs(structc) catch @panic("unreachable");
 
     verse_lib.addImport("comptime_structs", comptime_structs);
     verse_lib.addImport("comptime_templates", comptime_templates);
 
-    lib_unit_tests.root_module.addImport("comptime_templates", comptime_templates);
-    lib_unit_tests.root_module.addImport("comptime_structs", comptime_structs);
-
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+    const lib_tests = b.addTest(.{
+        .root_source_file = b.path("src/verse.zig"),
+        .target = target,
+        .optimize = optimize,
+        .use_llvm = use_llvm,
+        .use_lld = use_llvm,
+    });
+    lib_tests.root_module.addOptions("verse_buildopts", options);
+    lib_tests.root_module.addImport("comptime_templates", comptime_templates);
+    lib_tests.root_module.addImport("comptime_structs", comptime_structs);
+    const run_lib_tests = b.addRunArtifact(lib_tests);
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
+    test_step.dependOn(&run_lib_tests.step);
 
     const docs = b.addObject(.{ .name = "verse", .root_module = verse_lib });
     const install_docs = b.addInstallDirectory(.{
@@ -67,15 +79,8 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&install_docs.step);
 
     const examples = [_][]const u8{
-        "basic",
-        "cookies",
-        "template",
-        "endpoint",
-        "auth-cookie",
-        "request-userdata",
-        "api",
-        "websocket",
-        "stats",
+        "basic",            "cookies", "template",  "endpoint", "auth-cookie",
+        "request-userdata", "api",     "websocket", "stats",
     };
     inline for (examples) |example| {
         const example_exe = b.addExecutable(.{
@@ -84,6 +89,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .use_llvm = use_llvm,
+            .use_lld = use_llvm,
         });
         // All Examples should compile for tests to pass
         test_step.dependOn(&example_exe.step);
@@ -92,11 +98,9 @@ pub fn build(b: *std.Build) !void {
 
         const run_example = b.addRunArtifact(example_exe);
         run_example.step.dependOn(b.getInstallStep());
-
         if (b.args) |args| {
             run_example.addArgs(args);
         }
-
         const run_name = "run-" ++ example;
         const run_description = "Run example: " ++ example;
         const run_step = b.step(run_name, run_description);
@@ -158,9 +162,7 @@ const Compiler = struct {
 
         for (self.collected.items, names) |lpath, *name| {
             name.* = lpath.getPath3(self.b, null).sub_path;
-            _ = compiled.addAnonymousImport(name.*, .{
-                .root_source_file = lpath,
-            });
+            _ = compiled.addAnonymousImport(name.*, .{ .root_source_file = lpath });
         }
 
         found.addOption([]const []const u8, "names", names);
@@ -169,25 +171,13 @@ const Compiler = struct {
         return compiled;
     }
 
-    pub fn buildStructs(self: *Compiler) !*std.Build.Module {
+    pub fn buildStructs(self: *Compiler, comp: *std.Build.Step.Compile) !*std.Build.Module {
         if (self.structs) |s| return s;
 
         if (self.debugging) std.debug.print("building structs for {}\n", .{self.collected.items.len});
-        const t_compiler = self.b.addExecutable(.{
-            .name = "template-compiler",
-            .root_module = self.b.createModule(.{
-                .root_source_file = self.depPath("src/template/struct-emit.zig"),
-                .target = self.b.graph.host,
-            }),
-        });
-
-        const comptime_templates = try self.buildTemplates();
-        t_compiler.root_module.addImport("comptime_templates", comptime_templates);
-        const tc_build_run = self.b.addRunArtifact(t_compiler);
+        const tc_build_run = self.b.addRunArtifact(comp);
         const tc_structs = tc_build_run.addOutputFileArg("compiled-structs.zig");
-        const module = self.b.createModule(.{
-            .root_source_file = tc_structs,
-        });
+        const module = self.b.createModule(.{ .root_source_file = tc_structs });
 
         self.structs = module;
         return module;

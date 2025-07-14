@@ -131,38 +131,6 @@ pub var dynamic: []const Template = undefined;
 
 const MAX_BYTES = 2 <<| 15;
 
-fn loadDynamicTemplates(a: Allocator, path: []const u8) !void {
-    var cwd = std.fs.cwd();
-    var idir = cwd.openDir(path, .{ .iterate = true }) catch |err| {
-        log.warn("Unable to build dynamic templates ({})", .{err});
-        return;
-    };
-    defer idir.close();
-    var itr = idir.iterate();
-    var list = std.ArrayList(Template).init(a);
-    errdefer list.clearAndFree();
-    while (try itr.next()) |file| {
-        if (file.kind != .file) continue;
-        const name = try std.mem.join(a, "/", &[2][]const u8{
-            path,
-            file.name,
-        });
-        defer a.free(name);
-        const tail = tailPath(file.name);
-        const name_ = try a.dupe(u8, tail);
-        try list.append(.{
-            //.path = path,
-            .name = name_,
-            .blob = try cwd.readFileAlloc(a, name, MAX_BYTES),
-        });
-    }
-    dynamic = try list.toOwnedSlice();
-}
-
-pub fn initDynamic(a: Allocator, path: []const u8) void {
-    loadDynamicTemplates(a, path) catch unreachable;
-}
-
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const endsWith = std.mem.endsWith;

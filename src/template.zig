@@ -14,7 +14,6 @@ const template_data = @import("template/builtins.zig");
 pub const builtin = template_data.builtin;
 pub var dynamic = &template_data.dynamic;
 
-const initDynamic = template_data.initDynamic;
 const makeStructName = template_data.makeStructName;
 const makeFieldName = template_data.makeFieldName;
 pub const findTemplate = template_data.findTemplate;
@@ -173,11 +172,6 @@ test findPageType {
 }
 
 test "load templates" {
-    const a = std.testing.allocator;
-
-    initDynamic(a, "src/builtin-html/");
-    defer raze(a);
-
     //try std.testing.expectEqual(3, builtin.len);
     for (builtin) |bi| {
         if (std.mem.eql(u8, bi.name, "builtin-html/index.html")) {
