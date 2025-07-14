@@ -82,9 +82,7 @@ const AbstTree = struct {
                 \\
             );
             try w.writeAll("};\n");
-        } else {
-            comptime unreachable;
-        }
+        } else comptime unreachable;
     }
 };
 
@@ -119,6 +117,7 @@ fn AutoTranslate(into: type) type {
 }
 
 var root_tree: std.StringHashMapUnmanaged(*AbstTree) = .{};
+var enum_list: std.StringHashMapUnmanaged(*EnumLiteral) = .{};
 
 pub fn main() !void {
     var args = std.process.args();
@@ -192,10 +191,20 @@ pub fn main() !void {
         try emitSourceVars(a, fdata, this);
     }
 
-    var itr = root_tree.iterator();
-    while (itr.next()) |each| {
-        //std.debug.print("tree: {}\n", .{each.value_ptr.*});
-        try wout.print("{}\n", .{each.value_ptr.*});
+    {
+        var itr = root_tree.iterator();
+        while (itr.next()) |each| {
+            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            try wout.print("{}\n", .{each.value_ptr.*});
+        }
+    }
+
+    {
+        var itr = enum_list.iterator();
+        while (itr.next()) |each| {
+            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            try wout.print("{}\n", .{each.value_ptr.*});
+        }
     }
 }
 
@@ -203,6 +212,47 @@ fn genType(d: Directive) type {
     std.debug.print("dir {any}\n", .{d});
 
     return @Type(.{});
+}
+
+pub const EnumLiteral = struct {
+    name: []const u8,
+    members: std.ArrayListUnmanaged([]const u8) = .{},
+
+    pub fn init(a: Allocator, name: []const u8) !*EnumLiteral {
+        const self = try a.create(EnumLiteral);
+        self.* = .{
+            .name = try a.dupe(u8, name),
+        };
+        return self;
+    }
+
+    pub fn add(el: *EnumLiteral, a: Allocator, tag: []const u8) !void {
+        for (el.members.items) |each| {
+            if (eql(u8, each, tag)) return;
+        }
+        try el.members.append(a, try a.dupe(u8, tag));
+    }
+
+    pub fn format(self: EnumLiteral, comptime fmt: []const u8, _: std.fmt.FormatOptions, w: anytype) !void {
+        if (comptime std.mem.eql(u8, fmt, "")) {
+            try w.writeAll("pub const ");
+            try w.writeAll(self.name);
+            try w.writeAll(" = enum(u16) {\n");
+            for (self.members.items) |tag| {
+                try w.print("    {s},\n", .{tag});
+            }
+            try w.writeAll("};\n");
+        } else comptime unreachable;
+    }
+};
+
+fn appendEnumLiteral(a: Allocator, name: []const u8, tag: []const u8) !void {
+    const gop = try enum_list.getOrPut(a, name);
+    if (!gop.found_existing) {
+        gop.value_ptr.* = try .init(a, name);
+        gop.key_ptr.* = gop.value_ptr.*.name;
+    }
+    try gop.value_ptr.*.add(a, tag);
 }
 
 fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
@@ -233,10 +283,14 @@ fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
                                 kind = try bufPrint(&buffer, ": ?{s},\n", .{s_name});
                                 f_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
                             },
+                            .literal => |lit| {
+                                try appendEnumLiteral(a, s_name, lit[0]);
+                            },
                         }
-                        if (drct.known_type) |kt| {
-                            kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(kt)});
-                        }
+                        if (drct.html_type) |htype| switch (htype) {
+                            .@"enum" => kind = try bufPrint(&buffer, ": {s},\n", .{s_name}),
+                            else => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
+                        };
                         try root.append(f_name, kind);
                     },
                     else => |verb| {

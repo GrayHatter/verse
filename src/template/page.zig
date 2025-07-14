@@ -157,9 +157,18 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     },
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {
-                            //std.debug.print("directive\n", .{});
                             const child_data = os.getData(directive.kind, @ptrCast(&data));
-                            try offsetDirective(directive.kind, child_data.*, directive.d, out);
+                            switch (directive.d.otherwise) {
+                                .literal => |lit| {
+                                    // TODO figure out how to make this a u16 cmp instead of mem.eql
+                                    if (std.mem.eql(u8, @tagName(child_data.*), lit[0])) {
+                                        try out.writeAll(lit[1]);
+                                    }
+                                },
+                                else => {
+                                    try offsetDirective(directive.kind, child_data.*, directive.d, out);
+                                },
+                            }
                         },
                         else => {
                             std.debug.print("directive skipped {} {}\n", .{ directive.d.verb, ofs.len });
@@ -259,7 +268,17 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     .directive => |directive| switch (directive.d.verb) {
                         .variable => {
                             const child_data = os.getData(directive.kind, @ptrCast(&data));
-                            try ioVecDirective(directive.kind, child_data.*, directive.d, varr, a);
+                            switch (directive.d.otherwise) {
+                                .literal => |lit| {
+                                    // TODO figure out how to make this a u16 cmp instead of mem.eql
+                                    if (std.mem.eql(u8, @tagName(child_data.*), lit[0])) {
+                                        varr.appendAssumeCapacity(.fromSlice(lit[1]));
+                                    }
+                                },
+                                else => {
+                                    try ioVecDirective(directive.kind, child_data.*, directive.d, varr, a);
+                                },
+                            }
                         },
                         else => {
                             std.debug.print("directive skipped {} {}\n", .{ directive.d.verb, ofs.len });

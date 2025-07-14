@@ -773,6 +773,37 @@ test "directive typed isize" {
     try std.testing.expectEqualStrings(expected, print);
 }
 
+test "EnumLiteral" {
+    var a = std.testing.allocator;
+    const blob =
+        \\<li><a href="" class="<EnumLiteral type="enum" tagname="settings" text="active" />">Settings</a></li>
+        \\<li><a href="" class="<EnumLiteral type="enum" tagname="other" text="active" />">Other</a></li>
+        \\<li><a href="" class="<EnumLiteral type="enum" tagname="default" text="active" />">Default</a></li>
+        \\
+    ;
+    const expected: []const u8 =
+        \\<li><a href="" class="active">Settings</a></li>
+        \\<li><a href="" class="">Other</a></li>
+        \\<li><a href="" class="">Default</a></li>
+        \\
+    ;
+
+    const PData = struct {
+        enum_literal: enum(u16) {
+            settings,
+            other,
+            default,
+        },
+    };
+    const Temp = Template{ .name = "test", .blob = blob };
+    const PType = Page(Temp, PData);
+
+    const data = PData{ .enum_literal = .settings };
+    const print = try allocPrint(a, "{}", .{PType.init(data)});
+    defer a.free(print);
+    try std.testing.expectEqualStrings(expected, print);
+}
+
 test "grouped offsets" {
     const blob =
         \\<html>

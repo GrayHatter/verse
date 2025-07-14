@@ -4,7 +4,7 @@ otherwise: Otherwise,
 tag_block: []const u8,
 tag_block_body: ?[]const u8 = null,
 tag_block_skip: ?usize = null,
-known_type: ?KnownType = null,
+html_type: ?HtmlType = null,
 
 pub const Directive = @This();
 
@@ -14,6 +14,7 @@ pub const Otherwise = union(enum) {
     default: []const u8,
     template: Template,
     exact: usize,
+    literal: struct { []const u8, []const u8 },
     //page: type,
 };
 
@@ -25,14 +26,27 @@ pub const Verb = enum {
     build,
 };
 
-pub const KnownType = enum {
+pub const HtmlType = enum {
     usize,
     isize,
     @"?usize",
+    @"enum",
 
-    pub fn nullable(kt: KnownType) bool {
+    pub fn fromStr(s: []const u8) !HtmlType {
+        inline for (std.meta.fields(HtmlType)) |ht| {
+            if (eql(u8, ht.name, s)) {
+                return @enumFromInt(ht.value);
+            }
+        }
+        return error.InvalidHtmlType;
+    }
+
+    pub fn nullable(kt: HtmlType) bool {
         return switch (kt) {
-            .usize, .isize => false,
+            .usize,
+            .isize,
+            .@"enum",
+            => false,
             .@"?usize" => true,
         };
     }
@@ -61,23 +75,25 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
     if (noun[0] == '_') @panic("Template Directives must not start with _");
 
     var default_str: ?[]const u8 = null;
-    var knownt: ?KnownType = null;
+    var h_type: ?HtmlType = null;
+    var tag_name: ?[]const u8 = null;
+    var tag_text: ?[]const u8 = null;
     var rem_attr: []const u8 = tag[noun.len + 1 .. tag.len - 1];
     while (indexOfScalar(u8, rem_attr, '=') != null) {
         if (findAttribute(rem_attr)) |attr| {
             if (eql(u8, attr.name, "type")) {
-                inline for (std.meta.fields(KnownType)) |kt| {
-                    if (eql(u8, attr.value, kt.name)) {
-                        knownt = @enumFromInt(kt.value);
-                        break;
-                    }
-                } else {
+                h_type = HtmlType.fromStr(attr.value) catch {
                     std.debug.print("Unable to resolve requested type '{s}'\n", .{attr.value});
                     unreachable;
-                }
-            } else if (eql(u8, attr.name, "default")) {
+                };
+            } else if (eql(u8, "default", attr.name)) {
                 default_str = attr.value;
+            } else if (eql(u8, "tagname", attr.name)) {
+                tag_name = attr.value;
+            } else if (eql(u8, "text", attr.name)) {
+                tag_text = attr.value;
             }
+
             rem_attr = rem_attr[attr.len..];
         } else |err| switch (err) {
             error.AttrInvalid => break,
@@ -92,14 +108,22 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
             .{ .default = str }
         else if (indexOf(u8, tag, " ornull")) |_|
             .delete
-        else if (knownt) |kn|
-            if (kn.nullable())
+        else if (h_type) |htype|
+            if (htype.nullable())
                 .delete
+            else if (htype == .@"enum")
+                .{ .literal = .{ tag_name orelse {
+                    std.debug.print("Tag name not given for enum type\n", .{});
+                    unreachable;
+                }, tag_text orelse {
+                    std.debug.print("Tag name not given for enum type\n", .{});
+                    unreachable;
+                } } }
             else
                 .required
         else
             .required,
-        .known_type = knownt,
+        .html_type = h_type,
         .tag_block = tag,
     };
 }
@@ -407,7 +431,7 @@ fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
 pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
     switch (d.verb) {
         .variable => {
-            if (d.known_type) |_| return d.doTyped(T, ctx, out);
+            if (d.html_type) |_| return d.doTyped(T, ctx, out);
             const noun = d.noun;
             const var_name = typeField(T, noun, ctx);
             if (var_name) |data_blob| {
@@ -419,6 +443,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                     // Not really an error, just instruct caller to print original text
                     .required => return error.VariableMissing,
                     .delete => {},
+                    .literal => unreachable,
                     .template => |template| {
                         if (T == usize) unreachable;
                         if (@typeInfo(T) != .@"struct") unreachable;

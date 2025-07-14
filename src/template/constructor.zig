@@ -125,7 +125,7 @@ fn fieldType(T: type, name: []const u8) type {
         if (eql(u8, f.name, field)) {
             return f.type;
         }
-    } else unreachable;
+    } else comptime unreachable;
 }
 
 pub fn commentTag(blob: []const u8) ?usize {
