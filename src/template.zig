@@ -6,7 +6,6 @@ pub const html = @import("template/html.zig");
 
 const pages = @import("template/page.zig");
 pub const Page = pages.Page;
-pub const PageRuntime = pages.PageRuntime;
 
 const MAX_BYTES = 2 <<| 15;
 
@@ -933,6 +932,11 @@ test "For use=" {
     ;
 
     try std.testing.expectEqualStrings(expected, p);
+}
+
+test {
+    _ = std.testing.refAllDecls(@This());
+    _ = &html;
 }
 
 const std = @import("std");

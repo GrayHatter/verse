@@ -1,8 +1,4 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-
 pub const DOM = @import("html/dom.zig");
-
 pub const Extra = @import("html/extra.zig");
 
 pub const Attribute = struct {
@@ -404,3 +400,11 @@ test "attrs" {
     ;
     try std.testing.expectEqualStrings(example, str);
 }
+
+test {
+    _ = std.testing.refAllDecls(@This());
+    _ = &DOM;
+}
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
