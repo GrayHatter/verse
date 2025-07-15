@@ -277,6 +277,14 @@ test findAttrs {
     try std.testing.expectEqualStrings(map.get(.default).?, "text");
     map = try findAttrs("default=\"text\" />");
     try std.testing.expectEqualStrings(map.get(.default).?, "text");
+    map = try findAttrs("default=\"t\" default=\"tx\" default=\"txt\" default=\"text\" />");
+    try std.testing.expectEqualStrings(map.get(.default).?, "text");
+    map = try findAttrs("name=\"txt\" default=\"default\" text=\"name\" enum=\"blerg\" />");
+    try std.testing.expectEqualStrings(map.get(.default).?, "default");
+    try std.testing.expectEqualStrings(map.get(.@"enum").?, "blerg");
+    // Yes, they're reversed intentionally
+    try std.testing.expectEqualStrings(map.get(.name).?, "txt");
+    try std.testing.expectEqualStrings(map.get(.text).?, "name");
 }
 
 fn validChar(c: u8) bool {
