@@ -41,7 +41,7 @@ pub fn serve(http: *HTTP) !void {
     var srv = try http.listen_addr.listen(.{ .reuse_address = true });
     defer srv.deinit();
 
-    log.info("HTTP Server listening on port: {any}", .{http.listen_addr.getPort()});
+    log.info("HTTP Server listening at http://{}", .{http.listen_addr});
     http.alive = true;
     while (http.running) {
         const conn = try srv.accept();
