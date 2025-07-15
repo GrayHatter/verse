@@ -247,7 +247,8 @@ fn findAttrs(src_tag: []const u8) !TagAttrMap {
                     while (end < tag.len and tag[end] != qut) end += 1;
                     if (end == tag.len) return error.AttrInvalid;
                     if (tag[end] != qut) return error.AttrInvalid else end += 1;
-                    value = trim(u8, tag[eq_idx + 1 .. end], whitespace.* ++ &[_]u8{ qut, '=', '<', '>', '/' });
+                    value = trim(u8, tag[eq_idx + 1 .. end], whitespace);
+                    value = trim(u8, tag[eq_idx + 1 .. end], &[1]u8{qut});
                     break;
                 },
                 else => while (end < tag.len and !isWhitespace(tag[end])) : (end += 1) {},
