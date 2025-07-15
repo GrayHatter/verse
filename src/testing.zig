@@ -231,9 +231,10 @@ test {
         fc.buffer[0 .. hidx + 2],
         "\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
     ));
-
-    try std.testing.expectEqual(754, fc.frame.request.downstream.buffer.pos);
-    try std.testing.expectEqualSlices(u8, not_found_body, fc.buffer[hidx + 2 .. fc.frame.request.downstream.buffer.pos]);
+    const frame_response_size = fc.frame.request.downstream.buffer.pos;
+    try std.testing.expect(720 <= frame_response_size); // Tagged release header
+    try std.testing.expect(765 >= frame_response_size); // Devel release header (plus extra)
+    try std.testing.expectEqualSlices(u8, not_found_body, fc.buffer[hidx + 2 .. frame_response_size]);
 }
 
 const std = @import("std");
