@@ -50,7 +50,7 @@ pub const Element = struct {
 
         if (self.name[0] == '_') {
             if (self.text) |txt| {
-                return try std.fmt.format(out, "{s}", .{txt});
+                return try out.print("{s}", .{txt});
             }
         }
 
