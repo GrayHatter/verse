@@ -75,33 +75,17 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
 
     if (noun[0] == '_') @panic("Template Directives must not start with _");
 
-    var default_str: ?[]const u8 = null;
-    var h_type: ?HtmlType = null;
-    var tag_name: ?[]const u8 = null;
-    var directive: ?[]const u8 = null;
-    var rem_attr: []const u8 = tag[noun.len + 1 .. tag.len - 1];
-    while (indexOfScalar(u8, rem_attr, '=') != null) {
-        if (findAttribute(rem_attr)) |attr| {
-            if (eql(u8, attr.name, "type")) {
-                h_type = HtmlType.fromStr(attr.value) catch {
-                    std.debug.print("Unable to resolve requested type '{s}'\n", .{attr.value});
-                    unreachable;
-                };
-            } else if (eql(u8, "default", attr.name)) {
-                default_str = attr.value;
-            } else if (eql(u8, "enum", attr.name)) {
-                tag_name = attr.value;
-                h_type = .@"enum";
-            } else if (eql(u8, "text", attr.name)) {
-                directive = attr.value;
-            }
-
-            rem_attr = rem_attr[attr.len..];
-        } else |err| switch (err) {
-            error.AttrInvalid => break,
-            else => unreachable,
+    const tag_map = findAttrs(tag[noun.len + 1 .. tag.len - 1]) catch return null;
+    //const directive: ?[]const u8 = if (tag_map.get(.text)) |ht| try .fromStr(ht) else null;
+    const default_str: ?[]const u8 = tag_map.get(.default);
+    const h_type: ?HtmlType, const tag_name: ?[]const u8 = if (tag_map.get(.@"enum")) |ht|
+        .{ .@"enum", ht }
+    else if (tag_map.get(.type)) |ht|
+        .{
+            HtmlType.fromStr(ht) catch null, null,
         }
-    }
+    else
+        .{ null, null };
 
     return Directive{
         .verb = .variable,
@@ -176,30 +160,11 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             while (end_idx < blob.len and (blob[end_idx] == ' ' or blob[end_idx] == '\n')) end_idx += 1;
             const tag_block = blob[0..end_idx];
 
-            var name: ?[]const u8 = null;
-            var text: ?[]const u8 = null;
-            var rem_attr: []const u8 = tag_block_body["<Directive ".len..body_end];
-            while (indexOfScalar(u8, rem_attr, '=') != null) {
-                if (findAttribute(rem_attr)) |attr| {
-                    if (eql(u8, attr.name, "type")) {
-                        if (!eql(u8, "enum", attr.value)) {
-                            std.debug.print("Unable to resolve requested type '{s}'\n", .{attr.value});
-                            @panic("wut");
-                        }
-                    } else if (eql(u8, "name", attr.name)) {
-                        name = attr.value;
-                    } else if (eql(u8, "text", attr.name)) {
-                        text = attr.value;
-                    } else {
-                        unreachable;
-                    }
-                    rem_attr = rem_attr[attr.len..];
-                } else |err| switch (err) {
-                    error.AttrInvalid => break,
-                    else => unreachable,
-                }
-            }
-            std.debug.assert(std.mem.indexOf(u8, rem_attr, "name") == null);
+            const tag_map = findAttrs(tag_block_body["<Directive ".len..body_end]) catch return null;
+
+            const name: ?[]const u8 = tag_map.get(.name);
+            const text: ?[]const u8 = tag_map.get(.text);
+
             return Directive{
                 .verb = .directive,
                 .noun = name orelse @panic("literal text not given for directive"),
@@ -222,26 +187,9 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             if (noun[name_end - 1] == '/') name_end -= 1;
             const name = noun[1..name_end];
 
-            var exact: ?usize = null;
-            var use: ?[]const u8 = null;
-
-            var rem_attr: []const u8 = noun[1 + name.len ..];
-            while (indexOfScalar(u8, rem_attr, '=') != null) {
-                if (findAttribute(rem_attr)) |attr| {
-                    if (eql(u8, attr.name, "exact")) {
-                        exact = std.fmt.parseInt(usize, attr.value, 10) catch null;
-                    } else if (eql(u8, attr.name, "use")) {
-                        use = attr.value;
-                    } else {
-                        std.debug.print("attr {s}\n", .{attr.name});
-                        unreachable;
-                    }
-                    rem_attr = rem_attr[attr.len..];
-                } else |err| switch (err) {
-                    error.AttrInvalid => break,
-                    else => unreachable,
-                }
-            }
+            const tag_map = findAttrs(noun[1 + name.len ..]) catch return null;
+            const exact: ?usize = if (tag_map.get(.exact)) |e| std.fmt.parseInt(usize, e, 10) catch null else null;
+            const use: ?[]const u8 = tag_map.get(.use);
 
             const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
             const body_end: usize = end - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
@@ -269,54 +217,65 @@ fn findTag(blob: []const u8) ![]const u8 {
     return blob[0 .. 1 + (indexOf(u8, blob, ">") orelse return error.TagInvalid)];
 }
 
-const TAttr = struct {
-    name: []const u8,
-    value: []const u8,
-    len: usize,
+pub const TagAttribute = enum {
+    @"enum",
+    default,
+    exact,
+    name,
+    text,
+    type,
+    use,
 };
 
-fn findAttribute(tag: []const u8) !TAttr {
-    const equi = indexOfScalar(u8, tag, '=') orelse return error.AttrInvalid;
-    const name = trim(u8, tag[0..equi], whitespace);
-    var value = trim(u8, tag[equi + 1 ..], whitespace);
+pub const TagAttrMap = std.EnumMap(TagAttribute, []const u8);
 
-    var end: usize = equi + 1;
-    while (end < tag.len and isWhitespace(tag[end])) end += 1;
-    while (end < tag.len) {
-        // TODO rewrite with tagged switch syntax
-        switch (tag[end]) {
-            '\n', '\r', '\t', ' ' => end += 1,
-            '\'', '"' => |qut| {
-                end += 1;
-                while (end <= tag.len and tag[end] != qut) end += 1;
-                if (end == tag.len) return error.AttrInvalid;
-                if (tag[end] != qut) return error.AttrInvalid else end += 1;
-                value = trim(u8, tag[equi + 1 .. end], whitespace.* ++ &[_]u8{ qut, '=', '<', '>', '/' });
-                break;
-            },
-            else => {
-                while (end < tag.len and !isWhitespace(tag[end])) end += 1;
-            },
+fn findAttrs(src_tag: []const u8) !TagAttrMap {
+    var map: TagAttrMap = .init(.{});
+    var tag = src_tag;
+    while (indexOfScalar(u8, tag, '=')) |eq_idx| {
+        const name = trim(u8, tag[0..eq_idx], whitespace);
+        var value = trim(u8, tag[eq_idx + 1 ..], whitespace);
+
+        var end: usize = eq_idx + 1;
+        while (end < tag.len and isWhitespace(tag[end])) end += 1;
+        while (end < tag.len) {
+            // TODO rewrite with tagged switch syntax
+            switch (tag[end]) {
+                '\n', '\r', '\t', ' ' => end += 1,
+                '\'', '"' => |qut| {
+                    end += 1;
+                    while (end <= tag.len and tag[end] != qut) end += 1;
+                    if (end == tag.len) return error.AttrInvalid;
+                    if (tag[end] != qut) return error.AttrInvalid else end += 1;
+                    value = trim(u8, tag[eq_idx + 1 .. end], whitespace.* ++ &[_]u8{ qut, '=', '<', '>', '/' });
+                    break;
+                },
+                else => while (end < tag.len and !isWhitespace(tag[end])) : (end += 1) {},
+            }
         }
+        tag = tag[end..];
+
+        inline for (@typeInfo(TagAttribute).@"enum".fields) |f| {
+            if (eql(u8, f.name, name)) {
+                map.put(@enumFromInt(f.value), value);
+                break;
+            }
+        } else @panic("unreachable name");
     }
-    return .{
-        .name = name,
-        .value = value,
-        .len = end,
-    };
+    return map;
 }
 
-test findAttribute {
-    var attr = try findAttribute("type=\"usize\"");
-    try std.testing.expectEqualDeep(TAttr{ .name = "type", .value = "usize", .len = 12 }, attr);
-    attr = try findAttribute("type=\"isize\"");
-    try std.testing.expectEqualDeep(TAttr{ .name = "type", .value = "isize", .len = 12 }, attr);
-    attr = try findAttribute("type=\"?usize\"");
-    try std.testing.expectEqualDeep(TAttr{ .name = "type", .value = "?usize", .len = 13 }, attr);
-    attr = try findAttribute("default=\"text\"");
-    try std.testing.expectEqualDeep(TAttr{ .name = "default", .value = "text", .len = 14 }, attr);
-    attr = try findAttribute("default=\"text\" />");
-    try std.testing.expectEqualDeep(TAttr{ .name = "default", .value = "text", .len = 14 }, attr);
+test findAttrs {
+    var map = try findAttrs("type=\"usize\"");
+    try std.testing.expectEqualStrings(map.get(.type).?, "usize");
+    map = try findAttrs("type=\"isize\"");
+    try std.testing.expectEqualStrings(map.get(.type).?, "isize");
+    map = try findAttrs("type=\"?usize\"");
+    try std.testing.expectEqualStrings(map.get(.type).?, "?usize");
+    map = try findAttrs("default=\"text\"");
+    try std.testing.expectEqualStrings(map.get(.default).?, "text");
+    map = try findAttrs("default=\"text\" />");
+    try std.testing.expectEqualStrings(map.get(.default).?, "text");
 }
 
 fn validChar(c: u8) bool {
