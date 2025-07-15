@@ -3,7 +3,10 @@
 ///This page template is compiled/prepared at comptime.
 const ExamplePage = PageData("templates/example.html");
 
+var global_number: usize = 1; // Wanted to write 2, but off by one errors are common
+
 fn index(frame: *verse.Frame) Router.Error!void {
+    defer global_number +%= 1;
     var page = ExamplePage.init(.{
         // Simple Variables
         .simple_variable = "This is a simple variable",
@@ -18,7 +21,7 @@ fn index(frame: *verse.Frame) Router.Error!void {
         .default_provided = "This is the endpoint provided variable",
         // Commented so the HTML provided default can be used.
         //.default_missing = "This endpoint var could replaced the default",
-        .positive_number = 1, // Wanted to write 2, but off by one errors are common
+        .positive_number = global_number,
 
         // Logic based Variables.
         // A default isn't provided for .optional, because With statements, require
