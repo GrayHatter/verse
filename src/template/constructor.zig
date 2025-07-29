@@ -308,7 +308,7 @@ fn validateDirective(
 }
 
 pub fn validateBlock(comptime html: []const u8, BlockType: type, base_offset: usize) []const Offset {
-    @setEvalBranchQuota(10000);
+    @setEvalBranchQuota(200000);
     var found_offsets: []const Offset = &[0]Offset{};
     var pblob = html;
     var index: usize = 0;
