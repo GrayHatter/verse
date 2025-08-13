@@ -8,8 +8,9 @@ pub const verse_routes = [_]Router.Match{
     Router.ANY("hi", hi),
 };
 
-/// verse_endpoint_enabled is an option decl that defaults to true if omitted
-pub const verse_endpoint_enabled: bool = true;
+/// verse_endpoint_disabled is an optional decl that when defined and set true,
+/// will "hide" the endpoint from the endpoint router
+pub const verse_endpoint_disabled: bool = false;
 
 /// This is commented out here, as it's included within the root endpoint,
 /// but because this endpoint will be flattened out into root directory;

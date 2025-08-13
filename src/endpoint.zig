@@ -78,6 +78,10 @@ pub fn validateEndpoint(EP: anytype) void {
                 @compileError("the `verse_routes` decl is reserved for a list of pre-constructed " ++
                     "`Match` targets. " ++ @typeName(route) ++ " at position " ++ i ++ " is invalid.");
             }
+
+            if (route.name.len == 0) {
+                @compileError("Empty route name for: " ++ @typeName(EP) ++ ". To support a directory URI, define an index() instead");
+            }
         }
     }
 
@@ -106,64 +110,62 @@ pub fn validateEndpoint(EP: anytype) void {
         }
     }
 
-    if (@hasDecl(EP, "verse_alias")) {
-        // TODO write validation code for alias
+    if (@hasDecl(EP, "verse_aliases")) {
+        if (@typeInfo(@TypeOf(EP.verse_aliases)) != .@"struct") {
+            @compileError("ha");
+        }
+        if (!@typeInfo(@TypeOf(EP.verse_aliases)).@"struct".is_tuple) {
+            @compileError("Expected verse_aliases to be a tuple of .enum_literals");
+        }
+        for (EP.verse_aliases, 0..) |alias, i| {
+            if (@TypeOf(alias) != @TypeOf(.enum_literal)) {
+                @compileError("Expected verse_aliases in position " ++ i ++ " to be an .enum_literal.\n" ++
+                    "Instead it was: " ++ @typeName(alias));
+            }
+        }
     }
 
-    if (@hasDecl(EP, "verse_endpoint_enabled")) {
-        if (@TypeOf(EP.verse_endpoint_enabled) != bool) {
-            @compileError("The type of `verse_endpoint_enabled` decl must be bool. Instead it was " ++
+    if (@hasDecl(EP, "verse_endpoint_disabled")) {
+        if (@TypeOf(EP.verse_endpoint_disabled) != bool) {
+            @compileError("The type of `verse_endpoint_disabled` decl must be bool. Instead it was " ++
                 @typeName(@TypeOf(EP.verse_builder)));
         }
     }
 }
 
 fn routeCount(endpoints: anytype) usize {
-    var count: usize = 0;
     if (endpoints.len == 0) @compileError("Zero is not a countable number");
+
+    var count: usize = 0;
+    var flatten_root: bool = true;
     for (endpoints, 0..) |ep, i| {
-        if (@hasDecl(ep, "verse_endpoint_enabled")) {
-            if (!ep.verse_endpoint_enabled) continue;
+        if (@hasDecl(ep, "verse_endpoint_disabled")) {
+            if (ep.verse_endpoint_disabled) continue;
+        }
+
+        const root_endpoint: bool = ep.verse_name == .root and i == 0 or endpoints.len == 1;
+        if (@hasDecl(ep, "verse_flatten_routes") and ep.verse_flatten_routes == false) {
+            flatten_root = false;
         }
 
         if (@hasDecl(ep, "verse_router")) {
             count += 1;
-            if (@hasDecl(ep, "verse_alias")) {
-                count += ep.verse_alias.len;
-            }
+            if (@hasDecl(ep, "verse_aliases")) count += ep.verse_aliases.len;
+        } else if (root_endpoint and flatten_root) {
+            if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .@"fn") count += 1;
+            if (@hasDecl(ep, "verse_aliases")) count += ep.verse_aliases.len;
+            if (@hasDecl(ep, "verse_routes")) count += ep.verse_routes.len;
+            if (@hasDecl(ep, "verse_endpoints")) count += @min(ep.verse_endpoints.Endpoints.len, 1);
         } else {
+            if (@hasDecl(ep, "verse_aliases") and endpoints.len > 1) count += ep.verse_aliases.len;
+
             if (@hasDecl(ep, "index") and @typeInfo(@TypeOf(ep.index)) == .@"fn") {
                 count += 1;
+            } else if (@hasDecl(ep, "verse_routes")) {
+                count += @min(ep.verse_routes.len, 1);
+            } else if (@hasDecl(ep, "verse_endpoints")) {
+                count += @min(ep.verse_endpoints.Endpoints.len, 1);
             }
-
-            if (@hasDecl(ep, "verse_routes")) for (ep.verse_routes) |route| {
-                if (route.name.len == 0) {
-                    @compileError("Empty route name for: " ++ @typeName(ep) ++ ". To support a directory URI, define an index() instead");
-                }
-                count += 1;
-            };
-
-            if (@hasDecl(ep, "verse_endpoints")) {
-                count += ep.verse_endpoints.Endpoints.len;
-            }
-        }
-        if (i == 0 and ep.verse_name == .root) {
-            // .root is a special case endpoint that gets automagically
-            // flattened out
-            var flatten_count: isize = 0;
-            if (endpoints.len > 1) {
-                for (endpoints) |ep_alias| {
-                    if (@hasDecl(ep_alias, "verse_endpoint_enabled")) {
-                        if (!ep_alias.verse_endpoint_enabled) {
-                            flatten_count -= 1;
-                        }
-                    }
-                    if (@hasDecl(ep_alias, "verse_alias")) {
-                        flatten_count += ep_alias.verse_alias.len;
-                    }
-                }
-            }
-            return count + endpoints.len - 1 + flatten_count;
         }
     }
     return count;
@@ -183,7 +185,7 @@ test routeCount {
                 pub fn index() void {}
             },
         }));
-        try std.testing.expectEqual(2, routeCount(.{
+        try std.testing.expectEqual(1, routeCount(.{
             struct {
                 const verse_name = .testing;
                 const verse_endpoints = Endpoints(.{
@@ -192,10 +194,45 @@ test routeCount {
                         pub fn index() void {}
                     },
                 });
-                pub fn index() void {}
+            },
+        }));
+        try std.testing.expectEqual(5, routeCount(.{
+            struct {
+                const verse_name = .root;
+                pub fn index(_: *Frame) Router.Error!void {}
+                const verse_routes = .{
+                    Router.ROUTE("first", index),
+                    Router.ROUTE("second", index),
+                    Router.ROUTE("third", index),
+                };
+            },
+            struct {
+                pub const verse_name = .sub_root;
+                pub fn empty(_: *Frame) Router.Error!void {}
+                const verse_routes = .{
+                    Router.ROUTE("first", empty),
+                    Router.ROUTE("second", empty),
+                };
+                const verse_endpoints = Endpoints(.{
+                    struct {
+                        pub const verse_name = .sub_sub_root;
+                        pub fn index(_: *Frame) Router.Error!void {}
+                    },
+                });
             },
         }));
         try std.testing.expectEqual(3, routeCount(.{
+            struct {
+                const verse_name = .root;
+                const verse_routes = .{
+                    Router.ROUTE("first", empty),
+                    Router.ROUTE("second", empty),
+                    Router.ROUTE("third", empty),
+                };
+                pub fn empty(_: *Frame) Router.Error!void {}
+            },
+        }));
+        try std.testing.expectEqual(1, routeCount(.{
             struct {
                 const verse_name = .testing;
                 const verse_routes = .{
@@ -204,6 +241,9 @@ test routeCount {
                     Router.ROUTE("third", empty),
                 };
                 pub fn empty(_: *Frame) Router.Error!void {}
+            },
+            struct {
+                const verse_name = .dummy;
             },
         }));
         try std.testing.expectEqual(1, routeCount(.{
@@ -222,11 +262,11 @@ test routeCount {
             },
         }));
         // TODO test verse_router doesn't include verse_endpoints
-        try std.testing.expectEqual(1, routeCount(.{
+        try std.testing.expectEqual(2, routeCount(.{
             // TODO expand this test in include a root struct
             struct {
                 const verse_name = .testing;
-                const verse_alias = .{
+                const verse_aliases = .{
                     // everyone has testing infra, we're not lucky enough to
                     // have dedicated infra reserved for prod
                     .prod,
@@ -235,7 +275,7 @@ test routeCount {
             },
         }));
         // disabled
-        try std.testing.expectEqual(2, routeCount(.{
+        try std.testing.expectEqual(3, routeCount(.{
             // TODO expand this test in include a root struct
             struct {
                 const verse_name = .first;
@@ -243,7 +283,7 @@ test routeCount {
             },
             struct {
                 const verse_name = .second;
-                const verse_alias = .{.prod};
+                const verse_aliases = .{.prod};
                 pub fn index() void {}
             },
         }));
@@ -255,21 +295,35 @@ test routeCount {
             },
             struct {
                 const verse_name = .second;
-                const verse_alias = .{.prod};
-                const verse_endpoint_enabled: bool = false;
+                const verse_aliases = .{.prod};
+                const verse_endpoint_disabled: bool = true;
                 pub fn index() void {}
             },
         }));
-        try std.testing.expectEqual(2, routeCount(.{
-            // TODO expand this test in include a root struct
+        try std.testing.expectEqual(3, routeCount(.{
             struct {
                 const verse_name = .first;
                 pub fn index() void {}
             },
             struct {
                 const verse_name = .second;
-                const verse_alias = .{.prod};
-                const verse_endpoint_enabled: bool = true;
+                const verse_aliases = .{.prod};
+                const verse_endpoint_disabled: bool = false;
+                pub fn index() void {}
+            },
+        }));
+        try std.testing.expectEqual(10, routeCount(.{
+            struct {
+                const verse_name = .first;
+                pub fn index() void {}
+            },
+            struct {
+                const verse_name = .second;
+                const verse_aliases = .{
+                    .prod,     .devel,   .devel2, .not_devel,
+                    .not_prod, .testing, .admin,  .secret,
+                };
+                const verse_endpoint_disabled: bool = false;
                 pub fn index() void {}
             },
         }));
@@ -279,13 +333,18 @@ test routeCount {
 fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
     var match: [routeCount(EPS)]Router.Match = undefined;
     var idx: usize = 0;
-    for (EPS) |EP| {
-        if (@hasDecl(EP, "verse_endpoint_enabled")) {
-            if (!EP.verse_endpoint_enabled) continue;
+    var flatten_root: bool = true;
+    for (EPS, 0..) |EP, i| {
+        if (@hasDecl(EP, "verse_endpoint_disabled")) {
+            if (EP.verse_endpoint_disabled) continue;
         }
 
-        // Only flatten when the endpoint name is root
-        if (EP.verse_name == .root) {
+        const root_endpoint: bool = EP.verse_name == .root and i == 0 or EPS.len == 1;
+        if (@hasDecl(EP, "verse_flatten_routes") and EP.verse_flatten_routes == false) {
+            flatten_root = false;
+        }
+
+        if (root_endpoint) {
             for (buildRoutes(EP)) |r| {
                 match[idx] = r;
                 idx += 1;
@@ -293,19 +352,37 @@ fn collectRoutes(EPS: anytype) [routeCount(EPS)]Router.Match {
         } else if (@hasDecl(EP, "verse_router")) {
             match[idx] = Router.ROUTE(@tagName(EP.verse_name), EP.verse_router);
             idx += 1;
-            if (@hasDecl(EP, "verse_alias")) for (EP.verse_alias) |alias| {
+            if (@hasDecl(EP, "verse_aliases")) for (EP.verse_aliases) |alias| {
                 match[idx] = Router.ROUTE(@tagName(alias), EP.verse_router);
                 idx += 1;
             };
-        } else {
+        } else if (!@hasDecl(EP, "verse_flatten_routes") or EP.verse_flatten_routes) {
             const routes = buildRoutes(EP);
             match[idx] = Router.ROUTE(@tagName(EP.verse_name), &routes);
             idx += 1;
-            if (@hasDecl(EP, "verse_alias")) for (EP.verse_alias) |alias| {
+
+            if (@hasDecl(EP, "verse_aliases")) for (EP.verse_aliases) |alias| {
                 match[idx] = Router.ROUTE(@tagName(alias), &routes);
                 idx += 1;
             };
+        } else {
+            //const routes = buildRoutes(EP);
+            if (@hasDecl(EP, "verse_routes")) {
+                match[idx] = Router.ROUTE(@tagName(EP.verse_name), &EP.verse_routes);
+                idx += 1;
+                if (@hasDecl(EP, "verse_aliases")) for (EP.verse_aliases) |alias| {
+                    match[idx] = Router.ROUTE(@tagName(alias), &EP.verse_routes);
+                    idx += 1;
+                };
+            }
+            if (@hasDecl(EP, "verse_endpoints")) {
+                match[idx] = Router.ROUTE(@tagName(EP.verse_name), &EP.verse_endpoints);
+                idx += 1;
+            }
         }
+    }
+    if (idx != match.len) {
+        @compileError("Unable to collect all expected endpoints");
     }
     return match;
 }
@@ -320,6 +397,11 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
         if (@hasDecl(EP, "index")) {
             match[idx] = Router.ALL("", EP.index);
             idx += 1;
+            // This hack in wrong, and yes, I feel bad :<
+            if (@hasDecl(EP, "verse_aliases")) for (EP.verse_aliases) |_| {
+                match[idx] = Router.ALL("", EP.index);
+                idx += 1;
+            };
         }
 
         if (@hasDecl(EP, "verse_routes")) for (EP.verse_routes) |route| {
@@ -334,6 +416,9 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
     }
 
     if (idx == 0) @compileError("Unable to build routes for " ++ @typeName(EP) ++ " No valid routes found");
+    if (idx != match.len) {
+        @compileError("Unable to build all expected routes");
+    }
     return match;
 }
 
@@ -343,7 +428,7 @@ test Endpoints {
         pub fn nopEndpoint(_: *Frame) Router.Error!void {}
     };
 
-    _ = Endpoints(.{
+    const first = Endpoints(.{
         struct {
             pub const verse_name = .root;
             pub const verse_routes = [_]Router.Match{
@@ -355,6 +440,96 @@ test Endpoints {
             pub const index = Example.nopEndpoint;
         },
     });
+    try std.testing.expectEqual(@as(usize, 4), first.routes.len);
+
+    const second = Endpoints(.{
+        struct {
+            pub const verse_name = .root;
+            //pub const verse_flatten_routes = false;
+            pub const index = Example.nopEndpoint;
+            pub const verse_routes = [_]Router.Match{
+                Router.GET("nop", Example.nopEndpoint),
+                Router.ROUTE("routes", Example.nopEndpoint),
+                Router.STATIC("static"),
+            };
+            pub const verse_builder = &Router.defaultBuilder;
+        },
+        struct {
+            pub const verse_name = .flattened;
+            pub const verse_routes = [_]Router.Match{
+                Router.ANY("flat0", Example.nopEndpoint),
+                Router.ANY("flat1", Example.nopEndpoint),
+            };
+            pub const verse_endpoints = Endpoints(.{
+                struct {
+                    pub const verse_name = .sub_tree;
+                    pub const verse_routes = [_]Router.Match{
+                        Router.ANY("nop0", Example.nopEndpoint),
+                        Router.ANY("nop1", Example.nopEndpoint),
+                        Router.ANY("nop2", Example.nopEndpoint),
+                        Router.ANY("nop3", Example.nopEndpoint),
+                    };
+                },
+            });
+        },
+    });
+    try std.testing.expectEqual(@as(usize, 5), second.routes.len);
+    try std.testing.expectEqualStrings("", second.routes[0].name);
+    try std.testing.expectEqualStrings("nop", second.routes[1].name);
+    try std.testing.expectEqualStrings("routes", second.routes[2].name);
+    try std.testing.expectEqualStrings("static", second.routes[3].name);
+    try std.testing.expectEqualStrings("flattened", second.routes[4].name);
+    try std.testing.expectEqual(@as(usize, 3), second.routes[4].target.simple.len);
+    try std.testing.expectEqualStrings("flat0", second.routes[4].target.simple[0].name);
+    try std.testing.expectEqualStrings("flat1", second.routes[4].target.simple[1].name);
+    try std.testing.expectEqualStrings("sub_tree", second.routes[4].target.simple[2].name);
+    try std.testing.expectEqual(@as(usize, 4), second.routes[4].target.simple[2].target.simple.len);
+    try std.testing.expectEqualStrings("nop0", second.routes[4].target.simple[2].target.simple[0].name);
+    try std.testing.expectEqualStrings("nop1", second.routes[4].target.simple[2].target.simple[1].name);
+    try std.testing.expectEqualStrings("nop2", second.routes[4].target.simple[2].target.simple[2].name);
+    try std.testing.expectEqualStrings("nop3", second.routes[4].target.simple[2].target.simple[3].name);
+
+    //const aliased = Endpoints(.{
+    //    struct {
+    //        pub const verse_name = .root;
+    //        pub const verse_flatten_routes = false;
+    //        pub const index = Example.nopEndpoint;
+    //        pub const verse_routes = [_]Router.Match{
+    //            Router.GET("nop", Example.nopEndpoint),
+    //            Router.ROUTE("routes", Example.nopEndpoint),
+    //            Router.STATIC("static"),
+    //        };
+    //        pub const verse_builder = &Router.defaultBuilder;
+    //    },
+    //    struct {
+    //        pub const verse_name = .flattened;
+    //        pub const verse_routes = [_]Router.Match{
+    //            Router.ANY("flat0", Example.nopEndpoint),
+    //            Router.ANY("flat1", Example.nopEndpoint),
+    //        };
+    //        pub const verse_endpoints = Endpoints(.{
+    //            struct {
+    //                pub const verse_name = .sub_tree;
+    //                pub const verse_routes = [_]Router.Match{
+    //                    Router.ANY("nop", Example.nopEndpoint),
+    //                    Router.ANY("nop2", Example.nopEndpoint),
+    //                    Router.ANY("nop3", Example.nopEndpoint),
+    //                };
+    //            },
+    //        });
+    //    },
+    //});
+    //try std.testing.expectEqual(@as(usize, 5), aliased.routes.len);
+    //try std.testing.expectEqualStrings("", aliased.routes[0].name);
+    //try std.testing.expectEqualStrings("nop", aliased.routes[1].name);
+    //try std.testing.expectEqualStrings("routes", aliased.routes[2].name);
+    //try std.testing.expectEqualStrings("static", aliased.routes[3].name);
+    //try std.testing.expectEqualStrings("flattened", aliased.routes[4].name);
+    //try std.testing.expectEqual(@as(usize, 3), aliased.routes[4].target.simple.len);
+    //try std.testing.expectEqualStrings("flat0", aliased.routes[4].target.simple[0].name);
+    //try std.testing.expectEqualStrings("flat1", aliased.routes[4].target.simple[1].name);
+    //try std.testing.expectEqualStrings("sub_tree", aliased.routes[4].target.simple[2].name);
+    //try std.testing.expectEqual(@as(usize, 3), aliased.routes[4].target.simple[2].target.simple.len);
 }
 
 const std = @import("std");
