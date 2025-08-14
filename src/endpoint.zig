@@ -393,6 +393,11 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
     if (@hasDecl(EP, "verse_router")) {
         match[idx] = Router.ROUTE(@tagName(EP.verse_name), EP.verse_router);
         idx += 1;
+        // This hack in wrong, and yes, I feel bad :<
+        if (@hasDecl(EP, "verse_aliases")) for (EP.verse_aliases) |_| {
+            match[idx] = Router.ALL("", EP.index);
+            idx += 1;
+        };
     } else {
         if (@hasDecl(EP, "index")) {
             match[idx] = Router.ALL("", EP.index);
