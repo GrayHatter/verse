@@ -115,6 +115,10 @@ pub const PostData = struct {
         return RequestData(T).initPost(pdata);
     }
 
+    pub fn validateAlloc(pdata: PostData, comptime T: type, alloc: Allocator) !T {
+        return RequestData(T).initPostMap(alloc, pdata);
+    }
+
     pub fn validator(self: PostData) Validator(PostData) {
         return Validator(PostData).init(self);
     }
