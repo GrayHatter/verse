@@ -68,6 +68,8 @@ pub fn build(b: *std.Build) !void {
     const run_lib_tests = b.addRunArtifact(lib_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_tests.step);
+    const quick_test_step = b.step("unit-test", "Run unit tests only [exclude examples]");
+    quick_test_step.dependOn(&run_lib_tests.step);
 
     const docs = b.addObject(.{ .name = "verse", .root_module = verse_lib });
     const install_docs = b.addInstallDirectory(.{

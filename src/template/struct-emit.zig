@@ -294,7 +294,10 @@ fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
                         }
                         if (drct.html_type) |htype| switch (htype) {
                             .@"enum" => kind = try bufPrint(&buffer, ": {s},\n", .{s_name}),
-                            else => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
+                            .usize => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
+                            .isize => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
+                            .@"?usize" => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
+                            .humanize => kind = try bufPrint(&buffer, ": i64,\n", .{}),
                         };
                         try root.append(f_name, kind);
                     },

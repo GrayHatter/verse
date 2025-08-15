@@ -772,6 +772,27 @@ test "directive typed isize" {
     try std.testing.expectEqualStrings(expected, print);
 }
 
+test "directive typed humanize" {
+    // Disabled while I give the implementation more thought
+    if (true) return error.SkipZigTest;
+    var a = std.testing.allocator;
+    const blob =
+        \\<Date type="humanize" />
+    ;
+    const expected: []const u8 = "<span>1 hour ago</span>";
+
+    const FE = struct { date: i64 };
+
+    const t = Template{ .name = "test", .blob = blob };
+    const page = Page(t, FE);
+
+    const slice = FE{ .date = std.time.timestamp() - 3600 };
+    const pg = page.init(slice);
+    const p = try allocPrint(a, "{}", .{pg});
+    defer a.free(p);
+    try std.testing.expectEqualStrings(expected, p);
+}
+
 test "EnumLiteral" {
     var a = std.testing.allocator;
     const blob =

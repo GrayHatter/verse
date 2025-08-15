@@ -32,6 +32,7 @@ pub const HtmlType = enum {
     isize,
     @"?usize",
     @"enum",
+    humanize,
 
     pub fn fromStr(s: []const u8) !HtmlType {
         inline for (std.meta.fields(HtmlType)) |ht| {
@@ -47,6 +48,7 @@ pub const HtmlType = enum {
             .usize,
             .isize,
             .@"enum",
+            .humanize,
             => false,
             .@"?usize" => true,
         };
@@ -273,6 +275,8 @@ test findAttrs {
     try std.testing.expectEqualStrings(map.get(.type).?, "isize");
     map = try findAttrs("type=\"?usize\"");
     try std.testing.expectEqualStrings(map.get(.type).?, "?usize");
+    map = try findAttrs("type=\"humanize\"");
+    try std.testing.expectEqualStrings(map.get(.type).?, "humanize");
     map = try findAttrs("default=\"text\"");
     try std.testing.expectEqualStrings(map.get(.default).?, "text");
     map = try findAttrs("default=\"text\" />");
