@@ -1,4 +1,12 @@
 const std = @import("std");
+const zon: struct {
+    name: @TypeOf(.enum_literal),
+    version: []const u8,
+    fingerprint: usize,
+    minimum_zig_version: []const u8,
+    dependencies: struct {},
+    paths: []const []const u8,
+} = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -218,8 +226,7 @@ const Compiler = struct {
 
 fn version(b: *std.Build) []const u8 {
     if (!std.process.can_spawn) {
-        std.debug.print("Can't get a version number\n", .{});
-        std.process.exit(1);
+        return zon.version;
     }
 
     var code: u8 = undefined;
@@ -234,14 +241,14 @@ fn version(b: *std.Build) []const u8 {
         },
         &code,
         .Ignore,
-    ) catch @panic("git is having a bad day");
+    ) catch zon.version;
 
     var git = std.mem.trim(u8, git_wide, " \r\n");
     if (git[0] == 'v') git = git[1..];
     //std.debug.print("version {s}\n", .{git});
 
     // semver is really dumb, so we need to increment this internally
-    var ver = std.SemanticVersion.parse(git) catch return "v0.0.0-dev";
+    var ver = std.SemanticVersion.parse(git) catch return zon.version ++ "-giterr";
     if (ver.pre != null) {
         ver.minor += 1;
         ver.pre = std.fmt.allocPrint(b.allocator, "pre-{s}", .{ver.pre.?}) catch @panic("OOM");
