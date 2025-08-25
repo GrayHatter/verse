@@ -28,8 +28,20 @@ pub const ContentBase = union(Base) {
 
     pub fn string(comptime cb: ContentBase) [:0]const u8 {
         return switch (cb) {
-            inline else => |tag| @tagName(cb) ++ "/" ++ @tagName(tag),
+            inline else => |tag| tag.string(),
         };
+    }
+
+    test "ContentBase.string" {
+        try std.testing.expectEqualStrings(
+            "application/json",
+            (ContentBase{ .application = .json }).string(),
+        );
+
+        try std.testing.expectEqualStrings(
+            "font/ttf",
+            (ContentBase{ .font = .ttf }).string(),
+        );
     }
 };
 
@@ -61,15 +73,13 @@ pub const Application = enum {
 
     pub fn string(comptime app: Application) [:0]const u8 {
         return switch (app) {
-            inline else => |r| @typeName(@This())[13..] ++ "/" ++ @tagName(r),
+            inline else => |r| "application/" ++ @tagName(r),
         };
     }
 
     test "Application.string" {
-        // This should be a lowercase A, but I don't know how much time to
-        // invest into this yet.
         try std.testing.expectEqualStrings(
-            "Application/octet-stream",
+            "application/octet-stream",
             Application.@"octet-stream".string(),
         );
     }
@@ -77,17 +87,35 @@ pub const Application = enum {
 
 pub const Audio = enum {
     ogg,
+
+    pub fn string(comptime app: Audio) [:0]const u8 {
+        return switch (app) {
+            inline else => |r| "audio/" ++ @tagName(r),
+        };
+    }
 };
 
 pub const Font = enum {
     otf,
     ttf,
     woff,
+
+    pub fn string(comptime app: Font) [:0]const u8 {
+        return switch (app) {
+            inline else => |r| "font/" ++ @tagName(r),
+        };
+    }
 };
 
 pub const Image = enum {
     png,
     jpeg,
+
+    pub fn string(comptime app: Image) [:0]const u8 {
+        return switch (app) {
+            inline else => |r| "image/" ++ @tagName(r),
+        };
+    }
 };
 
 pub const Text = enum {
@@ -95,10 +123,22 @@ pub const Text = enum {
     css,
     html,
     javascript,
+
+    pub fn string(comptime app: Text) [:0]const u8 {
+        return switch (app) {
+            inline else => |r| "text/" ++ @tagName(r),
+        };
+    }
 };
 
 pub const Video = enum {
     mp4,
+
+    pub fn string(comptime app: Video) [:0]const u8 {
+        return switch (app) {
+            inline else => |r| "video/" ++ @tagName(r),
+        };
+    }
 };
 
 /// If created using fromStr that string must outlive the Multipart
@@ -205,13 +245,13 @@ test string {
 pub fn fromStr(str: []const u8) !ContentType {
     inline for (std.meta.fields(ContentBase)) |field| {
         if (startsWith(u8, str, field.name)) {
-            return wrap(field.type, str[field.name.len + 1 ..]);
+            return wrapBase(field.type, str[field.name.len + 1 ..]);
         }
     }
     return error.UnknownContentType;
 }
 
-fn subWrap(comptime Kind: type, str: []const u8) !Kind {
+fn wrapField(comptime Kind: type, str: []const u8) !Kind {
     inline for (std.meta.fields(Kind)) |field| {
         if (startsWith(u8, str, field.name)) {
             return @enumFromInt(field.value);
@@ -220,48 +260,43 @@ fn subWrap(comptime Kind: type, str: []const u8) !Kind {
     return error.UnknownContentType;
 }
 
-fn wrap(comptime kind: type, val: anytype) !ContentType {
+fn wrapBase(comptime kind: type, val: anytype) !ContentType {
     return .{
         .base = switch (kind) {
             MultiPart => .{ .multipart = try MultiPart.fromStr(val) },
-            Application => .{ .application = try subWrap(kind, val) },
-            Audio => .{ .audio = try subWrap(kind, val) },
-            Font => .{ .font = try subWrap(kind, val) },
-            Image => .{ .image = try subWrap(kind, val) },
-            Text => .{ .text = try subWrap(kind, val) },
-            Video => .{ .video = try subWrap(kind, val) },
+            Application => .{ .application = try wrapField(kind, val) },
+            Audio => .{ .audio = try wrapField(kind, val) },
+            Font => .{ .font = try wrapField(kind, val) },
+            Image => .{ .image = try wrapField(kind, val) },
+            Text => .{ .text = try wrapField(kind, val) },
+            Video => .{ .video = try wrapField(kind, val) },
             else => @compileError("not implemented type " ++ @typeName(kind)),
         },
     };
 }
 
-pub fn fromFileExtension(extension: []const u8) ContentType {
-    var ext = extension;
-    if (ext[0] == '.') {
-        ext = ext[1..];
-    }
-
-    if (eql(u8, ext, "html") or eql(u8, extension, "htm")) {
+pub fn fromFileExtension(ext: []const u8) !ContentType {
+    if (endsWith(u8, ext, "html") or endsWith(u8, ext, "htm")) {
         return .{ .base = .{ .text = .html } };
     }
 
-    if (eql(u8, ext, "css")) {
+    if (endsWith(u8, ext, "css")) {
         return .{ .base = .{ .text = .css } };
     }
 
-    if (eql(u8, ext, "js")) {
+    if (endsWith(u8, ext, "js")) {
         return .{ .base = .{ .text = .javascript } };
     }
 
-    if (eql(u8, ext, "png")) {
+    if (endsWith(u8, ext, "png")) {
         return .{ .base = .{ .image = .png } };
     }
 
-    if (eql(u8, ext, "jpg") or eql(u8, extension, "jpeg")) {
+    if (endsWith(u8, ext, "jpg") or endsWith(u8, ext, "jpeg")) {
         return .{ .base = .{ .image = .jpeg } };
     }
 
-    return default;
+    return error.UnknownFileExtension;
 }
 
 test ContentType {
@@ -270,5 +305,6 @@ test ContentType {
 
 const std = @import("std");
 const startsWith = std.mem.startsWith;
+const endsWith = std.mem.endsWith;
 const indexOf = std.mem.indexOf;
 const eql = std.mem.eql;
