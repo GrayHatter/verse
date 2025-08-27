@@ -1,4 +1,4 @@
-const AbstTree = struct {
+pub const AbstTree = struct {
     pub const Member = struct {
         name: []u8,
         kind: []u8,
@@ -116,7 +116,7 @@ fn AutoTranslate(into: type) type {
     };
 }
 
-var root_tree: std.StringHashMapUnmanaged(*AbstTree) = .{};
+pub var root_tree: std.StringHashMapUnmanaged(*AbstTree) = .{};
 var enum_list: std.StringHashMapUnmanaged(*EnumLiteral) = .{};
 
 pub fn main() !void {
@@ -260,7 +260,7 @@ fn appendEnumLiteral(a: Allocator, name: []const u8, tag: []const u8) !void {
     } else return error.EnumDoesNotExist;
 }
 
-fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
+pub fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
     var data = fdata;
     while (data.len > 0) {
         if (indexOf(u8, data, "<")) |offset| {

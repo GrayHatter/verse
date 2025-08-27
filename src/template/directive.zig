@@ -300,11 +300,11 @@ fn validChar(c: u8) bool {
 }
 
 fn calcBody(comptime keyword: []const u8, noun: []const u8, blob: []const u8) ?usize {
-    const open: *const [keyword.len + 2]u8 = "<" ++ keyword ++ " ";
-    const close: *const [keyword.len + 3]u8 = "</" ++ keyword ++ ">";
+    const open_tag = "<" ++ keyword ++ " ";
+    const close_tag = "</" ++ keyword ++ ">";
 
-    if (!startsWith(u8, blob, open)) @panic("error compiling template");
-    var shape_i: usize = open.len;
+    if (!startsWith(u8, blob, open_tag)) @panic("error compiling template");
+    var shape_i: usize = open_tag.len;
     while (shape_i < blob.len and blob[shape_i] != '/' and blob[shape_i] != '>')
         shape_i += 1;
     switch (blob[shape_i]) {
@@ -314,16 +314,18 @@ fn calcBody(comptime keyword: []const u8, noun: []const u8, blob: []const u8) ?u
     }
 
     var start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
-    var close_pos: usize = indexOfPosLinear(u8, blob, 0, close) orelse return null;
+    var close_pos: usize = indexOfPosLinear(u8, blob, 0, close_tag) orelse return null;
     // count is not comptime compliant while it uses indexOfPos increasing
     // backward branches. I've raised the quota, but complicated templates might
     // require a naive implementation
-    var skip = count(u8, blob[start..close_pos], open);
-    while (skip > 0) : (skip -= 1) {
-        close_pos = indexOfPosLinear(u8, blob, close_pos + 1, close) orelse close_pos;
+    var skip: usize = 0;
+    var blocks = count(u8, blob[start..close_pos], open_tag);
+    while (skip < blocks) : (skip += 1) {
+        close_pos = indexOfPosLinear(u8, blob, close_pos + 1, close_tag) orelse close_pos;
+        blocks = count(u8, blob[start..close_pos], open_tag);
     }
 
-    const end = close_pos + close.len;
+    const end = close_pos + close_tag.len;
     while (start < end and isWhitespace(blob[start])) : (start +|= 1) {}
 
     //while (endws > start and isWhitespace(blob[endws])) : (endws -|= 1) {}

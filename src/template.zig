@@ -550,6 +550,160 @@ test "directive for then for" {
     try std.testing.expectEqualStrings(expected, p);
 }
 
+test "directive for with for for" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    const a = arena.allocator();
+    defer arena.deinit();
+
+    const blob =
+        \\<div>
+        \\  <For Loop>
+        \\    <With Maybe>
+        \\      <For Indexes>
+        \\        <span><Idx></span>
+        \\       </For>
+        \\    </With>
+        \\    <With MaybeNames>
+        \\      <For First>
+        \\        <span><Name></span>
+        \\       </For>
+        \\      <For Second>
+        \\        <span><LastName></span>
+        \\       </For>
+        \\    </With>
+        \\  </For>
+        \\</div>
+    ;
+
+    {
+        //const emit = @import("template/struct-emit.zig");
+        //const this = try emit.AbstTree.init(a, "Testing", null);
+        //const gop = try emit.root_tree.getOrPut(a, this.name);
+        //if (!gop.found_existing) {
+        //    gop.value_ptr.* = this;
+        //}
+        //try emit.emitSourceVars(a, blob, this);
+        //std.debug.print("this {}", .{this});
+    }
+
+    const FTF = struct {
+        const Loop = struct {
+            maybe: ?Maybe,
+            maybe_names: ?MaybeNames,
+        };
+        const Maybe = struct {
+            indexes: []const Indexes,
+        };
+        const MaybeNames = struct {
+            first: []const First,
+            second: []const Second,
+        };
+        const Indexes = struct {
+            idx: []const u8,
+        };
+        const First = struct {
+            name: []const u8,
+        };
+        const Second = struct {
+            last_name: []const u8,
+        };
+
+        loop: []const Loop,
+    };
+
+    const t = Template{
+        .name = "test",
+        .blob = blob,
+    };
+    const page = Page(t, FTF);
+
+    var page_data: FTF = .{
+        .loop = &[2]FTF.Loop{
+            .{ .maybe = null, .maybe_names = null },
+            .{ .maybe = null, .maybe_names = null },
+        },
+    };
+    var page_temp = page.init(page_data);
+    var rendered = try allocPrint(a, "{}", .{page_temp});
+    const expected_empty: []const u8 = "<div>\n  \n    \n  \n    \n  \n</div>";
+    try std.testing.expectEqualStrings(expected_empty, rendered);
+
+    page_data = .{
+        .loop = &[2]FTF.Loop{ .{
+            .maybe = .{ .indexes = &[4]FTF.Indexes{
+                .{ .idx = "0" },
+                .{ .idx = "1" },
+                .{ .idx = "2" },
+                .{ .idx = "3" },
+            } },
+            .maybe_names = null,
+        }, .{ .maybe = null, .maybe_names = null } },
+    };
+
+    page_temp = page.init(page_data);
+    rendered = try allocPrint(a, "{}", .{page_temp});
+    const expected_first: []const u8 =
+        \\<div>
+        \\  <span>0</span>
+        \\       <span>1</span>
+        \\       <span>2</span>
+        \\       <span>3</span>
+        \\
+    ++ "       \n" //
+    ++ "    \n" //
+    ++ "    \n" //
+    ++ "  \n" //
+    ++ "    \n" //
+    ++ "  \n" //
+    ++ "</div>";
+    try std.testing.expectEqualStrings(expected_first, rendered);
+
+    page_data = .{
+        .loop = &[2]FTF.Loop{
+            .{ .maybe = null, .maybe_names = null }, .{
+                .maybe = null,
+                .maybe_names = .{
+                    .first = &[3]FTF.First{
+                        .{ .name = "First" },
+                        .{ .name = "Third" },
+                        .{ .name = "Fifth" },
+                    },
+                    .second = &[3]FTF.Second{
+                        .{ .last_name = "Second" },
+                        .{ .last_name = "Forth" },
+                        .{ .last_name = "Sixth" },
+                    },
+                },
+            },
+        },
+    };
+
+    page_temp = page.init(page_data);
+    rendered = try allocPrint(a, "{}", .{page_temp});
+    const expected_second: []const u8 =
+        \\<div>
+        \\
+    ++ "  \n" //
+    ++ "    \n" //
+    ++ "  \n" ++
+        \\    <span>First</span>
+        \\       <span>Third</span>
+        \\       <span>Fifth</span>
+        \\
+    ++ "       \n" ++
+        \\      <span>Second</span>
+        \\       <span>Forth</span>
+        \\       <span>Sixth</span>
+        \\
+    ++ "       \n" //
+    ++ "    \n" //
+    ++ "  \n" ++
+        \\</div>
+    ;
+
+    try std.testing.expectEqualStrings(expected_second, rendered);
+}
+
 test "directive With" {
     const a = std.testing.allocator;
 
