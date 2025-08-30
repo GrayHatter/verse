@@ -52,7 +52,7 @@ pub fn PageData(comptime name: []const u8) type {
 }
 
 pub fn findPageType(comptime name: []const u8) type {
-    var local: [0xFFFF]u8 = undefined;
+    var local: [0xFF]u8 = undefined;
     const llen = comptime makeStructName(name, &local);
     return @field(Structs, local[0..llen]);
 }
@@ -204,7 +204,7 @@ test "directive something" {
         .something = @as([]const u8, "Some Text Here"),
     };
     const pg = Page(t, @TypeOf(ctx)).init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("Some Text Here", p);
 
@@ -218,7 +218,7 @@ test "directive something" {
         .something = @as([]const u8, "Some Text Here"),
     };
     const pg2 = Page(t2, @TypeOf(ctx2)).init(ctx2);
-    const p2 = try allocPrint(a, "{}", .{pg2});
+    const p2 = try allocPrint(a, "{f}", .{pg2});
     defer a.free(p2);
     try std.testing.expectEqualStrings("Some Text Here", p2);
 }
@@ -242,7 +242,7 @@ test "directive typed something" {
         .something = "Some Text Here",
     });
 
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("Some Text Here", p);
 }
@@ -266,7 +266,7 @@ test "directive typed something /" {
         .something = "Some Text Here",
     });
 
-    const pg = try allocPrint(a, "{}", .{p});
+    const pg = try allocPrint(a, "{f}", .{p});
     defer a.free(pg);
     try std.testing.expectEqualStrings("Some Text Here", pg);
 }
@@ -283,7 +283,7 @@ test "directive nothing" {
     const page = Page(t, @TypeOf(ctx));
 
     const pg = page.init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("<!-- nothing -->", p);
 }
@@ -306,7 +306,7 @@ test "directive nothing new" {
     //try std.testing.expectError(error.VariableMissing, p);
 
     const pg = Page(t, @TypeOf(ctx)).init(.{});
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("<Nothing>", p);
 }
@@ -328,7 +328,7 @@ test "directive ORELSE" {
     };
 
     const pg = Page(t, @TypeOf(ctx)).init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("string until end", p);
 }
@@ -351,7 +351,7 @@ test "directive ORNULL" {
     };
 
     const pg = Page(t, @TypeOf(ctx)).init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("", p);
 
@@ -362,7 +362,7 @@ test "directive ORNULL" {
     };
 
     const nullpage = Page(t2, @TypeOf(ctx)).init(ctx);
-    const p2 = try allocPrint(a, "{}", .{nullpage});
+    const p2 = try allocPrint(a, "{f}", .{nullpage});
     defer a.free(p2);
     try std.testing.expectEqualStrings("", p2);
 }
@@ -401,7 +401,7 @@ test "directive For" {
     };
 
     const pg = Page(t, @TypeOf(ctx)).init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 
@@ -413,7 +413,7 @@ test "directive For" {
     };
 
     const dbl_page = Page(t, @TypeOf(ctx)).init(ctx);
-    const pg2 = try allocPrint(a, "{}", .{dbl_page});
+    const pg2 = try allocPrint(a, "{f}", .{dbl_page});
     defer a.free(pg2);
     try std.testing.expectEqualStrings(dbl_expected, pg2);
 }
@@ -482,7 +482,7 @@ test "directive For & For" {
     };
 
     const pg = Page(t, @TypeOf(ctx)).init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -545,7 +545,7 @@ test "directive for then for" {
         .loop = loop[0..],
         .numbers = numbers[0..],
     });
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -624,7 +624,7 @@ test "directive for with for for" {
         },
     };
     var page_temp = page.init(page_data);
-    var rendered = try allocPrint(a, "{}", .{page_temp});
+    var rendered = try allocPrint(a, "{f}", .{page_temp});
     const expected_empty: []const u8 = "<div>\n  \n    \n  \n    \n  \n</div>";
     try std.testing.expectEqualStrings(expected_empty, rendered);
 
@@ -641,7 +641,7 @@ test "directive for with for for" {
     };
 
     page_temp = page.init(page_data);
-    rendered = try allocPrint(a, "{}", .{page_temp});
+    rendered = try allocPrint(a, "{f}", .{page_temp});
     const expected_first: []const u8 =
         \\<div>
         \\  <span>0</span>
@@ -679,7 +679,7 @@ test "directive for with for for" {
     };
 
     page_temp = page.init(page_data);
-    rendered = try allocPrint(a, "{}", .{page_temp});
+    rendered = try allocPrint(a, "{f}", .{page_temp});
     const expected_second: []const u8 =
         \\<div>
         \\
@@ -738,7 +738,7 @@ test "directive With" {
 
     const page = Page(t, @TypeOf(ctx));
     const pg = page.init(ctx);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected_empty, p);
 
@@ -755,7 +755,7 @@ test "directive With" {
     ;
 
     const pg2 = page.init(ctx);
-    const p2 = try allocPrint(a, "{}", .{pg2});
+    const p2 = try allocPrint(a, "{f}", .{pg2});
     defer a.free(p2);
     try std.testing.expectEqualStrings(expected_thing, p2);
 }
@@ -801,7 +801,7 @@ test "directive Split" {
         },
     };
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -853,7 +853,7 @@ test "directive Build" {
         },
     };
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -870,7 +870,7 @@ test "directive typed usize" {
 
     const slice = FE{ .number = 420 };
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -887,7 +887,7 @@ test "directive typed ?usize" {
 
     const slice = MaybeUsize{ .number = 420 };
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -904,7 +904,7 @@ test "directive typed ?usize null" {
 
     const slice = FE{ .number = null };
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -921,7 +921,7 @@ test "directive typed isize" {
     const PType = Page(Temp, PData);
 
     const data = PData{ .number = -420 };
-    const print = try allocPrint(a, "{}", .{PType.init(data)});
+    const print = try allocPrint(a, "{f}", .{PType.init(data)});
     defer a.free(print);
     try std.testing.expectEqualStrings(expected, print);
 }
@@ -942,7 +942,7 @@ test "directive typed humanize" {
 
     const slice = FE{ .date = std.time.timestamp() - 3600 };
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -976,7 +976,7 @@ test "EnumLiteral" {
     const PType = Page(Temp, PData);
 
     const data = PData{ .enum_literal = .settings };
-    const print = try allocPrint(a, "{}", .{PType.init(data)});
+    const print = try allocPrint(a, "{f}", .{PType.init(data)});
     defer a.free(print);
     try std.testing.expectEqualStrings(expected, print);
 }
@@ -996,7 +996,7 @@ test "grouped offsets" {
     const PType = Page(Temp, PData);
     try std.testing.expectEqual(1, PType.DataOffsets.len);
     var a = std.testing.allocator;
-    const print = try allocPrint(a, "{}", .{PType.init(PData{})});
+    const print = try allocPrint(a, "{f}", .{PType.init(PData{})});
     defer a.free(print);
     const expected = blob;
     try std.testing.expectEqualStrings(expected, print);
@@ -1016,7 +1016,7 @@ test "comment tags" {
     const data = PData{};
     const expected = blob;
 
-    const page = try allocPrint(a, "{}", .{PType.init(data)});
+    const page = try allocPrint(a, "{f}", .{PType.init(data)});
     defer a.free(page);
 
     try std.testing.expectEqualStrings(expected, page);
@@ -1058,7 +1058,7 @@ test "For exact" {
     };
     const pg = Page(t, PgType).init(ctx);
 
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
 }
@@ -1092,7 +1092,7 @@ test "For use=" {
 
     const page = Page(t, FE);
     const pg = page.init(slice);
-    const p = try allocPrint(a, "{}", .{pg});
+    const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
 
     const expected: []const u8 =

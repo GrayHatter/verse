@@ -70,7 +70,7 @@ pub const Html = struct {
         return try abx.cleanAlloc(.html, a, in);
     }
 
-    pub fn format(self: Html, comptime _: []const u8, _: FmtOpt, out: anytype) !void {
+    pub fn format(self: Html, out: *Writer) !void {
         var buf: [6]u8 = undefined;
         for (self.text) |c| {
             try out.writeAll(buf[0 .. cleanHtml(c, &buf) catch unreachable]);
@@ -112,7 +112,7 @@ pub fn cleanHtml(in: u8, out: ?[]u8) Error!usize {
 
 test Html {
     var a = std.testing.allocator;
-    const cleaned = try std.fmt.allocPrint(a, "{}", .{Html{ .text = "<tags not allowed>" }});
+    const cleaned = try std.fmt.allocPrint(a, "{f}", .{Html{ .text = "<tags not allowed>" }});
     defer a.free(cleaned);
 
     try std.testing.expectEqualStrings("&lt;tags not allowed&gt;", cleaned);
@@ -125,7 +125,7 @@ test Html {
 //        return try abx.cleanAlloc(.path, a, in);
 //    }
 //
-//    pub fn format(self: Path, comptime _: []const u8, _: FmtOpt, out: anytype) anyerror!void {
+//    pub fn format(self: Path, comptime _: []const u8, _: FmtOpt, out: anytype) !void {
 //        var buffer: [256]u8 = undefined;
 //        for (self.word) |chr|
 //            try out.writeAll(buffer[0..try cleanWord(chr, &buffer)]);
@@ -140,16 +140,16 @@ pub const Path = struct {
         return try abx.cleanAlloc(.path, a, in);
     }
 
-    pub fn format(self: Path, comptime _: []const u8, _: FmtOpt, out: anytype) anyerror!void {
+    pub fn format(self: Path, out: anytype) !void {
         var buffer: [256]u8 = undefined;
         if (self.path_allowed) {
-            const required = try cleanPath(self.text, null);
-            if (required > buffer.len) return error.OutOfSpace;
-            _ = try cleanPath(self.text, &buffer);
+            const required = cleanPath(self.text, null) catch return error.WriteFailed;
+            if (required > buffer.len) return error.WriteFailed;
+            _ = cleanPath(self.text, &buffer) catch return error.WriteFailed;
             try out.writeAll(buffer[0..required]);
         } else {
             for (self.text) |chr|
-                try out.writeAll(buffer[0..try cleanFilename(chr, &buffer)]);
+                try out.writeAll(buffer[0 .. cleanFilename(chr, &buffer) catch return error.WriteFailed]);
         }
     }
 };
@@ -157,28 +157,28 @@ pub const Path = struct {
 test Path {
     const a = std.testing.allocator;
 
-    var array = std.ArrayList(u8).init(a);
-    defer array.deinit();
+    var array: std.ArrayList(u8) = .{};
+    defer array.deinit(a);
 
-    var w = array.writer();
+    var w = array.writer(a);
 
-    try w.print("{s}", .{Path{ .text = "valid.txt" }});
+    try w.print("{f}", .{Path{ .text = "valid.txt" }});
     try std.testing.expectEqualStrings("valid.txt", array.items);
     array.clearRetainingCapacity();
 
-    try w.print("{s}", .{Path{ .text = "../valid.txt", .path_allowed = true }});
+    try w.print("{f}", .{Path{ .text = "../valid.txt", .path_allowed = true }});
     try std.testing.expectEqualStrings("valid.txt", array.items);
     array.clearRetainingCapacity();
 
-    try w.print("{s}", .{Path{ .text = "../../valid.txt", .path_allowed = true }});
+    try w.print("{f}", .{Path{ .text = "../../valid.txt", .path_allowed = true }});
     try std.testing.expectEqualStrings("valid.txt", array.items);
     array.clearRetainingCapacity();
 
-    try w.print("{s}", .{Path{ .text = "../../../../../..blerg/valid.txt", .path_allowed = true }});
+    try w.print("{f}", .{Path{ .text = "../../../../../..blerg/valid.txt", .path_allowed = true }});
     try std.testing.expectEqualStrings("..blerg/valid.txt", array.items);
     array.clearRetainingCapacity();
 
-    try w.print("{s}", .{Path{ .text = "/valid.txt", .path_allowed = true }});
+    try w.print("{f}", .{Path{ .text = "/valid.txt", .path_allowed = true }});
     try std.testing.expectEqualStrings("valid.txt", array.items);
     array.clearRetainingCapacity();
 }
@@ -299,7 +299,7 @@ pub fn StreamCleaner(comptime rule: Rule, comptime Source: type) type {
             };
         }
 
-        pub fn typeErasedReadFn(context: *const anyopaque, buffer: []u8) anyerror!usize {
+        pub fn typeErasedReadFn(context: *const anyopaque, buffer: []u8) !usize {
             const ptr: *const Source = @alignCast(@ptrCast(context));
             return read(ptr.*, buffer);
         }
@@ -315,4 +315,4 @@ pub fn StreamCleaner(comptime rule: Rule, comptime Source: type) type {
 const std = @import("std");
 const eql = std.mem.eql;
 const Allocator = std.mem.Allocator;
-const FmtOpt = std.fmt.FormatOptions;
+const Writer = std.Io.Writer;

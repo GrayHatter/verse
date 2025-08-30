@@ -41,7 +41,7 @@ pub fn serve(http: *HTTP) !void {
     var srv = try http.listen_addr.listen(.{ .reuse_address = true });
     defer srv.deinit();
 
-    log.info("HTTP Server listening at http://{}", .{http.listen_addr});
+    log.info("HTTP Server listening at http://{f}", .{http.listen_addr});
     http.alive = true;
     while (http.running) {
         const conn = try srv.accept();
@@ -71,10 +71,14 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
 
     var conn = sconn;
     defer conn.stream.close();
+    log.info("HTTP connection from {f}", .{conn.address});
 
-    var request_buffer: [0xfffff]u8 = undefined;
-    log.info("HTTP connection from {}", .{conn.address});
-    var hsrv = std.http.Server.init(conn, &request_buffer);
+    var r_b: [0x100000]u8 = undefined;
+    var w_b: [0x100000]u8 = undefined;
+    var reader = conn.stream.reader(&r_b);
+    var writer = conn.stream.writer(&w_b);
+
+    var hsrv = std.http.Server.init(reader.interface(), &writer.interface);
 
     var arena = std.heap.ArenaAllocator.init(http.alloc);
     defer arena.deinit();
@@ -82,7 +86,7 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
 
     var hreq = try hsrv.receiveHead();
     const reqdata = try requestData(a, &hreq);
-    const req = try Request.initHttp(a, &hreq, reqdata);
+    const req = try Request.initHttp(a, &hreq, &conn, reqdata);
 
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
     const srvr: *Server = @fieldParentPtr("interface", ifc);
@@ -120,8 +124,9 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
         const hlen: usize = @intCast(h_len);
         if (hlen > 0) {
             const h_type = req.head.content_type orelse "text/plain";
-            var reader = try req.reader();
-            post_data = try RequestData.readPost(a, &reader, hlen, h_type);
+            var r_b: [0x100000]u8 = undefined;
+            const reader = req.readerExpectNone(&r_b);
+            post_data = try RequestData.readPost(a, reader, hlen, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },
@@ -164,11 +169,8 @@ test HTTP {
     defer client.deinit();
     while (!server.interface.http.alive) {}
 
-    var list = std.ArrayList(u8).init(a);
-    defer list.clearAndFree();
     server.interface.http.running = false;
     const fetch = try client.fetch(.{
-        .response_storage = .{ .dynamic = &list },
         .location = .{ .url = "http://localhost:9345/" },
         .method = .GET,
     });

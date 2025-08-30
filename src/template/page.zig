@@ -69,7 +69,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             return iovecCount(Self.DataOffsets[0..], @ptrCast(&self.data));
         }
 
-        fn offsetDirective(T: type, data: T, directive: Directive, out: anytype) !void {
+        fn offsetDirective(T: type, data: T, directive: Directive, out: *Writer) error{WriteFailed}!void {
             std.debug.assert(directive.verb == .variable);
             switch (T) {
                 []const u8 => try out.writeAll(data),
@@ -89,7 +89,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             }
         }
 
-        fn offsetOptionalItem(T: type, item: ?T, comptime ofs: []const Offset, html: []const u8, out: anytype) !void {
+        fn offsetOptionalItem(T: type, item: ?T, comptime ofs: []const Offset, html: []const u8, out: *Writer) !void {
             if (comptime T == ?[]const u8) return offsetDirective(T, item.?, ofs[0], out);
             switch (@typeInfo(T)) {
                 .int => std.debug.print("skipped int\n", .{}),
@@ -98,7 +98,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             }
         }
 
-        fn offsetArray(T: type, data: T, comptime ofs: []const Offset, html: []const u8, out: anytype) !void {
+        fn offsetArray(T: type, data: T, comptime ofs: []const Offset, html: []const u8, out: *Writer) !void {
             return switch (T) {
                 []const u8, u8 => unreachable,
                 []const []const u8 => {
@@ -132,7 +132,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             };
         }
 
-        fn formatDirective(T: type, data: T, comptime ofs: []const Offset, html: []const u8, out: anytype) !void {
+        fn formatDirective(T: type, data: T, comptime ofs: []const Offset, html: []const u8, out: *Writer) error{WriteFailed}!void {
             var skip: usize = 0;
             inline for (ofs, 0..) |os, idx| {
                 if (skip > 0) {
@@ -301,7 +301,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             return try ioVecCore(PageDataType, self.data, Self.DataOffsets[0..], vec, a);
         }
 
-        pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+        pub fn format(self: Self, out: *Writer) error{WriteFailed}!void {
             //std.debug.print("offs {any}\n", .{Self.DataOffsets});
             const blob = Self.PageTemplate.blob;
             if (Self.DataOffsets.len == 0)
@@ -364,6 +364,7 @@ const std = @import("std");
 const is_test = @import("builtin").is_test;
 const log = std.log.scoped(.Verse);
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 
 const iov = @import("../iovec.zig");
 const IOVec = iov.IOVec;

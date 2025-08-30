@@ -6,10 +6,11 @@ pub const Error = WriteError || MemError || ReadError;
 
 pub const MemError = error{
     OutOfMemory,
+    NoSpaceLeft,
 };
 
 pub const WriteError = error{
-    IOWriteFailure,
+    WriteFailed,
 } || MemError;
 
 pub const ReadError = error{
@@ -43,8 +44,8 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
     const accept_key = base64.encode(&encoded, &digest);
     try f.headers.addCustom(f.alloc, "Sec-WebSocket-Accept", accept_key);
 
-    f.sendHeaders() catch return error.IOWriteFailure;
-    f.sendRawSlice("\r\n") catch return error.IOWriteFailure;
+    try f.sendHeaders();
+    try f.sendRawSlice("\r\n");
 }
 
 pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
@@ -53,28 +54,35 @@ pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
     return ws.frame.request.downstream.writevAll(
         @ptrCast(@constCast(m.toVec()[0..3])),
     ) catch |err| switch (err) {
-        else => return error.IOWriteFailure,
+        else => return error.WriteFailed,
     };
 }
 
 pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
     var reader = switch (ws.frame.request.downstream) {
-        .zwsgi => |z| z.conn.stream.reader(),
-        .http => |h| h.server.connection.stream.reader(),
-        else => unreachable,
+        .zwsgi => |z| z.conn.stream.reader(buffer),
+        .http => |h| h.stream.reader(buffer),
     };
-    return Message.read(reader.any(), buffer) catch error.IOReadFailure;
+    return Message.read(reader.interface(), buffer) catch error.IOReadFailure;
 }
 
 pub const Message = struct {
     header: Header,
-    length: union(enum) {
+    length: Length,
+    mask: [4]u8 align(4) = undefined,
+    msg: []u8,
+
+    pub const Length = union(enum) {
         tiny: u7,
         small: u16,
         large: u64,
-    },
-    mask: [4]u8 align(4) = undefined,
-    msg: []u8,
+
+        pub fn len(l: Length) usize {
+            return switch (l) {
+                inline else => |e| e,
+            };
+        }
+    };
 
     pub const Header = if (endian == .big)
         packed struct(u16) {
@@ -114,44 +122,40 @@ pub const Message = struct {
         return message;
     }
 
-    pub fn read(r: AnyReader, buffer: []align(@alignOf(Mask)) u8) !Message {
-        var m: Message = undefined;
+    pub const Mask = usize;
 
-        if (try r.read(@as(*[2]u8, @ptrCast(&m.header))) != 2) return error.InvalidRead;
-        if (m.header.final == false) return error.FragmentNotSupported;
-        if (m.header.extlen == 127) {
-            m.length = .{ .large = try r.readInt(u64, .big) };
-        } else if (m.header.extlen == 126) {
-            m.length = .{ .small = try r.readInt(u16, .big) };
-        } else {
-            m.length = .{ .tiny = m.header.extlen };
-        }
+    pub fn read(r: *Reader, buffer: []align(@alignOf(Mask)) u8) !Message {
+        try r.fill(2);
+        if (r.end < 2) return error.InvalidRead;
+        const header: Message.Header = @as(*const Message.Header, @ptrCast(&(try r.takeArray(2)))).*;
+        if (header.final == false) return error.FragmentNotSupported;
+        const length: Length = if (header.extlen == 127)
+            .{ .large = try r.takeInt(u64, .big) }
+        else if (header.extlen == 126)
+            .{ .small = try r.takeInt(u16, .big) }
+        else
+            .{ .tiny = header.extlen };
 
-        const length: usize = switch (m.length) {
-            .tiny => |t| t,
-            .small => |s| s,
-            .large => |l| if (@sizeOf(usize) != @sizeOf(@TypeOf(l))) @intCast(l) else l,
-        };
+        if (length.len() > buffer.len) return error.NoSpaceLeft;
 
-        if (length > buffer.len) return error.NoSpaceLeft;
-
-        if (m.header.mask) {
-            _ = try r.read(&m.mask);
-        }
-        const size = try r.read(buffer[0..length]);
-        if (size != length) {
-            std.debug.print("read error: {} vs {}\n", .{ size, length });
-            std.debug.print("read error: {} \n", .{m.header});
+        try r.fillMore();
+        const mask: [4]u8 align(4) = if (header.mask) (try r.takeArray(4)).* else @splat(0);
+        if (r.bufferedLen() < length.len()) {
+            std.debug.print("read error: {} vs {}\n", .{ r.bufferedLen(), length });
+            std.debug.print("read error: {} \n", .{header});
             return error.InvalidRead;
         }
 
-        const umask: u32 = @as(*u32, @ptrCast(&m.mask)).*;
-        applyMask(umask, buffer[0..size]);
-        m.msg = buffer[0..size];
-        return m;
+        const umask: u32 = @as(*const u32, @ptrCast(&mask)).*;
+        applyMask(umask, @alignCast(r.buffered()));
+        return .{
+            .header = header,
+            .length = length,
+            .mask = mask,
+            .msg = r.buffered(),
+        };
     }
 
-    pub const Mask = usize;
     pub fn applyMask(mask: u32, buffer: []align(@alignOf(Mask)) u8) void {
         const block_mask: Mask = switch (@sizeOf(Mask)) {
             4 => mask,
@@ -234,4 +238,4 @@ const Frame = @import("frame.zig");
 const Hash = std.crypto.hash.Sha1;
 const base64 = std.base64.standard.Encoder;
 const nativeToBig = std.mem.nativeToBig;
-const AnyReader = std.io.AnyReader;
+const Reader = std.Io.Reader;

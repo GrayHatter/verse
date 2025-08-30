@@ -364,8 +364,7 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
             error.NoSpaceLeft,
             error.OutOfMemory,
             => @panic("Verse default builder: Page hit unhandled OOM error."),
-            error.BrokenPipe => log.warn("client disconnect", .{}),
-            error.IOWriteFailure => log.err("generic write error", .{}),
+            error.WriteFailed => log.err("generic write error", .{}),
             error.Unrouteable => {
                 // Reaching an Unrouteable error here should be impossible as
                 // the router has decided the target endpoint is correct.

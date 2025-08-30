@@ -150,7 +150,6 @@ pub fn robotsTxt(
             f.status = .ok;
             f.content_type = .@"text/plain";
             f.sendHeaders() catch |err| switch (err) {
-                error.HeadersFinished => unreachable,
                 inline else => |e| return e,
             };
 

@@ -51,8 +51,8 @@ pub const TestingAuth = struct {
     }
 
     pub fn valid(_: *const anyopaque, u: *const User) bool {
-        return (unsafeEql(u8, u.unique_id orelse return false, "_force_valid_user") and
-            unsafeEql(u8, @as(*const [17:0]u8, @ptrCast(u.user_ptr orelse return false)), "_force_valid_user"));
+        return (unsafe.eql(u8, u.unique_id orelse return false, "_force_valid_user") and
+            unsafe.eql(u8, @as(*const [17:0]u8, @ptrCast(u.user_ptr orelse return false)), "_force_valid_user"));
     }
 
     pub fn provider(self: *TestingAuth) Provider {
@@ -96,5 +96,7 @@ const RequestCookie = @import("cookies.zig").Cookie;
 // avoid confusion, the two comparison functions are given possibly misleading
 // names to encourage closer inspection and annotation over which is being used,
 // and how it's safe to do so.
-pub const unsafeEql = std.mem.eql;
-pub const constTimeEql = std.crypto.utils.timingSafeEql;
+pub const unsafe = struct {
+    pub const eql = std.mem.eql;
+};
+pub const timing_safe = std.crypto.timing_safe;

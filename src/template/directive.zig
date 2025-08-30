@@ -345,7 +345,7 @@ fn isStringish(t: type) bool {
     };
 }
 
-pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!void {
+pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) !void {
     //@compileLog(T);
     var local: [0xff]u8 = undefined;
     const realname = local[0..makeFieldName(self.noun, &local)];
@@ -404,7 +404,7 @@ pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!vo
         },
         .int => {
             //std.debug.assert(int.bits == 64);
-            try std.fmt.formatInt(ctx, 10, .lower, .{}, out);
+            try out.print("{d}", .{ctx});
         },
         else => |ERR| {
             //@compileLog(ERR);
@@ -414,7 +414,7 @@ pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) anyerror!vo
     }
 }
 
-pub fn forEachTyped(self: Directive, T: type, data: T, out: anytype) anyerror!void {
+pub fn forEachTyped(self: Directive, T: type, data: T, out: anytype) !void {
     var p = PageRuntime(T){
         .data = data,
         .template = .{
@@ -468,7 +468,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                 switch (d.otherwise) {
                     .default => |str| try out.writeAll(str),
                     // Not really an error, just instruct caller to print original text
-                    .required => return error.VariableMissing,
+                    .required => {},
                     .delete => {},
                     .literal => unreachable,
                     .template => |template| {

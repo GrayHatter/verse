@@ -97,7 +97,7 @@ pub fn CookieAuth(HMAC: type) type {
                 hm.update(t.userid);
                 if (t.extra_data) |ed| hm.update(ed);
                 hm.final(our_hash[0..]);
-                if (constTimeEql([HMAC.mac_length]u8, t.mac, our_hash)) {
+                if (timing_safe.eql([HMAC.mac_length]u8, t.mac, our_hash)) {
                     if (t.expired(maxage)) return error.TokenExpired;
                     if (user_buffer.len < t.userid.len) return error.NoSpaceLeft;
                     @memcpy(user_buffer[0..t.userid.len], t.userid);
@@ -347,5 +347,5 @@ const User = @import("user.zig");
 const Error = auth.Error;
 const Headers = @import("../headers.zig");
 const ReqCookie = @import("../cookies.zig").Cookie;
-const unsafeEql = auth.unsafeEql;
-const constTimeEql = auth.constTimeEql;
+const unsafe = auth.unsafe;
+const timing_safe = auth.timing_safe;

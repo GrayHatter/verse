@@ -4,7 +4,7 @@
 
 path: ?[]const u8,
 sout: ?std.fs.File,
-serr: ?std.fs.File = std.io.getStdErr(),
+serr: ?std.fs.File = std.fs.File.stderr(),
 
 /// Default when running as a daemon
 pub const default: Logging = .{
@@ -15,7 +15,7 @@ pub const default: Logging = .{
 /// Default when running in the foreground
 pub const stdout: Logging = .{
     .path = "/dev/stdout",
-    .sout = std.io.getStdOut(),
+    .sout = std.fs.File.stdout(),
 };
 
 pub const devnull: Logging = .{

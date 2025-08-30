@@ -114,7 +114,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
             .{
                 @as(f64, @floatFromInt(lap)) / 1000.0,
                 request.remote_addr,
-                request.method,
+                @tagName(request.method),
                 @intFromEnum(frame.status orelse .ok),
                 zreq.known.get(.REQUEST_URI) orelse "[ERROR: URI EMPTY]",
                 if (request.user_agent) |ua| ua.string else "EMPTY",
@@ -144,7 +144,7 @@ fn onceThreaded(z: *const zWSGI, acpt: net.Server.Connection) void {
     };
 }
 
-export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv(.C) void {
+export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv(.c) void {
     switch (sig) {
         std.posix.SIG.INT => {
             running = false;
@@ -158,7 +158,7 @@ export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv
 fn signalListen(signal: u6) void {
     std.posix.sigaction(signal, &std.posix.Sigaction{
         .handler = .{ .sigaction = sig_cb },
-        .mask = std.posix.empty_sigset,
+        .mask = std.posix.sigemptyset(),
         .flags = SA.SIGINFO,
     }, null);
 }
@@ -296,7 +296,7 @@ const uWSGIVar = struct {
         return uWSGIVar{ .key = "", .val = "" };
     }
 
-    pub fn format(self: uWSGIVar, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+    pub fn format(self: uWSGIVar, out: anytype) !void {
         try std.fmt.format(out, "\"{s}\" = \"{s}\"", .{
             self.key,
             if (self.val.len > 0) self.val else "[Empty]",
@@ -323,8 +323,9 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
 
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {
-            var reader = zreq.conn.stream.reader().any();
-            post_data = try Request.Data.readPost(a, &reader, post_size, h_type);
+            var b: [0x800]u8 = undefined;
+            var reader = zreq.conn.stream.reader(&b);
+            post_data = try Request.Data.readPost(a, reader.interface(), post_size, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },

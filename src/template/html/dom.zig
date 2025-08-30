@@ -9,10 +9,7 @@ const ElemArray = std.ArrayList(Elem);
 
 pub fn create(a: Allocator) *DOM {
     const self = a.create(DOM) catch unreachable;
-    self.* = DOM{
-        .alloc = a,
-        .elems = .init(a),
-    };
+    self.* = DOM{ .alloc = a, .elems = .{} };
     return self;
 }
 
@@ -29,11 +26,11 @@ pub fn pushSlice(self: *DOM, elems: []const HTML.E) void {
 }
 
 pub fn push(self: *DOM, elem: HTML.E) void {
-    self.elems.append(elem) catch unreachable;
+    self.elems.append(self.alloc, elem) catch unreachable;
 }
 
 pub fn dupe(self: *DOM, elem: HTML.E) void {
-    self.elems.append(HTML.E{
+    self.elems.append(self.alloc, HTML.E{
         .name = elem.name,
         .text = elem.text,
         .children = if (elem.children) |c| self.alloc.dupe(HTML.E, c) catch null else null,
@@ -43,7 +40,7 @@ pub fn dupe(self: *DOM, elem: HTML.E) void {
 
 pub fn close(self: *DOM) *DOM {
     if (self.parent) |p| {
-        self.opened.?.children = self.elems.toOwnedSlice() catch unreachable;
+        self.opened.?.children = self.elems.toOwnedSlice(self.alloc) catch unreachable;
         p.push(self.opened.?);
         p.child = null;
         defer self.alloc.destroy(self);
@@ -55,7 +52,7 @@ pub fn close(self: *DOM) *DOM {
 pub fn done(self: *DOM) []HTML.E {
     if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     defer self.alloc.destroy(self);
-    return self.elems.toOwnedSlice() catch unreachable;
+    return self.elems.toOwnedSlice(self.alloc) catch unreachable;
 }
 
 fn freeChildren(a: Allocator, elems: []const Elem) void {
@@ -74,10 +71,14 @@ pub fn render(self: *DOM, a: Allocator, comptime style: enum { full, compact }) 
     var html: std.ArrayListUnmanaged(u8) = .{};
     var w = html.writer(a);
     for (self.elems.items) |e| {
-        w.print(if (comptime style == .full) "{pretty}" else "{}", .{e}) catch unreachable;
+        if (comptime style == .full) {
+            w.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
+        } else {
+            w.print("{f}", .{e}) catch unreachable;
+        }
     }
     freeChildren(a, self.elems.items);
-    self.elems.deinit();
+    self.elems.deinit(self.alloc);
 
     return try html.toOwnedSlice(a);
 }

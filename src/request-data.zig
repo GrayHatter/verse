@@ -94,19 +94,19 @@ pub const PostData = struct {
     rawpost: []u8,
     items: []DataItem,
 
-    pub fn init(a: Allocator, size: usize, reader: *AnyReader, ct: ContentType) !PostData {
-        const post_buf: []u8 = try a.alloc(u8, size);
-        const read_size = try reader.read(post_buf);
-        if (read_size != size) return error.UnexpectedHttpBodySize;
+    pub fn init(a: Allocator, size: usize, reader: *Reader, ct: ContentType) !PostData {
+        reader.fillMore() catch {}; // TODO fix me
+        const read_b = try reader.readAlloc(a, size);
+        if (read_b.len != size) return error.UnexpectedHttpBodySize;
 
         const items = switch (ct.base) {
-            .application => |ap| try parseApplication(a, ap, post_buf),
-            .multipart, .message => |mp| try parseMulti(a, mp, post_buf),
+            .application => |ap| try parseApplication(a, ap, read_b),
+            .multipart, .message => |mp| try parseMulti(a, mp, read_b),
             .audio, .font, .image, .text, .video => @panic("content-type not implemented"),
         };
 
         return .{
-            .rawpost = post_buf,
+            .rawpost = read_b,
             .items = items,
         };
     }
@@ -294,9 +294,8 @@ test RequestData {
         \\bool=true&int=10&float=0.123&char=32&str=this%20is%20a%20string
     ;
 
-    var fbs = std.io.fixedBufferStream(all_valid);
-    var r = fbs.reader().any();
-    const post = try readPost(a, &r, all_valid.len, "application/x-www-form-urlencoded");
+    var reader = std.Io.Reader.fixed(all_valid);
+    const post = try readPost(a, &reader, all_valid.len, "application/x-www-form-urlencoded");
     const data = try post.validate(Struct);
 
     try std.testing.expectEqualDeep(Struct{
@@ -504,7 +503,7 @@ fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8) ![]Data
     }
 }
 
-pub fn readPost(a: Allocator, reader: *AnyReader, size: usize, htype: []const u8) !PostData {
+pub fn readPost(a: Allocator, reader: *Reader, size: usize, htype: []const u8) !PostData {
     return PostData.init(a, size, reader, try ContentType.fromStr(htype));
 }
 
@@ -529,9 +528,8 @@ test readPost {
     const vect =
         \\title=&desc=&thing=
     ;
-    var fbs = std.io.fixedBufferStream(vect);
-    var r = fbs.reader().any();
-    const post = try readPost(a, &r, vect.len, "application/x-www-form-urlencoded");
+    var reader = std.Io.Reader.fixed(vect);
+    const post = try readPost(a, &reader, vect.len, "application/x-www-form-urlencoded");
 
     try std.testing.expectEqual(3, post.items.len);
 
@@ -547,9 +545,8 @@ test readPost {
     const vectextra =
         \\title=&desc=&thing=%22double quote%22
     ;
-    fbs = std.io.fixedBufferStream(vectextra);
-    r = fbs.reader().any();
-    const postextra = try readPost(a, &r, vectextra.len, "application/x-www-form-urlencoded");
+    reader = std.Io.Reader.fixed(vectextra);
+    const postextra = try readPost(a, &reader, vectextra.len, "application/x-www-form-urlencoded");
 
     inline for (postextra.items, .{ .{ "title", "" }, .{ "desc", "" }, .{ "thing", "\"double quote\"" } }) |item, expect| {
         try std.testing.expectEqualStrings(expect[0], item.name);
@@ -607,7 +604,7 @@ test json {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const AnyReader = std.io.AnyReader;
+const Reader = std.Io.Reader;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 const Type = @import("builtin").Type;
 const parseInt = std.fmt.parseInt;

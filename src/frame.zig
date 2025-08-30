@@ -49,19 +49,12 @@ const Frame = @This();
 
 pub const Downstream = Request.DownstreamGateway;
 
-pub const SendError = error{
-    HeadersFinished,
-} || NetworkError;
-
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
 pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
     frame.status = frame.status orelse .ok;
 
-    frame.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
+    try frame.sendHeaders();
 
     try frame.sendRawSlice("\r\n");
 
@@ -80,8 +73,9 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 
     page.ioVec(&varr, stkalloc) catch |iovec_err| {
         log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
-        const w = stream.writer();
-        page.format("{}", .{}, w) catch |err| switch (err) {
+        var b: [15000]u8 = undefined;
+        var w = stream.writer(&b);
+        page.format(&w) catch |err| switch (err) {
             else => log.err("Page Build Error {}", .{err}),
         };
         return;
@@ -95,10 +89,7 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 /// verify the current state, and will allow you to inject data into the HTTP
 /// headers. If you only want to send response body data, use sendHTML instead.
 pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
-    vrs.writeAll(slice) catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
+    try vrs.writeAll(slice);
 }
 
 /// Takes a any object, that can be represented by json, converts it into a
@@ -111,35 +102,24 @@ pub fn sendJSON(fr: *Frame, comptime code: std.http.Status, json: anytype) Netwo
     fr.status = code;
     fr.content_type = .json;
 
-    fr.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
+    try fr.sendHeaders();
 
     try fr.sendRawSlice("\r\n");
-    const w = fr.writer();
+    _ = json;
+    //const w = fr.writer();
+    //w.print("{f}", .{std.json.fmt(
+    //    json,
+    //    .{ .emit_null_optional_fields = false },
+    //)}) catch return error.WriteFailed;
 
-    std.json.stringify(
-        json,
-        .{ .emit_null_optional_fields = false },
-        w,
-    ) catch |err| {
-        log.err("Error trying to print json {}", .{err});
-    };
-    fr.flush() catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
+    //try fr.flush();
 }
 
 pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
     frame.status = code;
     frame.content_type = .html;
 
-    frame.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
+    try frame.sendHeaders();
 
     try frame.sendRawSlice("\r\n");
     try frame.sendRawSlice(html);
@@ -159,20 +139,14 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
         else => @compileError("redirect() can only be called with a 3xx redirection code"),
     };
 
-    vrs.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe => |e| return e,
-        else => return error.IOWriteFailure,
-    };
+    try vrs.sendHeaders();
 
     var vect = [3]IOVec{
         .fromSlice("Location: "),
         .fromSlice(loc),
         .fromSlice("\r\n\r\n"),
     };
-    vrs.writevAll(vect[0..]) catch |err| switch (err) {
-        error.BrokenPipe => return error.BrokenPipe,
-        else => return error.IOWriteFailure,
-    };
+    try vrs.writevAll(vect[0..]);
 }
 
 pub fn acceptWebsocket(frame: *Frame) !Websocket {
@@ -211,10 +185,8 @@ fn VecList(comptime SIZE: usize) type {
     };
 }
 
-pub fn sendHeaders(vrs: *Frame) SendError!void {
-    if (vrs.headers_done) {
-        return SendError.HeadersFinished;
-    }
+pub fn sendHeaders(vrs: *Frame) NetworkError!void {
+    std.debug.assert(!vrs.headers_done);
 
     const stream = vrs.request.downstream;
     var vect = VecList(HEADER_VEC_COUNT).init();
@@ -259,7 +231,7 @@ pub fn sendHeaders(vrs: *Frame) SendError!void {
         try vect.append("\r\n");
     }
 
-    stream.writevAll(@ptrCast(vect.vect[0..vect.length])) catch return error.IOWriteFailure;
+    stream.writevAll(@ptrCast(vect.vect[0..vect.length])) catch return error.WriteFailed;
 
     vrs.headers_done = true;
 }
@@ -283,7 +255,7 @@ fn writer(fr: Frame) Writer {
     };
 }
 
-fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) anyerror!usize {
+fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) !usize {
     const fr: *const Frame = @alignCast(@ptrCast(ptr));
     return try fr.write(bytes);
 }
@@ -304,7 +276,7 @@ fn write(vrs: Frame, data: []const u8) Downstream.Error!usize {
     return vrs.request.downstream.write(data);
 }
 
-fn flush(f: *Frame) Downstream.Error!void {
+fn flush(f: *Frame) NetworkError!void {
     return f.request.downstream.flush();
 }
 

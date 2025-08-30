@@ -11,7 +11,7 @@ const zon: struct {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const use_llvm = false;
+    const use_llvm = true;
 
     //if (b.args) |args| for (args) |arg| std.debug.print("arg {s}\n", .{arg});
     //std.debug.print("default: {s}\n", .{b.default_step.name});
@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) !void {
     const structc = b.addExecutable(.{
         .name = "structc",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/template/struct-emit.zig"),
+            .root_source_file = b.path("src/struct-emit.zig"),
             .target = target,
             .optimize = optimize,
         }),
@@ -64,9 +64,7 @@ pub fn build(b: *std.Build) !void {
     verse_lib.addImport("comptime_templates", comptime_templates);
 
     const lib_tests = b.addTest(.{
-        .root_source_file = b.path("src/verse.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = verse_lib,
         .use_llvm = use_llvm,
         .use_lld = use_llvm,
     });
@@ -95,9 +93,11 @@ pub fn build(b: *std.Build) !void {
     inline for (examples) |example| {
         const example_exe = b.addExecutable(.{
             .name = example,
-            .root_source_file = b.path("examples/" ++ example ++ ".zig"),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("examples/" ++ example ++ ".zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
             .use_llvm = use_llvm,
             .use_lld = use_llvm,
         });
@@ -254,7 +254,7 @@ fn version(b: *std.Build) []const u8 {
         ver.pre = std.fmt.allocPrint(b.allocator, "pre-{s}", .{ver.pre.?}) catch @panic("OOM");
     }
 
-    const final = std.fmt.allocPrint(b.allocator, "{}", .{ver}) catch @panic("OOM");
+    const final = std.fmt.allocPrint(b.allocator, "{f}", .{ver}) catch @panic("OOM");
     //std.debug.print("version {s}\n", .{final});
     return final;
 }

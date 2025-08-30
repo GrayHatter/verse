@@ -47,6 +47,7 @@ pub const Stats = struct {
 
     pub const Line = struct {
         addr: Addr,
+        addr_buffer: [Size]u8 = undefined,
         code: std.http.Status,
         number: usize,
         page_size: usize,
@@ -54,13 +55,14 @@ pub const Stats = struct {
         time: u64,
         ua: ?UserAgent,
         uri: Uri,
+        uri_buffer: [Size]u8 = undefined,
         us: usize,
 
         pub const Size = 2048;
         // These are different because I haven't finalized the expected type
         // and size yet.
-        const Uri = std.BoundedArray(u8, Size);
-        const Addr = std.BoundedArray(u8, Size);
+        const Uri = std.ArrayList(u8);
+        const Addr = std.ArrayList(u8);
         pub const empty: Line = .{
             .addr = .{},
             .code = .internal_server_error,
@@ -100,15 +102,17 @@ pub const Stats = struct {
 
         stats.rows[stats.count % stats.rows.len] = .{
             .code = data.code,
-            .addr = Line.Addr.fromSlice(data.addr[0..@min(data.addr.len, Line.Size)]) catch unreachable,
+            .addr = .{},
             .number = stats.count,
             .page_size = data.page_size,
             .rss = data.rss,
             .time = @intCast(std.time.timestamp()),
             .ua = data.ua,
-            .uri = Line.Uri.fromSlice(data.uri[0..@min(data.uri.len, Line.Size)]) catch unreachable,
+            .uri = .{},
             .us = data.us,
         };
+        //stats.rows[stats.count % stats.rows.len].addr.appendSliceBounded(data.addr[0..@min(data.addr.len, Line.Size)]) catch unreachable;
+        //stats.rows[stats.count % stats.rows.len].uri.appendSliceBounded(data.uri[0..@min(data.uri.len, Line.Size)]) catch unreachable;
         stats.count += 1;
 
         stats.mean.time[stats.mean.idx] = data.us;
@@ -225,12 +229,12 @@ pub const Endpoint = struct {
 
                 data[i] = .{
                     .code = codeSlice(src.code),
-                    .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
+                    .ip_address = if (include_ip) src.addr.items else "[redacted]",
                     .number = src.number,
                     .rss = src.rss,
                     .page_size = src.page_size,
                     .time = src.time,
-                    .uri = src.uri.slice(),
+                    .uri = src.uri.items,
                     .verse_user_agent = ua orelse .{
                         .name = "[No User Agent Provided]",
                         .version = 0,

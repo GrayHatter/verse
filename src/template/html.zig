@@ -27,11 +27,11 @@ pub const Attribute = struct {
         return alloc(a, &[_][]const u8{k}, &[_]?[]const u8{v});
     }
 
-    pub fn format(self: Attribute, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+    pub fn format(self: Attribute, out: *Writer) !void {
         if (self.value) |value| {
-            try std.fmt.format(out, " {s}=\"{s}\"", .{ self.key, value });
+            try out.print(" {s}=\"{s}\"", .{ self.key, value });
         } else {
-            try std.fmt.format(out, " {s}", .{self.key});
+            try out.print(" {s}", .{self.key});
         }
     }
 };
@@ -45,9 +45,7 @@ pub const Element = struct {
     children: ?[]const Element = null,
     self_close: bool = false,
 
-    pub fn format(self: Element, comptime fmt: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
-        const pretty = std.mem.eql(u8, fmt, "pretty");
-
+    pub fn format(self: Element, out: *Writer) error{WriteFailed}!void {
         if (self.name[0] == '_') {
             if (self.text) |txt| {
                 return try out.print("{s}", .{txt});
@@ -56,7 +54,7 @@ pub const Element = struct {
 
         try out.print("<{s}", .{self.name});
         if (self.attrs) |attrs| {
-            for (attrs) |attr| try out.print("{}", .{attr});
+            for (attrs) |attr| try out.print("{f}", .{attr});
         }
         if (self.self_close) {
             return try out.print(" />", .{});
@@ -64,12 +62,35 @@ pub const Element = struct {
 
         if (self.children) |children| {
             for (children) |child| {
-                if (pretty) {
-                    try out.print("\n{pretty}", .{child});
-                } else {
-                    try out.print("{}", .{child});
-                }
-            } else if (pretty) try out.writeAll("\n");
+                try out.print("{f}", .{child});
+            }
+        } else if (self.text) |txt| {
+            try out.print("{s}", .{txt});
+        } else if (self.self_close) {
+            return try out.print(" />", .{});
+        }
+        try out.print("</{s}>", .{self.name});
+    }
+
+    pub fn pretty(self: Element, out: *Writer) error{WriteFailed}!void {
+        if (self.name[0] == '_') {
+            if (self.text) |txt| {
+                return try out.print("{s}", .{txt});
+            }
+        }
+
+        try out.print("<{s}", .{self.name});
+        if (self.attrs) |attrs| {
+            for (attrs) |attr| try out.print("{f}", .{attr});
+        }
+        if (self.self_close) {
+            return try out.print(" />", .{});
+        } else try out.print(">", .{});
+
+        if (self.children) |children| {
+            for (children) |child| {
+                try out.print("\n{f}", .{std.fmt.alt(child, .pretty)});
+            } else try out.writeAll("\n");
         } else if (self.text) |txt| {
             try out.print("{s}", .{txt});
         } else if (self.self_close) {
@@ -324,24 +345,24 @@ pub fn li(c: anytype, attr: ?[]const Attribute) Element {
 test "html" {
     var a = std.testing.allocator;
 
-    const str = try std.fmt.allocPrint(a, "{}", .{html(null)});
+    const str = try std.fmt.allocPrint(a, "{f}", .{html(null)});
     defer a.free(str);
     try std.testing.expectEqualStrings("<html></html>", str);
 
-    const str2 = try std.fmt.allocPrint(a, "{pretty}", .{html(&[_]E{body(null)})});
+    const str2 = try std.fmt.allocPrint(a, "{f}", .{std.fmt.alt(html(&[_]E{body(null)}), .pretty)});
     defer a.free(str2);
     try std.testing.expectEqualStrings("<html>\n<body></body>\n</html>", str2);
 }
 
 test "nested" {
     var a = std.testing.allocator;
-    const str = try std.fmt.allocPrint(a, "{pretty}", .{
-        html(&[_]E{
+    const str = try std.fmt.allocPrint(a, "{f}", .{
+        std.fmt.alt(html(&[_]E{
             head(null),
             body(
                 &[_]E{div(&[_]E{p(null, null)}, null)},
             ),
-        }),
+        }), .pretty),
     });
     defer a.free(str);
 
@@ -361,30 +382,30 @@ test "nested" {
 test "text" {
     var a = std.testing.allocator;
 
-    const str = try std.fmt.allocPrint(a, "{}", .{text("this is text")});
+    const str = try std.fmt.allocPrint(a, "{f}", .{text("this is text")});
     defer a.free(str);
     try std.testing.expectEqualStrings("this is text", str);
 
-    const pt = try std.fmt.allocPrint(a, "{}", .{p("this is text", null)});
+    const pt = try std.fmt.allocPrint(a, "{f}", .{p("this is text", null)});
     defer a.free(pt);
     try std.testing.expectEqualStrings("<p>this is text</p>", pt);
 
-    const p_txt = try std.fmt.allocPrint(a, "{}", .{p(&[_]E{text("this is text")}, null)});
+    const p_txt = try std.fmt.allocPrint(a, "{f}", .{p(&[_]E{text("this is text")}, null)});
     defer a.free(p_txt);
     try std.testing.expectEqualStrings("<p>this is text</p>", p_txt);
 }
 
 test "attrs" {
     var a = std.testing.allocator;
-    const str = try std.fmt.allocPrint(a, "{pretty}", .{
-        html(&[_]E{
+    const str = try std.fmt.allocPrint(a, "{f}", .{
+        std.fmt.alt(html(&[_]E{
             head(null),
             body(
                 &[_]E{div(&[_]E{p(null, null)}, &[_]Attribute{
                     Attribute{ .key = "class", .value = "something" },
                 })},
             ),
-        }),
+        }), .pretty),
     });
     defer a.free(str);
 
@@ -408,3 +429,4 @@ test {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;

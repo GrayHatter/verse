@@ -63,7 +63,7 @@ pub const Attributes = struct {
         return used;
     }
 
-    pub fn format(a: Attributes, comptime _: []const u8, _: fmt.FormatOptions, w: anytype) !void {
+    pub fn format(a: Attributes, w: *Writer) !void {
         if (a.domain) |d| try w.print("; Domain={s}", .{d});
         if (a.path) |p| try w.print("; Path={s}", .{p});
         if (a.max_age_str) |m| try w.print("; Max-Age={s}", .{m});
@@ -113,11 +113,14 @@ pub const Cookie = struct {
         return used;
     }
 
-    pub fn format(c: Cookie, comptime fstr: []const u8, _: fmt.FormatOptions, w: anytype) !void {
-        if (comptime eql(u8, fstr, "header")) {
-            try w.writeAll("Set-Cookie: ");
-        }
-        try w.print("{s}={s}{}", .{ c.name, c.value, c.attr });
+    pub fn header(c: Cookie, w: *Writer) !void {
+        try w.writeAll("Set-Cookie: ");
+
+        try w.print("{s}={s}{f}", .{ c.name, c.value, c.attr });
+    }
+
+    pub fn format(c: Cookie, w: *Writer) !void {
+        try w.print("{s}={s}{f}", .{ c.name, c.value, c.attr });
     }
 };
 
@@ -139,7 +142,7 @@ test Cookie {
     };
 
     for (expected, cookies) |expect, cookie| {
-        const res = try fmt.bufPrint(&buffer, "{header}", .{cookie});
+        const res = try fmt.bufPrint(&buffer, "{f}", .{std.fmt.alt(cookie, .header)});
         try std.testing.expectEqualStrings(expect, res);
     }
 
@@ -220,7 +223,7 @@ pub const Jar = struct {
         for (slice, jar.cookies.items) |*s, cookie| {
             s.* = .{
                 .name = try a.dupe(u8, "Set-Cookie"),
-                .value = try fmt.allocPrint(a, "{}", .{cookie}),
+                .value = try fmt.allocPrint(a, "{f}", .{cookie}),
             };
         }
         return slice;
@@ -265,5 +268,6 @@ const indexOf = std.mem.indexOf;
 const indexOfScalar = std.mem.indexOfScalar;
 const splitSequence = std.mem.splitSequence;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const Writer = std.Io.Writer;
 
 const IOVec = @import("iovec.zig").IOVec;

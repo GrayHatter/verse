@@ -30,19 +30,24 @@ const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 
 pub const DownstreamGateway = union(Downstream) {
     zwsgi: *zWSGIRequest,
-    http: *std.http.Server.Request,
-    buffer: *std.io.FixedBufferStream([]u8),
+    http: *std.net.Server.Connection,
 
-    pub const Error = std.net.Stream.WriteError || std.io.FixedBufferStream([]u8).WriteError;
-    pub const Writer = std.io.GenericWriter(DownstreamGateway, Error, write);
+    pub const Error = error{WriteFailed};
 
-    pub fn writer(ds: DownstreamGateway) Writer {
-        return .{
-            .context = ds,
+    pub fn reader(ds: DownstreamGateway, _: []u8) *std.Io.Reader {
+        return switch (ds) {
+            else => comptime unreachable,
         };
     }
 
-    fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) anyerror!usize {
+    pub fn writer(ds: DownstreamGateway, buffer: []u8) std.Io.Writer {
+        return switch (ds) {
+            .zwsgi => |z| z.conn.stream.writer(buffer).interface,
+            .http => |h| h.stream.writer(buffer).interface,
+        };
+    }
+
+    fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) Error!usize {
         const ds: *const DownstreamGateway = @alignCast(@ptrCast(ptr));
         return try ds.write(bytes);
     }
@@ -55,29 +60,22 @@ pub const DownstreamGateway = union(Downstream) {
     }
 
     pub fn writevAll(ds: DownstreamGateway, vect: []IOVec) Error!void {
-        switch (ds) {
-            .zwsgi => |z| try z.conn.stream.writevAll(@ptrCast(vect)),
-            .http => |h| try h.server.connection.stream.writevAll(@ptrCast(vect)),
-            .buffer => {
-                for (vect) |v| {
-                    try ds.writeAll(v.base[0..v.len]);
-                }
-            },
-        }
+        (switch (ds) {
+            .zwsgi => |z| z.conn.stream.writevAll(@ptrCast(vect)),
+            .http => |h| h.stream.writevAll(@ptrCast(vect)),
+        }) catch return error.WriteFailed;
     }
 
     // Raw writer, use with caution!
     pub fn write(ds: DownstreamGateway, data: []const u8) Error!usize {
-        return switch (ds) {
-            .zwsgi => |z| try z.conn.stream.write(data),
-            .http => |h| try h.server.connection.stream.write(data),
-            .buffer => |b| try b.write(data),
-        };
+        return (switch (ds) {
+            .zwsgi => |z| z.conn.stream.write(data),
+            .http => |h| h.stream.write(data),
+        }) catch return error.WriteFailed;
     }
 
     pub fn flush(ds: DownstreamGateway) Error!void {
         switch (ds) {
-            .buffer => |_| {}, // TODO implement flush for buffered writer
             .http, .zwsgi => {},
         }
     }
@@ -86,7 +84,6 @@ pub const DownstreamGateway = union(Downstream) {
 const Downstream = enum {
     zwsgi,
     http,
-    buffer,
 };
 
 pub const Host = []const u8;
@@ -268,7 +265,12 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
     );
 }
 
-pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Request {
+pub fn initHttp(
+    a: Allocator,
+    http: *std.http.Server.Request,
+    connection: *std.net.Server.Connection,
+    data: Data,
+) !Request {
     var headers = Headers.init();
 
     var accept: ?Accept = null;
@@ -302,7 +304,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
 
     var remote_addr: RemoteAddr = undefined;
     var ipbuf: [48]u8 = undefined;
-    const ipport = try bufPrint(&ipbuf, "{}", .{http.server.connection.address});
+    const ipport = try bufPrint(&ipbuf, "{f}", .{connection.address});
     if (lastIndexOfScalar(u8, ipport, ':')) |i| {
         // TODO lower this to remove the a.dupe
         remote_addr = try a.dupe(u8, ipport[0..i]);
@@ -323,7 +325,7 @@ pub fn initHttp(a: Allocator, http: *std.http.Server.Request, data: Data) !Reque
         cookie_header,
         proto,
         data,
-        .{ .http = http },
+        .{ .http = connection },
         false, // https isn't currently supported using verse internal http
     );
 }

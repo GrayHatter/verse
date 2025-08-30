@@ -26,7 +26,7 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
     frame.content_type = content_type;
 
     frame.sendHeaders() catch |err| switch (err) {
-        error.BrokenPipe, error.IOWriteFailure => |e| return e,
+        error.WriteFailed => |e| return e,
         else => unreachable,
     };
     try frame.sendRawSlice("\r\n");

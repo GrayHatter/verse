@@ -1,8 +1,8 @@
 .{
     .name = .verse,
-    .version = "0.0.1",
+    .version = "0.0.2",
     .fingerprint = 0xd2f7e69feb304207,
-    .minimum_zig_version = "0.14.1",
+    .minimum_zig_version = "0.15.1",
     .dependencies = .{},
     .paths = .{
         "build.zig",
