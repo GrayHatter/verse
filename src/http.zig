@@ -73,16 +73,15 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     defer conn.stream.close();
     log.info("HTTP connection from {f}", .{conn.address});
 
-    var r_b: [0x100000]u8 = undefined;
-    var w_b: [0x100000]u8 = undefined;
-    var reader = conn.stream.reader(&r_b);
-    var writer = conn.stream.writer(&w_b);
-
-    var hsrv = std.http.Server.init(reader.interface(), &writer.interface);
-
     var arena = std.heap.ArenaAllocator.init(http.alloc);
     defer arena.deinit();
     const a = arena.allocator();
+
+    const r_b: []u8 = try a.alloc(u8, 0x10000);
+    const w_b: []u8 = try a.alloc(u8, 0x40000);
+    var reader = conn.stream.reader(r_b);
+    var writer = conn.stream.writer(w_b);
+    var hsrv = std.http.Server.init(reader.interface(), &writer.interface);
 
     var hreq = try hsrv.receiveHead();
     const reqdata = try requestData(a, &hreq);
@@ -91,12 +90,22 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
     const srvr: *Server = @fieldParentPtr("interface", ifc);
 
-    var frame: Frame = try .init(a, srvr, &req, http.auth);
+    var frame: Frame = try .init(a, srvr, &req, .{
+        .gateway = .{ .http = &conn },
+        .reader = reader.interface(),
+        .writer = &writer.interface,
+    }, http.auth);
 
     errdefer comptime unreachable;
 
     const callable = http.router.fallback(&frame, http.router.route);
     http.router.builder(&frame, callable);
+
+    if (writer.err) |err| {
+        std.debug.print("stream writer error {}\n", .{err});
+    }
+
+    writer.interface.flush() catch unreachable; // TODO
 
     const lap = timer.lap();
     if (srvr.stats) |*stats| {

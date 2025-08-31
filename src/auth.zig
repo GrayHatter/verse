@@ -29,7 +29,7 @@ pub const TestingAuth = struct {
         return .{
             .origin_provider = &ta._provider,
             .unique_id = "_force_valid_user",
-            .user_ptr = @constCast(@ptrCast("_force_valid_user")),
+            .user_ptr = @ptrCast(@constCast("_force_valid_user")),
             .authenticated = true,
         };
     }

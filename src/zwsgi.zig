@@ -98,6 +98,11 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
+    const r_b: []u8 = try a.alloc(u8, 0x10000);
+    const w_b: []u8 = try a.alloc(u8, 0x40000);
+    var reader = conn.stream.reader(r_b);
+    var writer = conn.stream.writer(w_b);
+
     var zreq = try zWSGIRequest.init(a, &conn);
     const request_data = try requestData(a, &zreq);
     const request = try Request.initZWSGI(a, &zreq, request_data);
@@ -105,7 +110,11 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
     const ifc: *const Server.Interface = @fieldParentPtr("zwsgi", z);
     const srvr: *Server = @constCast(@fieldParentPtr("interface", ifc));
 
-    var frame: Frame = try .init(a, srvr, &request, z.auth);
+    var frame: Frame = try .init(a, srvr, &request, .{
+        .gateway = .{ .zwsgi = &zreq },
+        .reader = reader.interface(),
+        .writer = &writer.interface,
+    }, z.auth);
 
     defer {
         const lap = timer.lap() / 1000;

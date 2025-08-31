@@ -300,7 +300,7 @@ pub fn StreamCleaner(comptime rule: Rule, comptime Source: type) type {
         }
 
         pub fn typeErasedReadFn(context: *const anyopaque, buffer: []u8) !usize {
-            const ptr: *const Source = @alignCast(@ptrCast(context));
+            const ptr: *const Source = @ptrCast(@alignCast(context));
             return read(ptr.*, buffer);
         }
 

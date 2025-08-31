@@ -50,20 +50,15 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
 
 pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
     const m = Message.init(msg, .text);
-
-    return ws.frame.request.downstream.writevAll(
-        @ptrCast(@constCast(m.toVec()[0..3])),
-    ) catch |err| switch (err) {
-        else => return error.WriteFailed,
-    };
+    try m.write(ws.frame.downstream.writer);
+    try ws.frame.downstream.writer.flush();
 }
 
 pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
-    var reader = switch (ws.frame.request.downstream) {
-        .zwsgi => |z| z.conn.stream.reader(buffer),
-        .http => |h| h.stream.reader(buffer),
+    return Message.read(ws.frame.downstream.reader, buffer) catch |err| {
+        std.debug.print("reader failed! {}\n", .{err});
+        return error.IOReadFailure;
     };
-    return Message.read(reader.interface(), buffer) catch error.IOReadFailure;
 }
 
 pub const Message = struct {
@@ -127,7 +122,7 @@ pub const Message = struct {
     pub fn read(r: *Reader, buffer: []align(@alignOf(Mask)) u8) !Message {
         try r.fill(2);
         if (r.end < 2) return error.InvalidRead;
-        const header: Message.Header = @as(*const Message.Header, @ptrCast(&(try r.takeArray(2)))).*;
+        const header: Message.Header = try r.takeStruct(Message.Header, endian);
         if (header.final == false) return error.FragmentNotSupported;
         const length: Length = if (header.extlen == 127)
             .{ .large = try r.takeInt(u64, .big) }
@@ -137,8 +132,7 @@ pub const Message = struct {
             .{ .tiny = header.extlen };
 
         if (length.len() > buffer.len) return error.NoSpaceLeft;
-
-        try r.fillMore();
+        try r.fill(4 + length.len());
         const mask: [4]u8 align(4) = if (header.mask) (try r.takeArray(4)).* else @splat(0);
         if (r.bufferedLen() < length.len()) {
             std.debug.print("read error: {} vs {}\n", .{ r.bufferedLen(), length });
@@ -147,24 +141,25 @@ pub const Message = struct {
         }
 
         const umask: u32 = @as(*const u32, @ptrCast(&mask)).*;
-        applyMask(umask, @alignCast(r.buffered()));
+        applyMask(umask, r.buffered()[0..length.len()], buffer);
+        r.toss(length.len());
         return .{
             .header = header,
             .length = length,
             .mask = mask,
-            .msg = r.buffered(),
+            .msg = buffer[0..length.len()],
         };
     }
 
-    pub fn applyMask(mask: u32, buffer: []align(@alignOf(Mask)) u8) void {
+    pub fn applyMask(mask: u32, src: []const u8, buffer: []align(@alignOf(Mask)) u8) void {
         const block_mask: Mask = switch (@sizeOf(Mask)) {
             4 => mask,
             8 => mask | @as(Mask, mask) << 32,
             else => @compileError("mask not implemented for this arch size"),
         };
-        const block_buffer: []u8 align(@alignOf(Mask)) =
-            buffer[0 .. (buffer.len / @sizeOf(Mask)) * @sizeOf(Mask)];
-        const block_msg: []Mask = @alignCast(@ptrCast(block_buffer));
+        @memcpy(buffer[0..src.len], src);
+        const block_buffer: []u8 align(@alignOf(Mask)) = buffer[0 .. (buffer.len / @sizeOf(Mask)) * @sizeOf(Mask)];
+        const block_msg: []Mask = @ptrCast(@alignCast(block_buffer));
         for (block_msg) |*blk| blk.* ^= block_mask;
 
         const remainder = buffer[block_buffer.len..];
@@ -173,7 +168,10 @@ pub const Message = struct {
     }
 
     test applyMask {
-        var vector: [56]u8 align(@alignOf(Mask)) = [_]u8{
+        var dest: [56]u8 align(@alignOf(Mask)) = undefined;
+
+        // alignment is explicit here to verify reader alignment can missmatch
+        var source: [56]u8 align(1) = [_]u8{
             0x0b, 0x0a, 0x2e, 0xc1, 0x63, 0x06, 0x31, 0xcd,
             0x3a, 0x00, 0x22, 0xca, 0x31, 0x0a, 0x77, 0x9f,
             0x26, 0x0e, 0x33, 0x84, 0x2d, 0x08, 0x77, 0x99,
@@ -184,20 +182,18 @@ pub const Message = struct {
         };
         const mask: u32 = 3981930307;
         const expected = "Hey, if you're reading this, I hope you have a good day!";
-        applyMask(mask, &vector);
-        try std.testing.expectEqualStrings(expected, &vector);
+        applyMask(mask, &source, &dest);
+        try std.testing.expectEqualStrings(expected, &dest);
     }
 
-    pub fn toVec(m: *const Message) [3]std.posix.iovec_const {
-        return .{
-            .{ .base = @ptrCast(&m.header), .len = 2 },
-            switch (m.length) {
-                .tiny => .{ .base = @ptrCast(&m.length), .len = 0 },
-                .small => .{ .base = @ptrCast(&m.length.small), .len = 2 },
-                .large => .{ .base = @ptrCast(&m.length.large), .len = 8 },
-            },
-            .{ .base = m.msg.ptr, .len = m.msg.len },
-        };
+    pub fn write(m: *const Message, w: *std.Io.Writer) !void {
+        try w.writeAll(@ptrCast(&m.header));
+        switch (m.length) {
+            .tiny => {},
+            .small => try w.writeAll(@ptrCast(&m.length.small)),
+            .large => try w.writeAll(@ptrCast(&m.length.large)),
+        }
+        try w.writeAll(m.msg);
     }
 };
 

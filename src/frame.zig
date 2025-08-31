@@ -10,6 +10,8 @@
 alloc: Allocator,
 /// Base Request object from the client.
 request: *const Request,
+/// Connection to the downstream client/request
+downstream: Downstream,
 /// Request URI as received by Verse
 uri: Router.UriIterator,
 
@@ -47,7 +49,43 @@ server: if (false) *const Server else *align(8) const anyopaque,
 
 const Frame = @This();
 
-pub const Downstream = Request.DownstreamGateway;
+pub const Downstream = struct {
+    gateway: Gateway,
+    reader: *std.Io.Reader,
+    writer: *std.Io.Writer,
+
+    pub const Gateway = union(enum) {
+        zwsgi: *zWSGIRequest,
+        http: *std.net.Server.Connection,
+    };
+
+    pub const Error = error{WriteFailed};
+
+    fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) Downstream.Error!usize {
+        const ds: *const Downstream = @ptrCast(@alignCast(ptr));
+        return try ds.write(bytes);
+    }
+
+    pub fn writeAll(ds: Downstream, data: []const u8) Downstream.Error!void {
+        var index: usize = 0;
+        while (index < data.len) {
+            index += try ds.write(data[index..]);
+        }
+    }
+
+    pub fn writevAll(ds: Downstream, vect: []IOVec) Downstream.Error!void {
+        (switch (ds.gateway) {
+            .zwsgi => |z| z.conn.stream.writevAll(@ptrCast(vect)),
+            .http => |h| h.stream.writevAll(@ptrCast(vect)),
+        }) catch return error.WriteFailed;
+    }
+
+    pub fn flush(ds: Downstream) Downstream.Error!void {
+        switch (ds) {
+            .http, .zwsgi => {},
+        }
+    }
+};
 
 /// sendPage is the default way to respond in verse using the Template system.
 /// sendPage will flush headers to the client before sending Page data
@@ -58,7 +96,7 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 
     try frame.sendRawSlice("\r\n");
 
-    const stream = frame.request.downstream;
+    const stream = frame.downstream;
 
     var vec_buffer: [2048]IOVec = @splat(undefined);
     var varr: IOVArray = .initBuffer(&vec_buffer);
@@ -73,9 +111,7 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 
     page.ioVec(&varr, stkalloc) catch |iovec_err| {
         log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
-        var b: [15000]u8 = undefined;
-        var w = stream.writer(&b);
-        page.format(&w) catch |err| switch (err) {
+        page.format(frame.downstream.writer) catch |err| switch (err) {
             else => log.err("Page Build Error {}", .{err}),
         };
         return;
@@ -153,10 +189,17 @@ pub fn acceptWebsocket(frame: *Frame) !Websocket {
     return Websocket.accept(frame);
 }
 
-pub fn init(a: Allocator, srv: *const Server, req: *const Request, auth: Auth.Provider) !Frame {
+pub fn init(
+    a: Allocator,
+    srv: *const Server,
+    req: *const Request,
+    downstream: Downstream,
+    auth: Auth.Provider,
+) !Frame {
     return .{
         .alloc = a,
         .request = req,
+        .downstream = downstream,
         .uri = try splitUri(req.uri),
         .auth_provider = auth,
         .headers = Headers.init(),
@@ -188,7 +231,7 @@ fn VecList(comptime SIZE: usize) type {
 pub fn sendHeaders(vrs: *Frame) NetworkError!void {
     std.debug.assert(!vrs.headers_done);
 
-    const stream = vrs.request.downstream;
+    const stream = vrs.downstream;
     var vect = VecList(HEADER_VEC_COUNT).init();
 
     const h_resp = vrs.HttpHeader("HTTP/1.1");
@@ -247,16 +290,8 @@ pub fn sendDefaultErrorPage(vrs: *Frame, comptime code: std.http.Status) void {
 const ONESHOT_SIZE = 14720;
 const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
 
-pub const Writer = std.io.GenericWriter(Frame, Downstream.Error, write);
-
-fn writer(fr: Frame) Writer {
-    return .{
-        .context = fr,
-    };
-}
-
 fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) !usize {
-    const fr: *const Frame = @alignCast(@ptrCast(ptr));
+    const fr: *const Frame = @ptrCast(@alignCast(ptr));
     return try fr.write(bytes);
 }
 
@@ -268,16 +303,16 @@ fn writeAll(vrs: Frame, data: []const u8) !void {
 }
 
 fn writevAll(f: Frame, vect: []IOVec) !void {
-    return f.request.downstream.writevAll(vect);
+    return f.downstream.writevAll(vect);
 }
 
 // Raw writer, use with caution!
 fn write(vrs: Frame, data: []const u8) Downstream.Error!usize {
-    return vrs.request.downstream.write(data);
+    return vrs.downstream.writer.write(data);
 }
 
 fn flush(f: *Frame) NetworkError!void {
-    return f.request.downstream.flush();
+    return f.downstream.flush();
 }
 
 fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
@@ -316,7 +351,7 @@ pub const DumpDebugOptions = struct {
 };
 
 pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
-    switch (frame.request.downstream) {
+    switch (frame.downstream) {
         .zwsgi => |zw| {
             var itr = zw.known.iterator();
             while (itr.next()) |entry| {
@@ -362,11 +397,15 @@ test {
     std.testing.refAllDecls(@This());
 }
 
-const std = @import("std");
+const Allocator = std.mem.Allocator;
 const Auth = @import("auth.zig");
 const ContentType = @import("content-type.zig");
 const Cookies = @import("cookies.zig");
+const Error = errors.Error;
 const Headers = @import("headers.zig");
+const IOVArray = iov.IOVArray;
+const IOVec = iov.IOVec;
+const NetworkError = errors.NetworkError;
 const Request = @import("request.zig");
 const ResponseData = @import("response-data.zig");
 const Router = @import("router.zig");
@@ -374,14 +413,11 @@ const Server = @import("server.zig");
 const Websocket = @import("websocket.zig");
 const errors = @import("errors.zig");
 const iov = @import("iovec.zig");
-
-const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Verse);
-const IOVec = iov.IOVec;
-const IOVArray = iov.IOVArray;
-const Error = errors.Error;
-const NetworkError = errors.NetworkError;
 const splitUri = Router.splitUri;
+const std = @import("std");
+const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
+const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
 
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;

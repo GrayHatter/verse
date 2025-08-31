@@ -16,8 +16,6 @@ headers: Headers,
 cookie_jar: Cookies.Jar,
 /// POST or QUERY data
 data: Data,
-/// downstream connection to the client.
-downstream: DownstreamGateway,
 
 const Request = @This();
 
@@ -25,66 +23,6 @@ pub const Data = @import("request-data.zig");
 pub const UserAgent = @import("user-agent.zig");
 const Headers = @import("headers.zig");
 const Cookies = @import("cookies.zig");
-const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
-const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
-
-pub const DownstreamGateway = union(Downstream) {
-    zwsgi: *zWSGIRequest,
-    http: *std.net.Server.Connection,
-
-    pub const Error = error{WriteFailed};
-
-    pub fn reader(ds: DownstreamGateway, _: []u8) *std.Io.Reader {
-        return switch (ds) {
-            else => comptime unreachable,
-        };
-    }
-
-    pub fn writer(ds: DownstreamGateway, buffer: []u8) std.Io.Writer {
-        return switch (ds) {
-            .zwsgi => |z| z.conn.stream.writer(buffer).interface,
-            .http => |h| h.stream.writer(buffer).interface,
-        };
-    }
-
-    fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) Error!usize {
-        const ds: *const DownstreamGateway = @alignCast(@ptrCast(ptr));
-        return try ds.write(bytes);
-    }
-
-    pub fn writeAll(ds: DownstreamGateway, data: []const u8) Error!void {
-        var index: usize = 0;
-        while (index < data.len) {
-            index += try ds.write(data[index..]);
-        }
-    }
-
-    pub fn writevAll(ds: DownstreamGateway, vect: []IOVec) Error!void {
-        (switch (ds) {
-            .zwsgi => |z| z.conn.stream.writevAll(@ptrCast(vect)),
-            .http => |h| h.stream.writevAll(@ptrCast(vect)),
-        }) catch return error.WriteFailed;
-    }
-
-    // Raw writer, use with caution!
-    pub fn write(ds: DownstreamGateway, data: []const u8) Error!usize {
-        return (switch (ds) {
-            .zwsgi => |z| z.conn.stream.write(data),
-            .http => |h| h.stream.write(data),
-        }) catch return error.WriteFailed;
-    }
-
-    pub fn flush(ds: DownstreamGateway) Error!void {
-        switch (ds) {
-            .http, .zwsgi => {},
-        }
-    }
-};
-
-const Downstream = enum {
-    zwsgi,
-    http,
-};
 
 pub const Host = []const u8;
 pub const RemoteAddr = []const u8;
@@ -190,7 +128,6 @@ fn initCommon(
     cookies: ?[]const u8,
     proto: []const u8,
     data: Data,
-    downstream: DownstreamGateway,
     secure: bool,
 ) !Request {
     var method = _method;
@@ -208,7 +145,6 @@ fn initCommon(
         .headers = headers,
         .host = host,
         .method = method,
-        .downstream = downstream,
         .referer = referer,
         .remote_addr = remote_addr,
         .uri = uri,
@@ -260,7 +196,6 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         cookie_header,
         proto,
         data,
-        .{ .zwsgi = zwsgi },
         secure,
     );
 }
@@ -325,7 +260,6 @@ pub fn initHttp(
         cookie_header,
         proto,
         data,
-        .{ .http = connection },
         false, // https isn't currently supported using verse internal http
     );
 }
@@ -359,3 +293,5 @@ const allocPrint = std.fmt.allocPrint;
 const bufPrint = std.fmt.bufPrint;
 
 const IOVec = @import("iovec.zig").IOVec;
+const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
+const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
