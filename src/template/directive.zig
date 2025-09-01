@@ -455,18 +455,18 @@ fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
     return null;
 }
 
-pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
+pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !void {
     switch (d.verb) {
         .variable => {
-            if (d.html_type) |_| return d.doTyped(T, ctx, out);
+            if (d.html_type) |_| return d.doTyped(T, ctx, w);
             const noun = d.noun;
             const var_name = typeField(T, noun, ctx);
             if (var_name) |data_blob| {
-                try out.writeAll(data_blob);
+                try w.writeAll(data_blob);
             } else {
                 //if (DEBUG) std.debug.print("[missing var {s}]\n", .{noun.vari});
                 switch (d.otherwise) {
-                    .default => |str| try out.writeAll(str),
+                    .default => |str| try w.writeAll(str),
                     // Not really an error, just instruct caller to print original text
                     .required => {},
                     .delete => {},
@@ -484,7 +484,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                                     if (std.mem.eql(u8, field.name, realname)) {
                                         if (@field(ctx, field.name)) |subdata| {
                                             var subpage = template.pageOf(otype.child, subdata);
-                                            try subpage.format("{}", .{}, out);
+                                            try subpage.format("{}", .{}, w);
                                         } else std.debug.print(
                                             "sub template data was null for {s}\n",
                                             .{field.name},
@@ -495,7 +495,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                                     if (std.mem.eql(u8, field.name, noun)) {
                                         const subdata = @field(ctx, field.name);
                                         var subpage = template.pageOf(@TypeOf(subdata), subdata);
-                                        try subpage.format("{}", .{}, out);
+                                        try subpage.format("{}", .{}, w);
                                     }
                                 },
                                 else => {}, //@compileLog(field.type),
@@ -513,7 +513,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, out: anytype) !void {
                 }
             }
         },
-        else => d.doTyped(T, ctx, out) catch unreachable,
+        else => d.doTyped(T, ctx, w) catch unreachable,
     }
 }
 

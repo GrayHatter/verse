@@ -794,10 +794,10 @@ test "directive Split" {
 
     const slice = SplitS{
         .slice = &[_][]const u8{
-            "Alice",
-            "Bob",
-            "Charlie",
-            "Eve",
+            "Alice\n",
+            "Bob\n",
+            "Charlie\n",
+            "Eve\n",
         },
     };
     const pg = page.init(slice);
