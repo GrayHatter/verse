@@ -351,7 +351,7 @@ pub const DumpDebugOptions = struct {
 };
 
 pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
-    switch (frame.downstream) {
+    switch (frame.downstream.gateway) {
         .zwsgi => |zw| {
             var itr = zw.known.iterator();
             while (itr.next()) |entry| {
@@ -365,13 +365,12 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
                 std.debug.print("\tDumpDebug '{s}' => '{s}'\n", .{ varr.key, varr.val });
             }
         },
-        .http => |http| {
-            var itr_headers = http.iterateHeaders();
+        .http => {
+            var itr_headers = @constCast(frame.request).headers.iterator();
             while (itr_headers.next()) |header| {
                 std.debug.print("\tDumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
             }
         },
-        .buffer => |_| @panic("not implemented"),
     }
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
@@ -394,7 +393,8 @@ pub fn requireValidUser(frame: *Frame) !void {
 }
 
 test {
-    std.testing.refAllDecls(@This());
+    _ = std.testing.refAllDecls(@This());
+    _ = &dumpDebugData;
 }
 
 const Allocator = std.mem.Allocator;

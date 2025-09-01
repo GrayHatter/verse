@@ -41,6 +41,7 @@ pub const testing = @import("testing.zig");
 test {
     std.testing.refAllDecls(@This());
     _ = &testing;
+    _ = &Frame;
 }
 
 const std = @import("std");
