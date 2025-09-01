@@ -14,8 +14,8 @@ pub const Endpoint = struct {
     fn security(f: *Frame) Router.Error!void {
         f.status = .ok;
         f.content_type = .text;
-        f.sendHeaders();
-        f.sendRawSlice("security.txt is not provided for this site.");
+        f.sendHeaders(.close);
+        f.downstream.writer.writeAll("security.txt is not provided for this site.");
     }
 
     fn trafficAdvice(f: *Frame) Router.Error!void {

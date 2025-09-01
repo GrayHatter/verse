@@ -43,9 +43,7 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
     sha.final(&digest);
     const accept_key = base64.encode(&encoded, &digest);
     try f.headers.addCustom(f.alloc, "Sec-WebSocket-Accept", accept_key);
-
-    try f.sendHeaders();
-    try f.sendRawSlice("\r\n");
+    try f.sendHeaders(.close);
 }
 
 pub fn send(ws: Websocket, msg: []const u8) WriteError!void {

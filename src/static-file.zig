@@ -25,10 +25,6 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
     frame.status = .ok;
     frame.content_type = content_type;
 
-    frame.sendHeaders() catch |err| switch (err) {
-        error.WriteFailed => |e| return e,
-        else => unreachable,
-    };
-    try frame.sendRawSlice("\r\n");
-    try frame.sendRawSlice(fdata);
+    try frame.sendHeaders(.close);
+    try frame.downstream.writer.writeAll(fdata);
 }

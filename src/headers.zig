@@ -138,13 +138,12 @@ pub fn toSlice(h: *Headers, a: Allocator) ![]Header {
     return slice;
 }
 
-pub fn format(h: Headers, comptime fmts: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
-    comptime if (fmts.len > 0) @compileError("Header format string must be empty");
+pub fn fmt(h: Headers, w: *Writer) !void {
     var iter = h.extended.iterator();
 
     while (iter.next()) |next| {
         for (next.value_ptr.list) |this| {
-            try out.print("{s}: {s}\n", .{ next.value_ptr.name, this });
+            try w.print("{s}: {s}\r\n", .{ next.value_ptr.name, this });
         }
     }
 }
@@ -173,4 +172,5 @@ test Headers {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 const EnumMap = std.EnumMap;

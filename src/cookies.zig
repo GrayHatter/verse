@@ -17,52 +17,6 @@ pub const Attributes = struct {
         none,
     };
 
-    /// vec must be large enough for the largest cookie (10)
-    pub fn writeVec(a: Attributes, vec: []IOVec) !usize {
-        var used: usize = 0;
-        if (a.domain) |d| {
-            vec[used] = .{ .base = "; Domain=", .len = 9 };
-            used += 1;
-            vec[used] = .{ .base = d.ptr, .len = d.len };
-            used += 1;
-        }
-        if (a.path) |p| {
-            vec[used] = .{ .base = "; Path=", .len = 7 };
-            used += 1;
-            vec[used] = .{ .base = p.ptr, .len = p.len };
-            used += 1;
-        }
-        if (a.max_age_str) |str| {
-            vec[used] = .{ .base = "; Max-Age=".ptr, .len = 10 };
-            used += 1;
-            vec[used] = .{ .base = str.ptr, .len = str.len };
-            used += 1;
-        }
-
-        if (a.same_site) |s| {
-            vec[used] = switch (s) {
-                .strict => .{ .base = "; SameSite=Strict", .len = 17 },
-                .lax => .{ .base = "; SameSite=Lax", .len = 14 },
-                .none => .{ .base = "; SameSite=None", .len = 15 },
-            };
-            used += 1;
-        }
-        if (a.partitioned) {
-            vec[used] = .{ .base = "; Partitioned", .len = 13 };
-            used += 1;
-        }
-        if (a.secure) {
-            vec[used] = .{ .base = "; Secure", .len = 8 };
-            used += 1;
-        }
-        if (a.httponly) {
-            vec[used] = .{ .base = "; HttpOnly", .len = 10 };
-            used += 1;
-        }
-        std.debug.assert(used <= 10);
-        return used;
-    }
-
     pub fn format(a: Attributes, w: *Writer) !void {
         if (a.domain) |d| try w.print("; Domain={s}", .{d});
         if (a.path) |p| try w.print("; Path={s}", .{p});
@@ -93,24 +47,6 @@ pub const Cookie = struct {
             .source = .client,
             .attr = .{},
         };
-    }
-
-    /// vec must be large enough for the largest cookie (4 + attributes)
-    pub fn writeVec(c: Cookie, vec: []IOVec) !usize {
-        if (vec.len < 12) return error.NoSpaceLeft;
-        var used: usize = 0;
-        vec[used] = .{ .base = "Set-Cookie: ".ptr, .len = 12 };
-        used += 1;
-        vec[used] = .{ .base = c.name.ptr, .len = c.name.len };
-        used += 1;
-        vec[used] = .{ .base = "=".ptr, .len = 1 };
-        used += 1;
-        vec[used] = .{ .base = c.value.ptr, .len = c.value.len };
-        used += 1;
-        std.debug.assert(used <= 4);
-        used += try c.attr.writeVec(vec[4..]);
-
-        return used;
     }
 
     pub fn header(c: Cookie, w: *Writer) !void {
@@ -145,18 +81,6 @@ test Cookie {
         const res = try fmt.bufPrint(&buffer, "{f}", .{std.fmt.alt(cookie, .header)});
         try std.testing.expectEqualStrings(expect, res);
     }
-
-    const v_expct = [4]IOVec{
-        .{ .base = "Set-Cookie: ", .len = 12 },
-        .{ .base = "name", .len = 4 },
-        .{ .base = "=", .len = 1 },
-        .{ .base = "value", .len = 5 },
-    };
-
-    var v_buf: [14]IOVec = undefined;
-    const used = try cookies[0].writeVec(v_buf[0..]);
-    try std.testing.expectEqual(4, used);
-    try std.testing.expectEqualDeep(v_expct[0..4], v_buf[0..4]);
 }
 
 pub const Jar = struct {
@@ -269,5 +193,3 @@ const indexOfScalar = std.mem.indexOfScalar;
 const splitSequence = std.mem.splitSequence;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 const Writer = std.Io.Writer;
-
-const IOVec = @import("iovec.zig").IOVec;

@@ -51,40 +51,18 @@ const Frame = @This();
 
 pub const Downstream = struct {
     gateway: Gateway,
+    connection: *std.net.Server.Connection,
     reader: *std.Io.Reader,
     writer: *std.Io.Writer,
 
     pub const Gateway = union(enum) {
         zwsgi: *zWSGIRequest,
-        http: *std.net.Server.Connection,
+        http: *std.http.Server,
     };
 
     pub const Error = error{WriteFailed};
-
-    fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) Downstream.Error!usize {
-        const ds: *const Downstream = @ptrCast(@alignCast(ptr));
-        return try ds.write(bytes);
-    }
-
-    pub fn writeAll(ds: Downstream, data: []const u8) Downstream.Error!void {
-        var index: usize = 0;
-        while (index < data.len) {
-            index += try ds.write(data[index..]);
-        }
-    }
-
-    pub fn writevAll(ds: Downstream, vect: []IOVec) Downstream.Error!void {
-        (switch (ds.gateway) {
-            .zwsgi => |z| z.conn.stream.writevAll(@ptrCast(vect)),
-            .http => |h| h.stream.writevAll(@ptrCast(vect)),
-        }) catch return error.WriteFailed;
-    }
-
-    pub fn flush(ds: Downstream) Downstream.Error!void {
-        switch (ds) {
-            .http, .zwsgi => {},
-        }
-    }
+    // Largest single IP packet size
+    pub const ONESHOT_SIZE = 14720;
 };
 
 /// sendPage is the default way to respond in verse using the Template system.
@@ -92,77 +70,55 @@ pub const Downstream = struct {
 pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
     frame.status = frame.status orelse .ok;
 
-    try frame.sendHeaders();
+    try frame.sendHeaders(.close);
+    try frame.downstream.writer.print("{f}", .{page});
+    return;
 
-    try frame.sendRawSlice("\r\n");
+    //var vec_buffer: [2048]IOVec = @splat(undefined);
+    //var varr: IOVArray = .initBuffer(&vec_buffer);
+    //const required = page.iovecCountAll();
+    //if (required > varr.capacity) {
+    //    varr = IOVArray.initCapacity(frame.alloc, required) catch @panic("OOM");
+    //}
+    //defer if (varr.capacity > vec_buffer.len) varr.deinit(frame.alloc);
 
-    const stream = frame.downstream;
+    //var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
+    //const stkalloc = stkfb.get();
 
-    var vec_buffer: [2048]IOVec = @splat(undefined);
-    var varr: IOVArray = .initBuffer(&vec_buffer);
-    const required = page.iovecCountAll();
-    if (required > varr.capacity) {
-        varr = IOVArray.initCapacity(frame.alloc, required) catch @panic("OOM");
-    }
-    defer if (varr.capacity > vec_buffer.len) varr.deinit(frame.alloc);
-
-    var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
-    const stkalloc = stkfb.get();
-
-    page.ioVec(&varr, stkalloc) catch |iovec_err| {
-        log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
-        page.format(frame.downstream.writer) catch |err| switch (err) {
-            else => log.err("Page Build Error {}", .{err}),
-        };
-        return;
-    };
-    stream.writevAll(@ptrCast(varr.items)) catch |err| switch (err) {
-        else => log.err("iovec write error Error {} len {}", .{ err, varr.items.len }),
-    };
-}
-
-/// sendRawSlice will allow you to send data directly to the client. It will not
-/// verify the current state, and will allow you to inject data into the HTTP
-/// headers. If you only want to send response body data, use sendHTML instead.
-pub fn sendRawSlice(vrs: *Frame, slice: []const u8) NetworkError!void {
-    try vrs.writeAll(slice);
+    //page.ioVec(&varr, stkalloc) catch |iovec_err| {
+    //log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
+    //};
+    //frame.dowstream.writer.writevAll(@ptrCast(varr.items)) catch |err| switch (err) {
+    //    else => log.err("iovec write error Error {} len {}", .{ err, varr.items.len }),
+    //};
 }
 
 /// Takes a any object, that can be represented by json, converts it into a
 /// json string, and sends to the client.
-pub fn sendJSON(fr: *Frame, comptime code: std.http.Status, json: anytype) NetworkError!void {
+pub fn sendJSON(f: *Frame, comptime code: std.http.Status, json: anytype) NetworkError!void {
     if (code == .no_content) {
         @compileError("Sending JSON is not supported with status code no content");
     }
 
-    fr.status = code;
-    fr.content_type = .json;
+    f.status = code;
+    f.content_type = .json;
 
-    try fr.sendHeaders();
-
-    try fr.sendRawSlice("\r\n");
-    _ = json;
-    //const w = fr.writer();
-    //w.print("{f}", .{std.json.fmt(
-    //    json,
-    //    .{ .emit_null_optional_fields = false },
-    //)}) catch return error.WriteFailed;
-
-    //try fr.flush();
+    try f.sendHeaders(.close);
+    try f.downstream.writer.print("{f}", .{std.json.fmt(
+        json,
+        .{ .emit_null_optional_fields = false },
+    )});
 }
 
-pub fn sendHTML(frame: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
-    frame.status = code;
-    frame.content_type = .html;
-
-    try frame.sendHeaders();
-
-    try frame.sendRawSlice("\r\n");
-    try frame.sendRawSlice(html);
+pub fn sendHTML(f: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
+    f.status = code;
+    f.content_type = .html;
+    try f.sendHeaders(.close);
+    try f.downstream.writer.writeAll(html);
 }
 
-pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
-    vrs.status = switch (scode) {
+pub fn redirect(f: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
+    f.status = switch (scode) {
         .multiple_choice,
         .moved_permanently,
         .found,
@@ -175,14 +131,8 @@ pub fn redirect(vrs: *Frame, loc: []const u8, comptime scode: std.http.Status) N
         else => @compileError("redirect() can only be called with a 3xx redirection code"),
     };
 
-    try vrs.sendHeaders();
-
-    var vect = [3]IOVec{
-        .fromSlice("Location: "),
-        .fromSlice(loc),
-        .fromSlice("\r\n\r\n"),
-    };
-    try vrs.writevAll(vect[0..]);
+    try f.sendHeaders(.more);
+    try f.downstream.writer.print("Location: {s}\r\n\r\n", .{loc});
 }
 
 pub fn acceptWebsocket(frame: *Frame) !Websocket {
@@ -210,114 +160,54 @@ pub fn init(
     };
 }
 
-fn VecList(comptime SIZE: usize) type {
-    return struct {
-        pub const capacity = SIZE;
-        vect: [SIZE]IOVec = undefined,
-        length: usize = 0,
+pub const SendHeadersEnd = enum {
+    close,
+    more,
+};
 
-        pub fn init() @This() {
-            return .{};
-        }
-
-        pub fn append(self: *@This(), str: []const u8) !void {
-            if (self.length >= capacity) return error.NoSpaceLeft;
-            self.vect[self.length] = .fromSlice(str);
-            self.length += 1;
-        }
-    };
-}
-
-pub fn sendHeaders(vrs: *Frame) NetworkError!void {
-    std.debug.assert(!vrs.headers_done);
-
-    const stream = vrs.downstream;
-    var vect = VecList(HEADER_VEC_COUNT).init();
-
-    const h_resp = vrs.HttpHeader("HTTP/1.1");
-    try vect.append(h_resp);
-
-    // Default headers
+pub fn sendHeaders(f: *Frame, comptime end: SendHeadersEnd) NetworkError!void {
+    std.debug.assert(!f.headers_done);
+    // Verse headers
+    try f.downstream.writer.writeAll(f.HttpHeader("HTTP/1.1"));
     const s_name = "Server: verse/" ++ build_version ++ "\r\n";
-    try vect.append(s_name);
+    try f.downstream.writer.writeAll(s_name);
 
-    if (vrs.content_type) |ct| {
-        try vect.append("Content-Type: ");
+    if (f.content_type) |ct| {
+        try f.downstream.writer.writeAll("Content-Type: ");
         switch (ct.base) {
             inline else => |tag, name| {
-                try vect.append(@tagName(name));
-                try vect.append("/");
-                try vect.append(@tagName(tag));
+                try f.downstream.writer.print("{s}/{s}", .{ @tagName(name), @tagName(tag) });
             },
         }
-        if (ct.parameter) |param| {
-            const pre = "; charset=";
-            try vect.append(pre);
-            const tag = @tagName(param);
-            try vect.append(tag);
-        }
-        try vect.append("\r\n");
-        //"text/html; charset=utf-8"); // Firefox is trash
+        if (ct.parameter) |param|
+            try f.downstream.writer.print("; charset={s}", .{@tagName(param)});
+        try f.downstream.writer.writeAll("\r\n");
     }
-
-    var itr = vrs.headers.iterator();
-    while (itr.next()) |header| {
-        try vect.append(header.name);
-        try vect.append(": ");
-        try vect.append(header.value);
-        try vect.append("\r\n");
+    // Custom Headers
+    try f.downstream.writer.print("{f}", .{std.fmt.alt(f.headers, .fmt)});
+    for (f.cookie_jar.cookies.items) |cookie| {
+        try f.downstream.writer.print("{f}\r\n", .{std.fmt.alt(cookie, .header)});
     }
-
-    for (vrs.cookie_jar.cookies.items) |cookie| {
-        const used = try cookie.writeVec(vect.vect[vect.length..]);
-        vect.length += used;
-        try vect.append("\r\n");
+    switch (end) {
+        .close => try f.downstream.writer.writeAll("\r\n"),
+        .more => return,
     }
-
-    stream.writevAll(@ptrCast(vect.vect[0..vect.length])) catch return error.WriteFailed;
-
-    vrs.headers_done = true;
+    f.headers_done = true;
 }
 
 /// Helper function to return a default error page for a given http status code.
-pub fn sendDefaultErrorPage(vrs: *Frame, comptime code: std.http.Status) void {
-    return Router.defaultResponse(code)(vrs) catch |err| {
+pub fn sendDefaultErrorPage(f: *Frame, comptime code: std.http.Status) void {
+    return Router.defaultResponse(code)(f) catch |err| {
         log.err("Unable to generate default error page! {}", .{err});
         @panic("internal verse error");
     };
 }
 
-const ONESHOT_SIZE = 14720;
 const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
 
-fn untypedWrite(ptr: *const anyopaque, bytes: []const u8) !usize {
-    const fr: *const Frame = @ptrCast(@alignCast(ptr));
-    return try fr.write(bytes);
-}
-
-fn writeAll(vrs: Frame, data: []const u8) !void {
-    var index: usize = 0;
-    while (index < data.len) {
-        index += try write(vrs, data[index..]);
-    }
-}
-
-fn writevAll(f: Frame, vect: []IOVec) !void {
-    return f.downstream.writevAll(vect);
-}
-
-// Raw writer, use with caution!
-fn write(vrs: Frame, data: []const u8) Downstream.Error!usize {
-    return vrs.downstream.writer.write(data);
-}
-
-fn flush(f: *Frame) NetworkError!void {
-    return f.downstream.flush();
-}
-
-fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
-    if (vrs.status == null) vrs.status = .ok;
-    return switch (vrs.status.?) {
+fn HttpHeader(f: *Frame, comptime ver: []const u8) [:0]const u8 {
+    if (f.status == null) f.status = .ok;
+    return switch (f.status.?) {
         .switching_protocols => ver ++ " 101 Switching Protocols\r\n",
         .ok => ver ++ " 200 OK\r\n",
         .created => ver ++ " 201 Created\r\n",
@@ -339,7 +229,7 @@ fn HttpHeader(vrs: *Frame, comptime ver: []const u8) [:0]const u8 {
         .payload_too_large => ver ++ " 413 Content Too Large\r\n",
         .internal_server_error => ver ++ " 500 Internal Server Error\r\n",
         else => b: {
-            log.err("Status code not implemented {}", .{vrs.status.?});
+            log.err("Status code not implemented {}", .{f.status.?});
             break :b ver ++ " 500 Internal Server Error\r\n";
         },
     };

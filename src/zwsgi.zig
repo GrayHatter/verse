@@ -112,6 +112,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
 
     var frame: Frame = try .init(a, srvr, &request, .{
         .gateway = .{ .zwsgi = &zreq },
+        .connection = &conn,
         .reader = reader.interface(),
         .writer = &writer.interface,
     }, z.auth);
@@ -144,6 +145,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);
     z.router.builder(&frame, routed_endpoint);
+    writer.interface.flush() catch unreachable;
 }
 
 fn onceThreaded(z: *const zWSGI, acpt: net.Server.Connection) void {

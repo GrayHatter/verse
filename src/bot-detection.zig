@@ -149,12 +149,8 @@ pub fn robotsTxt(
         fn respond(f: *Frame, text: []const u8) Router.Error!void {
             f.status = .ok;
             f.content_type = .@"text/plain";
-            f.sendHeaders() catch |err| switch (err) {
-                inline else => |e| return e,
-            };
-
-            try f.sendRawSlice("\r\n");
-            try f.sendRawSlice(text);
+            try f.sendHeaders(.close);
+            try f.downstream.writer.writeAll(text);
         }
 
         pub fn endpoint(f: *Frame) Router.Error!void {

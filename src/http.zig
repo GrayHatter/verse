@@ -91,7 +91,8 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
     const srvr: *Server = @fieldParentPtr("interface", ifc);
 
     var frame: Frame = try .init(a, srvr, &req, .{
-        .gateway = .{ .http = &conn },
+        .gateway = .{ .http = &hsrv },
+        .connection = &conn,
         .reader = reader.interface(),
         .writer = &writer.interface,
     }, http.auth);
