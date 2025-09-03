@@ -46,23 +46,33 @@ pub const Stats = struct {
     };
 
     pub const Line = struct {
-        addr: Addr,
-        addr_buffer: [Size]u8 = undefined,
+        addr: ArrBuf,
         code: std.http.Status,
         number: usize,
         page_size: usize,
         rss: usize,
         time: u64,
         ua: ?UserAgent,
-        uri: Uri,
-        uri_buffer: [Size]u8 = undefined,
+        uri: ArrBuf,
         us: usize,
 
-        pub const Size = 2048;
-        // These are different because I haven't finalized the expected type
-        // and size yet.
-        const Uri = std.ArrayList(u8);
-        const Addr = std.ArrayList(u8);
+        pub const ArrBuf = struct {
+            buf: [size]u8 = undefined,
+            len: usize = 0,
+
+            pub fn init(str: []const u8) ArrBuf {
+                var ab: ArrBuf = undefined;
+                ab.len = @min(size, str.len);
+                @memcpy(ab.buf[0..ab.len], str[0..ab.len]);
+                return ab;
+            }
+
+            pub fn slice(ab: *const ArrBuf) []const u8 {
+                return ab.buf[0..ab.len];
+            }
+        };
+
+        pub const size = 2048;
         pub const empty: Line = .{
             .addr = .{},
             .code = .internal_server_error,
@@ -99,22 +109,19 @@ pub const Stats = struct {
     pub fn log(stats: *Stats, data: Data) void {
         if (stats.mutex) |*mx| mx.lock();
         defer if (stats.mutex) |*mx| mx.unlock();
-
-        stats.rows[stats.count % stats.rows.len] = .{
+        const row: *Line = &stats.rows[stats.count % stats.rows.len];
+        row.* = .{
+            .addr = .init(data.addr),
             .code = data.code,
-            .addr = .{},
             .number = stats.count,
             .page_size = data.page_size,
             .rss = data.rss,
             .time = @intCast(std.time.timestamp()),
             .ua = data.ua,
-            .uri = .{},
+            .uri = .init(data.uri),
             .us = data.us,
         };
-        //stats.rows[stats.count % stats.rows.len].addr.appendSliceBounded(data.addr[0..@min(data.addr.len, Line.Size)]) catch unreachable;
-        //stats.rows[stats.count % stats.rows.len].uri.appendSliceBounded(data.uri[0..@min(data.uri.len, Line.Size)]) catch unreachable;
         stats.count += 1;
-
         stats.mean.time[stats.mean.idx] = data.us;
         stats.mean.idx +%= 1;
 
@@ -133,13 +140,13 @@ pub const Endpoint = struct {
 
     pub const stats = index;
 
-    fn codeSlice(code: std.http.Status) []const u8 {
+    fn codeString(code: std.http.Status) []const u8 {
         return switch (code) {
-            inline .ok,
-            .not_found,
-            .internal_server_error,
-            => |c| std.fmt.comptimePrint("{}: {s}", .{ @as(usize, @intFromEnum(c)), @tagName(c) }),
-            else => "status code not implemented",
+            .ok => "Ok",
+            .found => "Found",
+            .not_found => "Not Found",
+            .internal_server_error => "Internal Server Error",
+            else => "not implemented",
         };
     }
 
@@ -147,7 +154,8 @@ pub const Endpoint = struct {
         var include_ip: bool = false;
         switch (options.auth_mode) {
             .auth_required => {
-                if (f.auth_provider.vtable.valid == null) return f.sendDefaultErrorPage(.not_implemented);
+                if (f.auth_provider.vtable.valid == null)
+                    return f.sendDefaultErrorPage(.not_implemented);
             },
             .sensitive => {
                 if (f.user) |user| if (f.auth_provider.valid(&user)) {
@@ -159,7 +167,7 @@ pub const Endpoint = struct {
 
         var data: [60]S.VerseStatsList = @splat(
             .{
-                .code = "",
+                .code = 500,
                 .ip_address = "",
                 .number = 0,
                 .page_size = 0,
@@ -167,7 +175,8 @@ pub const Endpoint = struct {
                 .time = 0,
                 .uri = "null",
                 .us = 0,
-                .verse_user_agent = null,
+                .user_agent_name = "",
+                .user_agent_version = null,
                 .status_class = "",
             },
         );
@@ -183,27 +192,15 @@ pub const Endpoint = struct {
                 if (i >= count) break;
                 const idx = count - i - 1;
                 const src = &active.rows[idx % active.rows.len];
-                const ua: ?S.VerseUserAgent = if (src.ua) |sua|
+                const ua_str: []const u8, const ua_ver: ?usize = if (src.ua) |sua|
                     switch (sua.resolved) {
-                        .bot => |b| .{
-                            .name = @tagName(b.name),
-                            .version = 0,
-                        },
-                        .browser => |b| .{
-                            .name = @tagName(b.name),
-                            .version = b.version,
-                        },
-                        .script => |s| .{
-                            .name = @tagName(s.name),
-                            .version = s.version,
-                        },
-                        .unknown => .{
-                            .name = "[unknown]",
-                            .version = null,
-                        },
+                        .bot => |b| .{ @tagName(b.name), 0 },
+                        .browser => |b| .{ @tagName(b.name), b.version },
+                        .script => |s| .{ @tagName(s.name), s.version },
+                        .unknown => .{ "[unknown]", null },
                     }
                 else
-                    null;
+                    .{ "[No User Agent Provided]", 0 };
 
                 var is_bot: ?[]const u8 = null;
                 if (src.ua) |sua| {
@@ -228,19 +225,18 @@ pub const Endpoint = struct {
                 };
 
                 data[i] = .{
-                    .code = codeSlice(src.code),
-                    .ip_address = if (include_ip) src.addr.items else "[redacted]",
                     .number = src.number,
+                    .time = src.time,
+                    .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
+                    .code = @intFromEnum(src.code),
+                    .code_string = codeString(src.code),
+                    .status_class = status_class,
                     .rss = src.rss,
                     .page_size = src.page_size,
-                    .time = src.time,
-                    .uri = src.uri.items,
-                    .verse_user_agent = ua orelse .{
-                        .name = "[No User Agent Provided]",
-                        .version = 0,
-                    },
+                    .uri = src.uri.slice(),
+                    .user_agent_name = ua_str,
+                    .user_agent_version = ua_ver,
                     .is_bot = is_bot,
-                    .status_class = status_class,
                     .us = src.us,
                 };
             }

@@ -9,9 +9,9 @@
   </head>
   <body>
     <div class="verse-stats-header">
-      <span>Uptime: <Uptime type="usize" /></span>
-      <span>Count: <Count type="usize" /></span>
-      <span>Mean Response Time: <MeanRespTime type="usize" /></span>
+      <div>Uptime: <Uptime type="usize" /></div>
+      <div>Count: <Count type="usize" /></div>
+      <div>Mean Response Time: <MeanRespTime type="usize" /></div>
     </div>
 
     <table class="verse-stats-contents">
@@ -31,12 +31,12 @@
         <td><Number type="usize" /></td>
         <td><Time type="usize" /></td>
         <td><IpAddress /></td>
-        <td><Code /></td>
+        <td title="<CodeString ornull/>"><Code type="usize"/></td>
         <td><Uri /></td>
         <td><PageSize type="usize" /> </td>
         <td><Rss type="usize" /> </td>
         <td><Us type="usize" /></td>
-        <td><With VerseUserAgent><Name /> <Version type="?usize" /></With></td>
+        <td><UserAgentName /> <UserAgentVersion type="?usize" /></td>
       </tr>
       </For>
     </table>
