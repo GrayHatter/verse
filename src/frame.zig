@@ -155,7 +155,7 @@ pub fn init(
         .headers = Headers.init(),
         .user = auth.authenticate(&req.headers) catch null,
         .cookie_jar = .init(a),
-        .response_data = ResponseData.init(a),
+        .response_data = .{},
         .server = @ptrCast(srv),
     };
 }
@@ -282,9 +282,14 @@ pub fn requireValidUser(frame: *Frame) !void {
     comptime unreachable;
 }
 
+pub fn raze(f: *Frame) void {
+    f.response_data.raze(f.alloc);
+}
+
 test {
     _ = std.testing.refAllDecls(@This());
     _ = &dumpDebugData;
+    _ = &ResponseData;
 }
 
 const Allocator = std.mem.Allocator;

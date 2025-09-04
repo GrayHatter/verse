@@ -1,19 +1,6 @@
-alloc: Allocator,
-map: std.StringHashMap(*anyopaque),
+map: HashMap = .{},
 
 const ResponseData = @This();
-
-pub const Pair = struct {
-    name: []const u8,
-    data: *const anyopaque,
-};
-
-pub fn init(a: Allocator) ResponseData {
-    return .{
-        .alloc = a,
-        .map = std.StringHashMap(*anyopaque).init(a),
-    };
-}
 
 fn name(comptime T: type) []const u8 {
     return comptime switch (@typeInfo(T)) {
@@ -24,18 +11,48 @@ fn name(comptime T: type) []const u8 {
     };
 }
 
-pub fn add(self: *ResponseData, data: anytype) !void {
-    const copy = try self.alloc.create(@TypeOf(data));
-    copy.* = data;
-    try self.map.put(name(@TypeOf(data)), copy);
+pub fn add(rd: *ResponseData, T: type, a: Allocator, data: *T) !void {
+    try rd.map.put(a, name(T), data);
 }
 
-pub fn get(self: ResponseData, T: type) !T {
-    if (self.map.get(@typeName(T))) |data| {
-        return @as(*T, @ptrCast(@alignCast(data))).*;
-    } else return error.NotFound;
+pub fn clone(rd: *ResponseData, T: type, a: Allocator, data: T) !void {
+    const copy = try a.create(@TypeOf(data));
+    copy.* = data;
+    try rd.add(T, a, copy);
+}
+
+pub fn get(rd: ResponseData, T: type) ?*T {
+    if (rd.map.get(@typeName(T))) |data| {
+        return @as(*T, @ptrCast(@alignCast(data)));
+    }
+    return null;
+}
+
+pub fn raze(rd: *ResponseData, a: Allocator) void {
+    rd.map.deinit(a);
+}
+
+test ResponseData {
+    const a = std.testing.allocator;
+
+    var rd: ResponseData = .{};
+    defer rd.raze(a);
+
+    const Type = struct {
+        name: []const u8,
+        number: usize,
+    };
+
+    try std.testing.expectEqual(rd.get(Type), null);
+    try rd.clone(Type, a, .{ .name = "name", .number = 345 });
+    const found: ?*Type = rd.get(Type);
+    const expect: ?*const Type = &.{ .name = "name", .number = 345 };
+    try std.testing.expectEqualDeep(expect, found);
+
+    a.destroy(found.?);
 }
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const HashMap = std.StringHashMapUnmanaged(*anyopaque);
 const eql = std.mem.eql;
