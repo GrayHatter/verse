@@ -154,7 +154,7 @@ pub const QueryData = struct {
     /// segment out name="dquote"
     fn parseSegment(a: Allocator, seg: []const u8) !DataItem {
         const segment = try a.dupe(u8, seg);
-        if (std.mem.indexOf(u8, segment, "=")) |i| {
+        if (indexOf(u8, segment, "=")) |i| {
             const value_len = segment.len - i - 1;
 
             if (value_len > 0) {
@@ -363,7 +363,7 @@ fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]DataItem {
     for (items) |*item| {
         const idata = itr.next().?;
         item.segment = try a.dupe(u8, idata);
-        if (std.mem.indexOf(u8, idata, "=")) |i| {
+        if (indexOf(u8, idata, "=")) |i| {
             item.name = try normalizeUrlEncoded(idata[0..i], item.segment[0..i]);
             item.value = try normalizeUrlEncoded(idata[i + 1 ..], item.segment[i + 1 ..]);
         }
@@ -414,69 +414,65 @@ const DataHeader = enum {
     @"Content-Disposition",
     @"Content-Type",
 
-    pub fn fromStr(str: []const u8) !DataHeader {
+    pub fn fromStr(str: []const u8) ?DataHeader {
         inline for (std.meta.fields(DataHeader)) |field| {
             if (std.mem.startsWith(u8, str, field.name)) {
                 return @enumFromInt(field.value);
             }
         }
         std.log.info("'{s}'", .{str});
-        return error.UnknownHeader;
+        return null;
     }
 };
 
 const MultiData = struct {
-    header: DataHeader,
     str: []const u8,
     name: ?[]const u8 = null,
     filename: ?[]const u8 = null,
 
     fn update(md: *MultiData, str: []const u8) void {
         var trimmed = std.mem.trim(u8, str, " \t\n\r");
-        if (std.mem.indexOf(u8, trimmed, "=")) |i| {
+        if (indexOf(u8, trimmed, "=")) |i| {
             if (eql(u8, trimmed[0..i], "name")) {
-                md.name = trimmed[i + 1 ..];
+                md.name = std.mem.trim(u8, trimmed[i + 1 ..], "\"");
             } else if (eql(u8, trimmed[0..i], "filename")) {
-                md.filename = trimmed[i + 1 ..];
+                md.filename = std.mem.trim(u8, trimmed[i + 1 ..], "\"");
             }
         }
     }
 };
 
 fn parseMultiData(data: []const u8) !MultiData {
-    var extra = splitScalar(u8, data, ';');
-    const first = extra.first();
-    const header = try DataHeader.fromStr(first);
-    var mdata: MultiData = .{
-        .header = header,
-        .str = first[@tagName(header).len + 1 ..],
-    };
+    if (std.mem.startsWith(u8, data, "Content-Disposition: form-data")) {
+        var mdata: MultiData = .{
+            .str = data["Content-Disposition: form-data".len + 1 ..],
+        };
 
-    while (extra.next()) |each| {
-        mdata.update(each);
+        var extra = splitScalar(u8, data, ';');
+        _ = extra.first();
+        while (extra.next()) |each| {
+            mdata.update(each);
+        }
+
+        return mdata;
     }
-
-    return mdata;
+    return error.ParseError;
 }
 
 fn parseMultiFormData(a: Allocator, data: []const u8) !DataItem {
     std.debug.assert(std.mem.startsWith(u8, data, "\r\n"));
-    if (std.mem.indexOf(u8, data, "\r\n\r\n")) |i| {
-        const post_item = DataItem{
+    if (indexOf(u8, data, "\r\n\r\n")) |i| {
+        var post_item = DataItem{
             .segment = try a.dupe(u8, data),
-            .name = undefined,
+            .name = &.{},
             .value = data[i + 4 ..],
         };
 
-        // Commented out while pending rewrite to be more const
-        //post_item.headers = data[0..i];
-        //var headeritr = splitSequence(u8, post_item.headers.?, "\r\n");
-        //while (headeritr.next()) |header| {
-        //    if (header.len == 0) continue;
-        //    const md = try parseMultiData(header);
-        //    if (md.name) |name| post_item.name = name;
-        //    // TODO look for other headers or other data
-        //}
+        if (indexOfPos(u8, data, 2, "\r\n")) |h_idx| {
+            const md = try parseMultiData(data[2..h_idx]);
+            if (md.name) |name|
+                post_item.name = name;
+        }
         return post_item;
     }
     return error.UnableToParseFormData;
@@ -510,7 +506,7 @@ fn parseText(a: Allocator, tx: ContentType.Text, data: []const u8) ![]DataItem {
     const dupe = try a.dupe(u8, data);
     return try a.dupe(DataItem, &[1]DataItem{.{
         .segment = dupe,
-        .name = undefined,
+        .name = &.{},
         .value = dupe,
     }});
 }
@@ -626,4 +622,6 @@ const ContentType = @import("content-type.zig");
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
 const splitSequence = std.mem.splitSequence;
+const indexOf = std.mem.indexOf;
+const indexOfPos = std.mem.indexOfPos;
 const json = std.json;
