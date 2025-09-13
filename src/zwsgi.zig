@@ -315,22 +315,11 @@ const uWSGIVar = struct {
     }
 };
 
-fn find(list: []uWSGIVar, search: []const u8) ?[]const u8 {
-    for (list) |each| {
-        if (std.mem.eql(u8, each.key, search)) return each.val;
-    }
-    return null;
-}
-
-fn findOr(list: []uWSGIVar, search: []const u8) []const u8 {
-    return find(list, search) orelse "[missing]";
-}
-
 fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
     var post_data: ?Request.Data.PostData = null;
 
-    if (find(zreq.vars.items, "HTTP_CONTENT_LENGTH")) |h_len| {
-        const h_type = findOr(zreq.vars.items, "HTTP_CONTENT_TYPE");
+    if (zreq.known.get(.CONTENT_LENGTH)) |h_len| {
+        const h_type = zreq.known.get(.CONTENT_TYPE) orelse "text/plain";
 
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {

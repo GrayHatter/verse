@@ -1,8 +1,9 @@
 //! Client Request Data
-const Data = @This();
 
 post: ?PostData,
 query: QueryData,
+
+const Data = @This();
 
 pub fn validate(data: Data, comptime T: type) !T {
     return RequestData(T).init(data);
@@ -102,7 +103,8 @@ pub const PostData = struct {
         const items = switch (ct.base) {
             .application => |ap| try parseApplication(a, ap, read_b),
             .multipart, .message => |mp| try parseMulti(a, mp, read_b),
-            .audio, .font, .image, .text, .video => @panic("content-type not implemented"),
+            .text => |tx| try parseText(a, tx, read_b),
+            .audio, .font, .image, .video => @panic("content-type not implemented"),
         };
 
         return .{
@@ -501,6 +503,16 @@ fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8) ![]Data
             return items;
         },
     }
+}
+
+fn parseText(a: Allocator, tx: ContentType.Text, data: []const u8) ![]DataItem {
+    _ = tx;
+    const dupe = try a.dupe(u8, data);
+    return try a.dupe(DataItem, &[1]DataItem{.{
+        .segment = dupe,
+        .name = undefined,
+        .value = dupe,
+    }});
 }
 
 pub fn readPost(a: Allocator, reader: *Reader, size: usize, htype: []const u8) !PostData {

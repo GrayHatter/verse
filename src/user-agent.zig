@@ -273,7 +273,7 @@ pub fn init(ua_str: []const u8) UserAgent {
     };
 }
 
-pub fn validate(ua: *UserAgent, r: *const Request) !bool {
+pub fn validate(ua: *UserAgent, r: *const Request) bool {
     if (!BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
     ua.bot_validation = .init(r);
 
