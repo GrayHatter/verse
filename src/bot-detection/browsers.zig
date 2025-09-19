@@ -32,8 +32,9 @@ pub const Chrome = struct {
     pub const Version = enum(u16) {
         _,
 
-        pub const revision_date: i64 = 1749531600;
+        pub const revision_date: i64 = 1758252287;
         pub const Dates = compileDates(&VerDates);
+        // https://chromestatus.com/roadmap
         pub const VerDates = [_]VerDate{
             .{ 0, 1227513600 },   .{ 1, 1228982400 },   .{ 2, 1243148400 },   .{ 3, 1255330800 },
             .{ 4, 1264406400 },   .{ 5, 1274425200 },   .{ 6, 1283410800 },   .{ 7, 1287644400 },
@@ -71,6 +72,7 @@ pub const Chrome = struct {
             .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
             .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 }, .{ 135, 1743465600 },
             .{ 136, 1745884800 }, .{ 137, 1749531600 }, .{ 138, 1753142400 }, .{ 139, 1753833600 },
+            .{ 140, 1756252800 }, .{ 141, 1758672000 }, .{ 142, 1761091200 },
         };
     };
 };
@@ -80,9 +82,9 @@ pub const Edge = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{
-            .{ 0, 0 },
-        };
+        // This is almost certainly incorrect, but I care so little about Edge, this is better
+        // until someone who cares decides to build/maintain this list.
+        pub const VerDates = Chrome.Version.VerDates;
     };
 };
 
@@ -90,8 +92,9 @@ pub const Firefox = struct {
     pub const Version = enum(u16) {
         _,
 
-        pub const revision_date: i64 = 1748322000;
+        pub const revision_date: i64 = 1758252287;
         pub const Dates = compileDates(&VerDates);
+        // https://www.firefox.com/en-US/releases/
         pub const VerDates = [_]VerDate{
             .{ 0, 1099980000 },   .{ 1, 1099987200 },   .{ 2, 1161673200 },   .{ 3, 1213686000 },
             .{ 4, 1300777200 },   .{ 5, 1308639600 },   .{ 6, 1313478000 },   .{ 7, 1317106800 },
@@ -128,7 +131,7 @@ pub const Firefox = struct {
             .{ 128, 1720508400 }, .{ 129, 1722927600 }, .{ 130, 1725346800 }, .{ 131, 1727766000 },
             .{ 132, 1730185200 }, .{ 133, 1732608000 }, .{ 134, 1736236800 }, .{ 135, 1738656000 },
             .{ 136, 1741075200 }, .{ 137, 1743490800 }, .{ 138, 1745902800 }, .{ 139, 1748322000 },
-            .{ 140, 1750723200 }, .{ 141, 1753142400 },
+            .{ 140, 1750723200 }, .{ 141, 1753142400 }, .{ 142, 1755561600 }, .{ 143, 1757980800 },
         };
     };
 };
