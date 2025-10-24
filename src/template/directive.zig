@@ -25,6 +25,8 @@ pub const Verb = enum {
     split,
     variable,
     with,
+    @"switch",
+    case,
 };
 
 pub const HtmlType = enum {
@@ -127,6 +129,10 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
         .with
     else if (eql(u8, verb, "Build"))
         .build
+    else if (eql(u8, verb, "Switch"))
+        .@"switch"
+    else if (eql(u8, verb, "Case"))
+        .case
     else
         return null;
 
@@ -212,6 +218,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 .tag_block_skip = body_start,
             };
         },
+        .@"switch", .case => unreachable,
     }
 }
 

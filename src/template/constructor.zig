@@ -304,6 +304,7 @@ fn validateDirective(
                 },
             }} ++ loop;
         },
+        .@"switch", .case => unreachable,
     }
 }
 
