@@ -98,35 +98,26 @@ test getOffset {
 fn baseType(T: type, name: []const u8) type {
     var local: [0xff]u8 = undefined;
     const field = local[0..makeFieldName(name, &local)];
-    //return @TypeOf(@FieldType(T, field)); // not in 0.13.0
-    for (std.meta.fields(T)) |f| {
-        if (eql(u8, f.name, field)) {
-            switch (f.type) {
-                []const u8 => unreachable,
-                ?[]const u8 => unreachable,
-                ?usize => unreachable,
-                else => switch (@typeInfo(f.type)) {
-                    .pointer => |ptr| return ptr.child,
-                    .optional => |opt| return opt.child,
-                    .@"struct" => return f.type,
-                    .int => return f.type,
-                    .array => |array| return array.child,
-                    else => @compileError("Unexpected kind " ++ f.name),
-                },
-            }
-        }
-    } else unreachable;
+    const field_type = @FieldType(T, field);
+    switch (field_type) {
+        []const u8 => unreachable,
+        ?[]const u8 => unreachable,
+        ?usize => unreachable,
+        else => switch (@typeInfo(field_type)) {
+            .pointer => |ptr| return ptr.child,
+            .optional => |opt| return opt.child,
+            .array => |array| return array.child,
+            .@"struct" => return field_type,
+            .int => return field_type,
+            else => @compileError("Unexpected kind " ++ @typeName(field_type)),
+        },
+    }
 }
 
 fn fieldType(T: type, name: []const u8) type {
     var local: [0xff]u8 = undefined;
     const field = local[0..makeFieldName(name, &local)];
-    //return @TypeOf(@FieldType(T, field)); // not in 0.13.0
-    for (std.meta.fields(T)) |f| {
-        if (eql(u8, f.name, field)) {
-            return f.type;
-        }
-    } else comptime unreachable;
+    return @FieldType(T, field); // not in 0.13.0
 }
 
 pub fn commentTag(blob: []const u8) ?usize {
