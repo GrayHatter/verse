@@ -75,10 +75,7 @@ pub fn init(str: []const u8) ?Directive {
 }
 
 fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
-    //std.debug.print("init noun {s}\n", .{noun});
-
     if (noun[0] == '_') @panic("Template Directives must not start with _");
-
     const tag_map = findAttrs(tag[noun.len + 1 .. tag.len - 1]) catch return null;
     //const directive: ?[]const u8 = if (tag_map.get(.text)) |ht| try .fromStr(ht) else null;
     const default_str: ?[]const u8 = tag_map.get(.default);
@@ -218,7 +215,34 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 .tag_block_skip = body_start,
             };
         },
-        .@"switch", .case => unreachable,
+        .@"switch", .case => {
+            const end = switch (word) {
+                .@"switch" => calcBody("Switch", noun, blob) orelse return null,
+                .case => calcBody("Case", noun, blob) orelse return null,
+                else => unreachable,
+            };
+
+            const name_end = (indexOfAnyPos(u8, noun, 1, " >") orelse noun.len);
+            if (noun[name_end - 1] == '/') unreachable;
+            const name = noun[1..name_end];
+
+            const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
+            const body_end: usize = end - @as(usize, if (word == .@"switch")
+                9
+            else if (word == .case)
+                7
+            else
+                0);
+            const tag_block_body = blob[body_start..body_end];
+            return .{
+                .verb = word,
+                .noun = name,
+                .otherwise = .required,
+                .tag_block = blob[0..end],
+                .tag_block_body = tag_block_body,
+                .tag_block_skip = body_start,
+            };
+        },
     }
 }
 

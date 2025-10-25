@@ -981,6 +981,80 @@ test "EnumLiteral" {
     try std.testing.expectEqualStrings(expected, print);
 }
 
+test "TaggedUnion" {
+    var a = std.testing.allocator;
+    const blob =
+        \\<Switch UnionName>
+        \\<Case First><a href="<Url />"><SomeText /></a></Case>
+        \\<Case Second><NoURL /></Case>
+        \\<Case Third><a href="<Url />"><SomeText /></a> But also -> <NoURL /></Case>
+        \\</Switch>
+        \\
+    ;
+    const PageTemplate = Template{ .name = "test", .blob = blob };
+
+    const expected1: []const u8 =
+        \\<a href="/url/goes/here">This is the link text</a>
+        \\
+    ;
+    const expected2: []const u8 =
+        \\You're not allowed to have a link
+        \\
+    ;
+    const expected3: []const u8 =
+        \\<a href="/url/goes/where">This is the bonus link text</a> But also -> No link here!
+        \\
+    ;
+
+    const UnionNameFirst = struct {
+        url: []const u8,
+        some_text: []const u8,
+    };
+    const UnionNameSecond = struct {
+        no_u_r_l: []const u8,
+    };
+    const UnionNameThird = struct {
+        url: []const u8,
+        some_text: []const u8,
+        no_u_r_l: []const u8,
+    };
+
+    const PgData = struct {
+        union_name: UnionName,
+
+        pub const UnionName = union(enum) {
+            first: UnionNameFirst,
+            second: UnionNameSecond,
+            third: UnionNameThird,
+        };
+    };
+    const PageType = Page(PageTemplate, PgData);
+
+    var pd: PgData = .{ .union_name = .{ .first = .{
+        .url = "/url/goes/here",
+        .some_text = "This is the link text",
+    } } };
+    var print = try allocPrint(a, "{f}", .{PageType.init(pd)});
+    try std.testing.expectEqualStrings(expected1, print);
+    a.free(print);
+
+    pd = .{ .union_name = .{ .second = .{
+        .no_u_r_l = "You're not allowed to have a link",
+    } } };
+    print = try allocPrint(a, "{f}", .{PageType.init(pd)});
+    try std.testing.expectEqualStrings(expected2, print);
+    a.free(print);
+
+    pd = .{ .union_name = .{ .third = .{
+        .url = "/url/goes/where",
+        .some_text = "This is the bonus link text",
+        .no_u_r_l = "No link here!",
+    } } };
+    print = try allocPrint(a, "{f}", .{PageType.init(pd)});
+    try std.testing.expectEqualStrings(expected3, print);
+    a.free(print);
+}
+
 test "grouped offsets" {
     const blob =
         \\<html>

@@ -45,7 +45,7 @@ fn getOffset(T: type, name: []const u8, base: usize) usize {
             const field = local[0..end];
             return @offsetOf(T, field) + base;
         },
-        .@"enum" => 0,
+        .@"union" => return 0,
         else => unreachable,
     }
 }
@@ -109,6 +109,7 @@ fn baseType(T: type, name: []const u8) type {
             .array => |array| return array.child,
             .@"struct" => return field_type,
             .int => return field_type,
+            .@"union" => return field_type,
             else => @compileError("Unexpected kind " ++ @typeName(field_type)),
         },
     }
@@ -295,7 +296,24 @@ fn validateDirective(
                 },
             }} ++ loop;
         },
-        .@"switch", .case => unreachable,
+        .@"switch", .case => {
+            if (drct.tag_block_body) |body| {
+                const FieldT = fieldType(BlockType, drct.noun);
+                const BaseT = baseType(BlockType, drct.noun);
+                const loop = validateBlock(body, BaseT, 0);
+                return &[_]Offset{.{
+                    .start = index + drct.tag_block_skip.?,
+                    .end = index + end,
+                    .kind = .{
+                        .component = .{
+                            .kind = FieldT,
+                            .data_offset = data_offset,
+                            .len = loop.len,
+                        },
+                    },
+                }} ++ loop;
+            } else unreachable;
+        },
     }
 }
 

@@ -238,9 +238,33 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         .array => |arr| {
                             for (data) |each| try print(arr.child, each, ofs, out);
                         },
+                        .@"union" => switch (data) {
+                            inline else => |case, tag| {
+                                if (data == tag) {
+                                    const tagT = std.meta.TagPayload(T, tag);
+                                    const start, const end = comptime brk: {
+                                        var start: usize = 0;
+                                        for (ofs) |of| {
+                                            start += 1;
+                                            switch (of.kind) {
+                                                .component => |cmp| {
+                                                    if (cmp.kind == tagT) {
+                                                        break :brk .{ start, start + cmp.len };
+                                                    }
+                                                },
+                                                else => {},
+                                            }
+                                        } else unreachable;
+                                    };
+                                    try print(@TypeOf(case), case, ofs[start..end], out);
+                                }
+                            },
+                        },
+                        .@"struct" => try print(T, data, ofs, out),
                         else => {
-                            @compileLog("unexpected type {s}\n", .{@typeName(T)});
-                            comptime unreachable;
+                            const err = std.fmt.comptimePrint("unexpected type {s}\n", .{@typeName(T)});
+                            @compileLog(@typeInfo(T));
+                            @compileError(err);
                         },
                     },
                 };
