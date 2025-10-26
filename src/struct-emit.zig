@@ -1,31 +1,24 @@
 pub const AbstTree = struct {
+    name: []u8,
+    children: ArrayList(Member),
+
     pub const Member = struct {
         name: []u8,
         kind: []u8,
 
-        pub fn format(self: Member, w: *std.Io.Writer) !void {
+        pub fn format(self: Member, w: *Writer) !void {
             try w.writeAll("    ");
             try w.writeAll(self.name);
             try w.writeAll(self.kind);
         }
     };
 
-    //parent: ?*AbstTree,
-    alloc: Allocator,
-    name: []u8,
-    children: []Member,
-    child_cap: usize = 0,
-
-    pub fn init(a: Allocator, name: []const u8, _: ?*AbstTree) !*AbstTree {
+    pub fn init(a: Allocator, name: []const u8) !*AbstTree {
         const self = try a.create(AbstTree);
         self.* = .{
-            //.parent = parent,
-            .alloc = a,
             .name = try a.dupe(u8, name),
-            .children = try a.alloc(Member, 50),
-            .child_cap = 50,
+            .children = .initBuffer(try a.alloc(Member, 50)),
         };
-        self.children.len = 0;
         return self;
     }
 
@@ -36,12 +29,10 @@ pub const AbstTree = struct {
         return false;
     }
 
-    pub fn append(self: *AbstTree, name: []const u8, kind: []const u8) !void {
-        if (self.children.len >= self.child_cap) @panic("large structs not implemented");
-
-        for (self.children) |child| {
-            if (std.mem.eql(u8, child.name, name)) {
-                if (!std.mem.eql(u8, child.kind, kind)) {
+    pub fn append(self: *AbstTree, new: Member) !void {
+        for (self.children.items) |child| {
+            if (eql(u8, child.name, new.name)) {
+                if (!eql(u8, child.kind, new.kind)) {
                     std.debug.print("Error: kind mismatch while building ", .{});
                     //var par = self.parent;
                     //while (par != null) {
@@ -51,7 +42,7 @@ pub const AbstTree = struct {
 
                     std.debug.print(
                         "{s}.{s}\n  {s} != {s}\n",
-                        .{ self.name, name, child.kind, kind },
+                        .{ self.name, new.name, child.kind, new.kind },
                     );
                     return error.KindMismatch;
                 }
@@ -59,18 +50,14 @@ pub const AbstTree = struct {
             }
         }
 
-        self.children.len += 1;
-        self.children[self.children.len - 1] = .{
-            .name = try self.alloc.dupe(u8, name),
-            .kind = try self.alloc.dupe(u8, kind),
-        };
+        try self.children.appendBounded(new);
     }
 
-    pub fn format(self: AbstTree, w: *std.Io.Writer) !void {
+    pub fn format(self: AbstTree, w: *Writer) !void {
         try w.writeAll("pub const ");
         try w.writeAll(self.name);
         try w.writeAll(" = struct {\n");
-        for (self.children) |child| {
+        for (self.children.items) |child| {
             try w.print("{f}", .{child});
         }
         try w.writeAll(
@@ -114,9 +101,9 @@ fn AutoTranslate(into: type) type {
     };
 }
 
-pub var root_tree: std.StringHashMapUnmanaged(*AbstTree) = .{};
-var enum_list: std.StringHashMapUnmanaged(*EnumLiteral) = .{};
-var switch_list: std.StringHashMapUnmanaged(*Switch) = .{};
+pub var global_tree: StrHashMap(*AbstTree) = .{};
+var enum_list: StrHashMap(*EnumLiteral) = .{};
+var switch_list: StrHashMap(*Switch) = .{};
 
 pub fn main() !void {
     var args = std.process.args();
@@ -186,16 +173,16 @@ pub fn main() !void {
         defer a.free(fdata);
 
         const name = makeStructName(tplt.path);
-        const this = try AbstTree.init(a, name, null);
-        const gop = try root_tree.getOrPut(a, this.name);
+        const this = try AbstTree.init(a, name);
+        const gop = try global_tree.getOrPut(a, this.name);
         if (!gop.found_existing) {
             gop.value_ptr.* = this;
         }
-        try emitSourceVars(a, fdata, this);
+        try emitSourceVars(a, fdata, this, &global_tree);
     }
 
     {
-        var itr = root_tree.iterator();
+        var itr = global_tree.iterator();
         while (itr.next()) |each| {
             //std.debug.print("tree: {}\n", .{each.value_ptr.*});
             try wout.print("{f}\n", .{each.value_ptr.*});
@@ -204,6 +191,14 @@ pub fn main() !void {
 
     {
         var itr = enum_list.iterator();
+        while (itr.next()) |each| {
+            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            try wout.print("{f}\n", .{each.value_ptr.*});
+        }
+    }
+
+    {
+        var itr = switch_list.iterator();
         while (itr.next()) |each| {
             //std.debug.print("tree: {}\n", .{each.value_ptr.*});
             try wout.print("{f}\n", .{each.value_ptr.*});
@@ -264,19 +259,37 @@ fn appendEnumLiteral(a: Allocator, name: []const u8, tag: []const u8) !void {
 pub const Switch = struct {
     name: []const u8,
     text: []const u8,
-    members: ArrayList(Case) = .{},
+    members: ArrayList(Case),
+    tree: StrHashMap(*AbstTree),
 
     pub const Case = struct {
         name: []const u8,
         flavor: []const u8,
+
+        pub fn format(c: Case, w: *Writer) !void {
+            try w.print("{s}: {s}", .{ c.name, c.flavor });
+        }
     };
 
-    pub fn init(a: Allocator, name: []const u8, text: []const u8) !*Switch {
+    pub fn init(a: Allocator, sname: []const u8, text: []const u8) error{ OutOfMemory, WriteError }!*Switch {
+        const name = try a.dupe(u8, sname);
+        var tree: StrHashMap(*AbstTree) = .{};
+        const first = try AbstTree.init(a, name);
+        try tree.put(a, first.name, first);
+
+        emitSourceVars(a, text, first, &tree) catch unreachable;
         const self = try a.create(Switch);
         self.* = .{
-            .name = try a.dupe(u8, name),
+            .name = name,
             .text = try a.dupe(u8, text),
+            .members = .{},
+            .tree = tree,
         };
+        const kv = tree.fetchRemove(first.name) orelse unreachable;
+        for (kv.value.children.items) |child| {
+            try self.members.append(a, .{ .name = child.name, .flavor = child.kind });
+        }
+        // spacer
         return self;
     }
 
@@ -285,7 +298,14 @@ pub const Switch = struct {
         try w.writeAll(sw.name);
         try w.writeAll(" = union(enum) {\n");
         for (sw.members.items) |tag| {
-            try w.print("    {s}: {s},\n", .{ tag.name, tag.flavor });
+            try w.print("{f},\n", .{tag});
+        }
+
+        try w.writeAll("\n");
+        var itr = sw.tree.iterator();
+        while (itr.next()) |each| {
+            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            try w.print("{f}\n", .{each.value_ptr.*});
         }
         try w.writeAll("};\n");
     }
@@ -296,7 +316,7 @@ fn createSwitch(a: Allocator, name: []const u8, text: []const u8) !void {
     try switch_list.put(a, sw.name, sw);
 }
 
-pub fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
+pub fn emitSourceVars(a: Allocator, fdata: []const u8, parent: *AbstTree, root: *StrHashMap(*AbstTree)) !void {
     var data = fdata;
     while (data.len > 0) {
         if (indexOf(u8, data, "<")) |offset| {
@@ -305,44 +325,52 @@ pub fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
                 //_ = genType(drct);
                 data = data[drct.tag_block.len..];
                 const s_name = makeStructName(drct.noun);
-                var f_name = makeFieldName(drct.noun);
+                const f_name = try allocFieldName(a, drct.noun);
+
                 switch (drct.verb) {
                     .variable => |_| {
-                        var buffer: [0xFF]u8 = undefined;
-                        var kind = try bufPrint(&buffer, ": []const u8,\n", .{});
-
-                        switch (drct.otherwise) {
-                            .required => {},
-                            .exact => unreachable,
-                            .default => |str| {
-                                kind = try bufPrint(&buffer, ": []const u8 = \"{s}\",\n", .{str});
-                            },
-                            .delete => {
-                                kind = try bufPrint(&buffer, ": ?[]const u8 = null,\n", .{});
-                            },
-                            .template => |_| {
-                                kind = try bufPrint(&buffer, ": ?{s},\n", .{s_name});
-                                f_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
-                            },
-                            .literal => |lit| {
-                                try appendEnumLiteral(a, s_name, lit);
-                            },
-                        }
-                        if (drct.html_type) |htype| switch (htype) {
-                            .@"enum" => kind = try bufPrint(&buffer, ": {s},\n", .{s_name}),
-                            .usize => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
-                            .isize => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
-                            .@"?usize" => kind = try bufPrint(&buffer, ": {s},\n", .{@tagName(htype)}),
-                            .humanize => kind = try bufPrint(&buffer, ": i64,\n", .{}),
+                        const kind: []u8 = kind: {
+                            if (drct.html_type) |htype| {
+                                break :kind switch (htype) {
+                                    .@"enum" => try allocPrint(a, ": {s},\n", .{s_name}),
+                                    .usize,
+                                    .isize,
+                                    .@"?usize",
+                                    => try allocPrint(a, ": {s},\n", .{@tagName(htype)}),
+                                    .humanize => try allocPrint(a, ": i64,\n", .{}),
+                                };
+                            } else {
+                                break :kind switch (drct.otherwise) {
+                                    .required => try allocPrint(a, ": []const u8,\n", .{}),
+                                    .exact => unreachable,
+                                    .default => |str| try allocPrint(a, ": []const u8 = \"{s}\",\n", .{str}),
+                                    .delete => try allocPrint(a, ": ?[]const u8 = null,\n", .{}),
+                                    .template => |_| {
+                                        const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
+                                        try parent.append(.{
+                                            .name = try a.dupe(u8, rf_name),
+                                            .kind = try allocPrint(a, ": ?{s},\n", .{s_name}),
+                                        });
+                                        continue;
+                                    },
+                                    .literal => |lit| {
+                                        try appendEnumLiteral(a, s_name, lit);
+                                        break :kind try allocPrint(a, ": []const u8,\n", .{});
+                                    },
+                                };
+                            }
                         };
-                        try root.append(f_name, kind);
+                        try parent.append(.{ .name = f_name, .kind = kind });
                     },
                     .directive => try createEnumLiteral(a, s_name, drct.otherwise.literal),
-                    .@"switch" => try createSwitch(a, s_name, drct.tag_block_body.?),
-                    .case => unreachable, // implemented within createSwitch
+                    .@"switch" => {
+                        const sw_name = try a.dupe(u8, s_name);
+                        try createSwitch(a, sw_name, drct.tag_block_body.?);
+                        try parent.append(.{ .name = f_name, .kind = try allocPrint(a, ": {s},\n", .{sw_name}) });
+                    },
                     else => |verb| {
-                        var this = try AbstTree.init(a, s_name, root);
-                        const gop = try root_tree.getOrPut(a, this.name);
+                        var this: *AbstTree = try .init(a, s_name);
+                        const gop = try root.getOrPut(a, this.name);
                         if (!gop.found_existing) {
                             gop.value_ptr.* = this;
                         } else {
@@ -352,52 +380,34 @@ pub fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
                         switch (verb) {
                             .directive => unreachable,
                             .variable => unreachable,
-                            .@"switch" => unreachable,
-                            .case => unreachable,
+                            .@"switch" => unreachable, // recursive switch not implemented
                             .foreach => {
-                                var buffer: [0xFF]u8 = undefined;
-                                switch (drct.otherwise) {
-                                    .exact => |exact| {
-                                        const kind = try bufPrint(
-                                            &buffer,
-                                            ": [{}]{s},\n",
-                                            .{ exact, s_name },
-                                        );
-                                        try root.append(f_name, kind);
-                                        try emitSourceVars(a, drct.tag_block_body.?, this);
-                                    },
-                                    .template => |template| {
-                                        const kind = try bufPrint(
-                                            &buffer,
-                                            ": []const {s},\n",
-                                            .{s_name},
-                                        );
-                                        try root.append(f_name, kind);
-                                        try emitSourceVars(a, template.blob, this);
-                                    },
-                                    else => {
-                                        const kind = try bufPrint(&buffer, ": []const {s},\n", .{s_name});
-                                        try root.append(f_name, kind);
-                                        try emitSourceVars(a, drct.tag_block_body.?, this);
-                                    },
-                                }
+                                const body_blob: []const u8, const kind: []u8 = switch (drct.otherwise) {
+                                    .exact => |exact| .{ drct.tag_block_body.?, try allocPrint(a, ": [{}]{s},\n", .{ exact, s_name }) },
+                                    .template => |template| .{ template.blob, try allocPrint(a, ": []const {s},\n", .{s_name}) },
+                                    else => .{ drct.tag_block_body.?, try allocPrint(a, ": []const {s},\n", .{s_name}) },
+                                };
+                                try parent.append(.{ .name = f_name, .kind = kind });
+                                try emitSourceVars(a, body_blob, this, root);
                             },
                             .split => {
-                                var buffer: [0xFF]u8 = undefined;
-                                const kind = try bufPrint(&buffer, ": []const []const u8,\n", .{});
-                                try root.append(f_name, kind);
+                                const kind = try allocPrint(a, ": []const []const u8,\n", .{});
+                                try parent.append(.{ .name = f_name, .kind = kind });
+                            },
+                            .case => {
+                                const kind = try allocPrint(a, "{s}", .{s_name});
+                                try parent.append(.{ .name = f_name, .kind = kind });
+                                try emitSourceVars(a, drct.tag_block_body.?, this, root);
                             },
                             .with => {
-                                var buffer: [0xFF]u8 = undefined;
-                                const kind = try bufPrint(&buffer, ": ?{s},\n", .{s_name});
-                                try root.append(f_name, kind);
-                                try emitSourceVars(a, drct.tag_block_body.?, this);
+                                const kind = try allocPrint(a, ": ?{s},\n", .{s_name});
+                                try parent.append(.{ .name = f_name, .kind = kind });
+                                try emitSourceVars(a, drct.tag_block_body.?, this, root);
                             },
                             .build => {
-                                var buffer: [0xFF]u8 = undefined;
                                 const tmpl_name = makeStructName(drct.otherwise.template.name);
-                                const kind = try bufPrint(&buffer, ": {s},\n", .{tmpl_name});
-                                try root.append(f_name, kind);
+                                const kind = try allocPrint(a, ": {s},\n", .{tmpl_name});
+                                try parent.append(.{ .name = f_name, .kind = kind });
                             },
                         }
                     },
@@ -410,6 +420,11 @@ pub fn emitSourceVars(a: Allocator, fdata: []const u8, root: *AbstTree) !void {
         } else return;
     }
     return;
+}
+
+pub fn allocFieldName(a: Allocator, in: []const u8) ![]u8 {
+    const name = makeFieldName(in);
+    return try a.dupe(u8, name);
 }
 
 pub fn makeFieldName(in: []const u8) []const u8 {
@@ -508,9 +523,11 @@ fn intToWord(in: u8) []const u8 {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const StrHashMap = std.StringHashMapUnmanaged;
 const Writer = std.Io.Writer;
 const eql = std.mem.eql;
 const bufPrint = std.fmt.bufPrint;
+const allocPrint = std.fmt.allocPrint;
 const indexOf = std.mem.indexOf;
 const indexOfPos = std.mem.indexOfPos;
 const compiled = @import("comptime_templates");
