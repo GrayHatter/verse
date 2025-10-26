@@ -273,15 +273,11 @@ pub fn init(ua_str: []const u8) UserAgent {
     };
 }
 
-pub fn validate(ua: *UserAgent, r: *const Request) bool {
+pub fn validate(source: UserAgent, r: *const Request) UserAgent {
     if (!BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
+    var ua = source;
     ua.bot_validation = .init(r);
-
-    if (ua.bot_validation.?.malicious) {
-        ua.resolved = .malicious;
-        return false;
-    }
-    return true;
+    return ua;
 }
 
 const BOTDETC_ENABLED: bool = verse_buildopts.botdetection or builtin.is_test;
