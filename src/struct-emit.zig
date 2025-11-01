@@ -251,8 +251,8 @@ fn createEnumLiteral(a: Allocator, name: []const u8, text: []const u8) !void {
 }
 
 fn appendEnumLiteral(a: Allocator, name: []const u8, tag: []const u8) !void {
-    if (enum_list.get(name)) |*lit| {
-        try lit.*.add(a, tag);
+    if (enum_list.get(name)) |lit| {
+        try lit.add(a, tag);
     } else return error.EnumDoesNotExist;
 }
 
@@ -316,6 +316,21 @@ fn createSwitch(a: Allocator, name: []const u8, text: []const u8) !void {
     try switch_list.put(a, sw.name, sw);
 }
 
+fn htmlType(a: Allocator, html_type: ?Directive.HtmlType, struct_name: []const u8) ![]u8 {
+    if (html_type) |htype| {
+        return switch (htype) {
+            .@"enum" => try allocPrint(a, ": {s},\n", .{struct_name}),
+            .usize,
+            .isize,
+            .@"?usize",
+            => try allocPrint(a, ": {s},\n", .{@tagName(htype)}),
+            .humanize => try allocPrint(a, ": i64,\n", .{}),
+        };
+    } else {
+        return try allocPrint(a, ": []const u8,\n", .{});
+    }
+}
+
 pub fn emitSourceVars(a: Allocator, fdata: []const u8, parent: *AbstTree, root: *StrHashMap(*AbstTree)) !void {
     var data = fdata;
     while (data.len > 0) {
@@ -329,37 +344,28 @@ pub fn emitSourceVars(a: Allocator, fdata: []const u8, parent: *AbstTree, root: 
 
                 switch (drct.verb) {
                     .variable => |_| {
-                        const kind: []u8 = kind: {
-                            if (drct.html_type) |htype| {
-                                break :kind switch (htype) {
-                                    .@"enum" => try allocPrint(a, ": {s},\n", .{s_name}),
-                                    .usize,
-                                    .isize,
-                                    .@"?usize",
-                                    => try allocPrint(a, ": {s},\n", .{@tagName(htype)}),
-                                    .humanize => try allocPrint(a, ": i64,\n", .{}),
-                                };
-                            } else {
-                                break :kind switch (drct.otherwise) {
-                                    .required => try allocPrint(a, ": []const u8,\n", .{}),
-                                    .exact => unreachable,
-                                    .default => |str| try allocPrint(a, ": []const u8 = \"{s}\",\n", .{str}),
-                                    .delete => try allocPrint(a, ": ?[]const u8 = null,\n", .{}),
-                                    .template => |_| {
-                                        const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
-                                        try parent.append(.{
-                                            .name = try a.dupe(u8, rf_name),
-                                            .kind = try allocPrint(a, ": ?{s},\n", .{s_name}),
-                                        });
-                                        continue;
-                                    },
-                                    .literal => |lit| {
-                                        try appendEnumLiteral(a, s_name, lit);
-                                        break :kind try allocPrint(a, ": []const u8,\n", .{});
-                                    },
-                                };
-                            }
+                        const kind: []u8 = switch (drct.otherwise) {
+                            .required => try htmlType(a, drct.html_type, s_name),
+                            .exact => unreachable,
+                            .default => |str| try allocPrint(a, ": []const u8 = \"{s}\",\n", .{str}),
+                            .delete => if (drct.html_type) |_|
+                                try htmlType(a, drct.html_type, s_name)
+                            else
+                                try allocPrint(a, ": ?[]const u8 = null,\n", .{}),
+                            .template => |_| {
+                                const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
+                                try parent.append(.{
+                                    .name = try a.dupe(u8, rf_name),
+                                    .kind = try allocPrint(a, ": ?{s},\n", .{s_name}),
+                                });
+                                continue;
+                            },
+                            .literal => |lit| kind: {
+                                try appendEnumLiteral(a, s_name, lit);
+                                break :kind try htmlType(a, drct.html_type, s_name);
+                            },
                         };
+
                         try parent.append(.{ .name = f_name, .kind = kind });
                     },
                     .directive => try createEnumLiteral(a, s_name, drct.otherwise.literal),

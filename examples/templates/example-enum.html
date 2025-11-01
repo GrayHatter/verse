@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Welcome to the Verse!</title>
+    <style> 
+       li { display: block }
+       .active { background-color: black; color: white; }
+    </style>
+  </head>
+  <body>
+    <content>
+      <ul>
+        <Directive type="enum" name="EnumName" text="active" />
+        <li class="<EnumName enum="settings" />"><a href="/">Settings</a></li>
+        <li class="<EnumName enum="admin" />"><a href="/">Admin</a></li>
+        <li class="<EnumName enum="thingy" />"><a href="/">New Thingy</a></li>
+        <li class="<EnumName enum="example" />"><a href="/">Example</a></li>
+        <li class="<EnumName enum="nullish" />"><a href="/">Null</a></li>
+      </ul>
+    </content>
+  </body>
+</html>
