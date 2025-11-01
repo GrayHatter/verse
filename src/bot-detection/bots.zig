@@ -38,13 +38,12 @@ pub const Bot = struct {
     name: Name,
     version: u32,
 
-    pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
-    pub const malicious: Bot = .{ .name = .malicious, .version = 0 };
-
     pub const Name = enum {
         bingbot,
         claudebot,
         googlebot,
+        gptbot,
+        lounge_irc_client,
 
         malicious,
         unknown,
@@ -60,6 +59,10 @@ pub const Bot = struct {
             return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
         } else if (indexOf(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
             return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
+        } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
+            return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
+        } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
+            return .{ .name = .lounge_irc_client, .version = 0 };
         }
         return null;
     }
@@ -73,11 +76,14 @@ pub const Bot = struct {
             return parseInt(u32, str[start..end], 10) catch return error.Invalid;
         } else return error.Invalid;
     }
+
+    pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
+    pub const malicious: Bot = .{ .name = .malicious, .version = 0 };
 };
 
 pub const Identity = struct {
     bot: Bot.Name,
-    network: ?Network,
+    network: ?*const Network,
 };
 
 pub const bots: std.EnumArray(Bot.Name, Identity) = .{
@@ -86,14 +92,14 @@ pub const bots: std.EnumArray(Bot.Name, Identity) = .{
         .{ .bot = .claudebot, .network = null },
         .{
             .bot = .googlebot,
-            .network = Network{
+            .network = &.{
                 // Yes, I know strings are the stupid way of doing this, this is
                 // "temporary"
-                .nets = &[_][]const u8{
-                    "66.249",
-                },
+                .nets = &[_][]const u8{"66.249"},
             },
         },
+        .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
+        .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .malicious, .network = null },
         .{ .bot = .unknown, .network = null },
     },
@@ -112,5 +118,6 @@ const std = @import("std");
 const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
 const indexOf = std.mem.indexOf;
+const eql = std.mem.eql;
 const indexOfScalarPos = std.mem.indexOfScalarPos;
 const parseInt = std.fmt.parseInt;

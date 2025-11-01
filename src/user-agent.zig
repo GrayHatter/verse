@@ -211,6 +211,24 @@ test Resolved {
         } },
         Resolved.init(git),
     );
+
+    const gptbot = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)";
+    try std.testing.expectEqualDeep(
+        Resolved{ .bot = .{
+            .name = .gptbot,
+            .version = 1,
+        } },
+        Resolved.init(gptbot),
+    );
+
+    const lounge = "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0";
+    try std.testing.expectEqualDeep(
+        Resolved{ .bot = .{
+            .name = .lounge_irc_client,
+            .version = 0,
+        } },
+        Resolved.init(lounge),
+    );
 }
 
 pub const Browser = struct {
