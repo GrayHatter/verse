@@ -4,7 +4,7 @@
 //! This is only the data represented by the client.
 //! TODO write doc comments
 string: []const u8,
-resolved: Resolved,
+agent: Agent,
 bot_validation: if (BOTDETC_ENABLED) ?BotDetection else ?void = null,
 
 const UserAgent = @This();
@@ -16,27 +16,27 @@ pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
 
     const bd: BotDetection = ua.bot_validation orelse .init(r);
     //std.debug.print("ua detection: {s} \n", .{ua.string});
-    std.debug.print("ua detection: {} \n", .{ua.resolved});
+    std.debug.print("ua detection: {} \n", .{ua.agent});
     std.debug.print("bot detection: {} \n", .{bd});
-    if (ua.resolved == .browser) {
-        const age = ua.resolved.browser.age() catch 0;
+    if (ua.agent == .browser) {
+        const age = ua.agent.browser.age() catch 0;
         std.debug.print("age: days {} seconds {}  \n", .{ @divTrunc(age, 86400), age });
     }
 }
 
 pub const Bot = BotDetection.bots.Bot;
 
-pub const Resolved = union(enum) {
+pub const Agent = union(enum) {
     bot: Bot,
     browser: Browser,
     script: Script,
     unknown: Other,
 
-    pub const malicious: Resolved = .{
+    pub const malicious: Agent = .{
         .bot = .malicious,
     };
 
-    pub fn init(str: []const u8) Resolved {
+    pub fn init(str: []const u8) Agent {
         if (startsWith(u8, str, "Mozilla/")) {
             return .mozilla(str);
         } else if (asScript(str)) |scrpt| {
@@ -45,7 +45,7 @@ pub const Resolved = union(enum) {
         return .{ .unknown = .{} };
     }
 
-    fn mozilla(str: []const u8) Resolved {
+    fn mozilla(str: []const u8) Agent {
         if (indexOf(u8, str, "Bot") orelse indexOf(u8, str, "bot")) |idx| {
             if (idx < str.len - 3) {
                 switch (str[idx + 3]) {
@@ -58,7 +58,7 @@ pub const Resolved = union(enum) {
         return asBrowser(str);
     }
 
-    fn asScript(str: []const u8) ?Resolved {
+    fn asScript(str: []const u8) ?Agent {
         if (startsWith(u8, str, "curl/")) {
             return .{ .script = .{
                 .name = .curl,
@@ -72,7 +72,7 @@ pub const Resolved = union(enum) {
         } else return null;
     }
 
-    fn asBot(str: []const u8) Resolved {
+    fn asBot(str: []const u8) Agent {
         if (Bot.resolve(str)) |bot| {
             return .{ .bot = bot };
         }
@@ -122,7 +122,7 @@ pub const Resolved = union(enum) {
         return error.UnknownBrowser;
     }
 
-    fn asBrowser(str: []const u8) Resolved {
+    fn asBrowser(str: []const u8) Agent {
         const name, const vsearch = guessBrowser(str) catch return .{ .browser = .unknown };
         const version = parseVersion(str, vsearch) catch return .{ .browser = .unknown };
         const vstr = versionString(str, vsearch); // catch return .{ .bot = .unknown };
@@ -136,98 +136,98 @@ pub const Resolved = union(enum) {
     }
 };
 
-test Resolved {
-    try std.testing.expectEqualDeep(Resolved{ .unknown = .{} }, Resolved.init("unknown"));
+test Agent {
+    try std.testing.expectEqualDeep(Agent{ .unknown = .{} }, Agent.init("unknown"));
 
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .unknown },
-        Resolved.init("Mozilla/5.0"),
+        Agent{ .browser = .unknown },
+        Agent.init("Mozilla/5.0"),
     );
 
-    try std.testing.expectEqualDeep(Resolved{ .unknown = .{} }, Resolved.init("mozilla/5.0"));
+    try std.testing.expectEqualDeep(Agent{ .unknown = .{} }, Agent.init("mozilla/5.0"));
 
     const not_google_bot = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{
+        Agent{ .browser = .{
             .name = .chrome,
             .version = 134,
             .version_string = "134.0.6998.165",
         } },
-        Resolved.init(not_google_bot),
+        Agent.init(not_google_bot),
     );
 
     const mangled_version = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/a134.0.6998.165 Mobile Safari/537.36";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .unknown },
-        Resolved.init(mangled_version),
+        Agent{ .browser = .unknown },
+        Agent.init(mangled_version),
     );
 
     const google_bot = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36 " ++
         "(compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
     try std.testing.expectEqualDeep(
-        Resolved{ .bot = .{ .name = .googlebot, .version = 2 } },
-        Resolved.init(google_bot),
+        Agent{ .bot = .{ .name = .googlebot, .version = 2 } },
+        Agent.init(google_bot),
     );
 
     const fake_edge_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " ++
         "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{
+        Agent{ .browser = .{
             .name = .edge,
             .version = 114,
             .version_string = "114.0.1823.43",
         } },
-        Resolved.init(fake_edge_ua),
+        Agent.init(fake_edge_ua),
     );
 
     const lin_ff = "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{
+        Agent{ .browser = .{
             .name = .firefox,
             .version = 134,
             .version_string = "134.0",
         } },
-        Resolved.init(lin_ff),
+        Agent.init(lin_ff),
     );
 
     const msie = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0; Trident/5.0)";
     try std.testing.expectEqualDeep(
-        Resolved{ .browser = .{
+        Agent{ .browser = .{
             .name = .msie,
             .version = 9,
             .version_string = "9.0;",
         } },
-        Resolved.init(msie),
+        Agent.init(msie),
     );
 
     const git = "git/2.49.0";
     try std.testing.expectEqualDeep(
-        Resolved{ .script = .{
+        Agent{ .script = .{
             .name = .git,
             .version = 2,
         } },
-        Resolved.init(git),
+        Agent.init(git),
     );
 
     const gptbot = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)";
     try std.testing.expectEqualDeep(
-        Resolved{ .bot = .{
+        Agent{ .bot = .{
             .name = .gptbot,
             .version = 1,
         } },
-        Resolved.init(gptbot),
+        Agent.init(gptbot),
     );
 
     const lounge = "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0";
     try std.testing.expectEqualDeep(
-        Resolved{ .bot = .{
+        Agent{ .bot = .{
             .name = .lounge_irc_client,
             .version = 0,
         } },
-        Resolved.init(lounge),
+        Agent.init(lounge),
     );
 }
 
@@ -286,7 +286,7 @@ pub const Other = struct {};
 pub fn init(ua_str: []const u8) UserAgent {
     return .{
         .string = ua_str,
-        .resolved = .init(ua_str),
+        .agent = .init(ua_str),
         .bot_validation = null,
     };
 }

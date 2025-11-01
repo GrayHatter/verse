@@ -33,7 +33,7 @@ pub fn init(r: *const Request) BotDetection {
         rule(ua, r, &bot.score) catch @panic("not implemented");
     }
 
-    switch (ua.resolved) {
+    switch (ua.agent) {
         .bot => {
             bot.bot = true;
             inline for (rules.bot) |rule| {

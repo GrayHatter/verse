@@ -193,7 +193,7 @@ pub const Endpoint = struct {
                 const idx = count - i - 1;
                 const src = &active.rows[idx % active.rows.len];
                 const ua_str: []const u8, const ua_ver: ?usize = if (src.ua) |sua|
-                    switch (sua.resolved) {
+                    switch (sua.agent) {
                         .bot => |b| .{ @tagName(b.name), 0 },
                         .browser => |b| .{ @tagName(b.name), b.version },
                         .script => |s| .{ @tagName(s.name), s.version },
@@ -204,10 +204,10 @@ pub const Endpoint = struct {
 
                 var is_bot: ?[]const u8 = null;
                 if (src.ua) |sua| {
-                    if (sua.resolved == .bot) is_bot = " verse-bot";
+                    if (sua.agent == .bot) is_bot = " verse-bot";
                     if (@TypeOf(sua.bot_validation) != ?void) {
                         const bv: UserAgent.BotDetection = sua.bot_validation orelse .init(f.request);
-                        if (bv.malicious or bv.bot and sua.resolved != .bot) is_bot = " verse-bot-malicious";
+                        if (bv.malicious or bv.bot and sua.agent != .bot) is_bot = " verse-bot-malicious";
                     }
                 }
 

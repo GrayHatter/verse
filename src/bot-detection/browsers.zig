@@ -207,9 +207,9 @@ pub const Rules = struct {
     pub const AGE_STEP: usize = DAY * 45;
 
     pub fn age(ua: UA, _: *const Request, score: *f16) !void {
-        if (ua.resolved != .browser) return;
-        if (ua.resolved.browser.name == .unknown) return;
-        const delta: i64 = ua.resolved.browser.age() catch {
+        if (ua.agent != .browser) return;
+        if (ua.agent.browser.name == .unknown) return;
+        const delta: i64 = ua.agent.browser.age() catch {
             return;
         };
         const YEAR: i64 = 86400 * 365;
@@ -229,12 +229,12 @@ pub const Rules = struct {
 
     test age {
         var score: f16 = 0.0;
-        try age(.{ .string = "", .resolved = .{
+        try age(.{ .string = "", .agent = .{
             .browser = .{ .name = .chrome, .version = 0 },
         } }, undefined, &score);
         try std.testing.expectEqual(score, 0.9);
         score = 0;
-        try age(.{ .string = "", .resolved = .{
+        try age(.{ .string = "", .agent = .{
             .browser = .{
                 .name = .chrome,
                 .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
@@ -249,15 +249,15 @@ pub const Rules = struct {
         };
 
         score = 0.0;
-        try age(.{ .string = "", .resolved = .{
+        try age(.{ .string = "", .agent = .{
             .browser = .{ .name = .unknown, .version = 0 },
         } }, undefined, &score);
         try std.testing.expectEqual(score, 0.0);
     }
 
     pub fn acceptStr(ua: UA, r: *const Request, score: *f16) !void {
-        std.debug.assert(ua.resolved == .browser);
-        switch (ua.resolved.browser.name) {
+        std.debug.assert(ua.agent == .browser);
+        switch (ua.agent.browser.name) {
             .chrome => {},
             else => {
                 const normal = "text/html,application/xhtml+xml,";

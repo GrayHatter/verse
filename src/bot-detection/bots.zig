@@ -9,9 +9,9 @@ pub const Rules = struct {
     }
 
     pub fn knownSubnet(ua: UA, r: *const Request, score: *f16) !void {
-        if (ua.resolved != .bot) return error.NotABot;
+        if (ua.agent != .bot) return error.NotABot;
 
-        if (bots.get(ua.resolved.bot.name).network) |nw| {
+        if (bots.get(ua.agent.bot.name).network) |nw| {
             for (nw.nets) |net| {
                 if (startsWith(u8, r.remote_addr, net)) break;
             } else {
