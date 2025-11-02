@@ -68,19 +68,18 @@ pub fn render(self: *DOM, a: Allocator, comptime style: enum { full, compact }) 
     if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     defer self.alloc.destroy(self);
 
-    var html: std.ArrayListUnmanaged(u8) = .{};
-    var w = html.writer(a);
+    var html: Writer.Allocating = .init(a);
     for (self.elems.items) |e| {
         if (comptime style == .full) {
-            w.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
+            html.writer.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
         } else {
-            w.print("{f}", .{e}) catch unreachable;
+            html.writer.print("{f}", .{e}) catch unreachable;
         }
     }
     freeChildren(a, self.elems.items);
     self.elems.deinit(self.alloc);
 
-    return try html.toOwnedSlice(a);
+    return try html.toOwnedSlice();
 }
 
 test render {
@@ -153,5 +152,6 @@ test "open close" {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 const HTML = @import("../html.zig");
 const Elem = HTML.E;
