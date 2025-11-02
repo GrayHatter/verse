@@ -13,6 +13,8 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const use_llvm = true;
 
+    const default_step = b.getInstallStep();
+
     //if (b.args) |args| for (args) |arg| std.debug.print("arg {s}\n", .{arg});
     //std.debug.print("default: {s}\n", .{b.default_step.name});
 
@@ -32,7 +34,6 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-
     verse_lib.addOptions("verse_buildopts", options);
 
     // Set up template compiler
@@ -57,6 +58,7 @@ pub fn build(b: *std.Build) !void {
         }),
     });
     structc.root_module.addImport("comptime_templates", comptime_templates);
+    default_step.dependOn(&structc.step);
 
     const comptime_structs = compiler.buildStructs(structc) catch @panic("unreachable");
 
