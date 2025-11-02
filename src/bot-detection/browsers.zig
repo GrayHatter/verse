@@ -1,4 +1,4 @@
-const Date = i64;
+const Date = i96;
 const VerDate = struct { u16, Date };
 
 const browser_count = @typeInfo(UA.Browser.Name).@"enum".fields.len;
@@ -209,9 +209,8 @@ pub const Rules = struct {
     pub fn age(ua: UA, _: *const Request, score: *f16) !void {
         if (ua.agent != .browser) return;
         if (ua.agent.browser.name == .unknown) return;
-        const delta: i64 = ua.agent.browser.age() catch {
-            return;
-        };
+        const delta: i64 = @intCast(ua.agent.browser.age() catch return);
+
         const YEAR: i64 = 86400 * 365;
         // These are all just made up based on feeling, TODO real data analysis
         switch (delta) {
