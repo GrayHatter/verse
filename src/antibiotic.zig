@@ -4,8 +4,8 @@
 const abx = @This();
 
 pub const Error = error{
-    NoSpaceLeft,
-    OutOfMemory,
+    ReadFailed,
+    WriteFailed,
 };
 
 pub const Rule = enum {
@@ -25,55 +25,27 @@ pub const Rule = enum {
 };
 
 pub const RuleFn = union(enum) {
-    chr: *const fn (u8, ?[]u8) Error!usize,
-    str: *const fn ([]const u8, ?[]u8) Error!usize,
+    chr: *const fn (u8, *Writer) Error!void,
+    str: *const fn (*Reader, *Writer) Error!void,
 };
 
-/// If an error is returned, the contents of `out` is unspecified.
-pub fn clean(comptime rule: Rule, in: []const u8, out: []u8) Error![]u8 {
+pub fn clean(comptime rule: Rule, in: *Reader, out: *Writer) Error!void {
     switch (comptime rule.func()) {
         .chr => |func| {
-            var pos: usize = 0;
-            for (in) |src| {
-                pos += try func(src, out[pos..]);
-            }
-            return out[0..pos];
+            while (in.takeByte()) |c| {
+                try func(c, out);
+            } else |err| if (err != error.EndOfStream) return err;
         },
-        .str => |func| {
-            return func(in, out);
-        },
-    }
-}
-
-/// Same semantics of clean, only will count, and allocate for you.
-pub fn cleanAlloc(comptime rule: Rule, a: Allocator, in: []const u8) Error![]u8 {
-    switch (comptime rule.func()) {
-        .chr => |func| {
-            var out_size: usize = 0;
-            for (in) |c| out_size +|= try func(c, null);
-            const out = try a.alloc(u8, out_size);
-            return try clean(rule, in, out);
-        },
-        .str => |func| {
-            const out_size = try func(in, null);
-            const out = try a.alloc(u8, out_size);
-            _ = try func(in, out);
-            return out;
-        },
+        .str => |func| return try func(in, out),
     }
 }
 
 pub const Html = struct {
     text: []const u8,
 
-    pub fn cleanAlloc(a: Allocator, in: []const u8) Error![]u8 {
-        return try abx.cleanAlloc(.html, a, in);
-    }
-
-    pub fn format(self: Html, out: *Writer) !void {
-        var buf: [6]u8 = undefined;
+    pub fn format(self: Html, out: *Writer) error{WriteFailed}!void {
         for (self.text) |c| {
-            try out.writeAll(buf[0 .. cleanHtml(c, &buf) catch unreachable]);
+            try cleanHtml(c, out);
         }
     }
 
@@ -90,24 +62,17 @@ pub const Html = struct {
 };
 
 /// Basic html sanitizer. Will replace all chars, even when it may be
-/// unnecessary to do so.
-pub fn cleanHtml(in: u8, out: ?[]u8) Error!usize {
+/// unnecessary to do so in context.
+pub fn cleanHtml(in: u8, out: *Writer) error{WriteFailed}!void {
     var same = [1:0]u8{in};
-    const replace = switch (in) {
+    _ = try out.writeAll(switch (in) {
         '<' => "&lt;",
         '&' => "&amp;",
         '>' => "&gt;",
         '"' => "&quot;",
         '\'' => "&apos;",
         else => &same,
-    };
-
-    // I would like the null check to be comptime, but happy to defer that for now
-    if (out) |o| {
-        if (replace.len > o.len) return error.NoSpaceLeft;
-        @memcpy(o[0..replace.len], replace);
-    }
-    return replace.len;
+    });
 }
 
 test Html {
@@ -118,38 +83,19 @@ test Html {
     try std.testing.expectEqualStrings("&lt;tags not allowed&gt;", cleaned);
 }
 
-//pub const Word = struct {
-//    word: []const u8,
-//
-//    pub fn cleanAlloc(a: Allocator, in: []const u8) Error![]u8 {
-//        return try abx.cleanAlloc(.path, a, in);
-//    }
-//
-//    pub fn format(self: Path, comptime _: []const u8, _: FmtOpt, out: anytype) !void {
-//        var buffer: [256]u8 = undefined;
-//        for (self.word) |chr|
-//            try out.writeAll(buffer[0..try cleanWord(chr, &buffer)]);
-//    }
-//};
-
 pub const Path = struct {
     text: []const u8,
     path_allowed: bool = false,
 
-    pub fn cleanAlloc(a: Allocator, in: []const u8) Error![]u8 {
-        return try abx.cleanAlloc(.path, a, in);
-    }
-
-    pub fn format(self: Path, out: anytype) !void {
-        var buffer: [256]u8 = undefined;
+    pub fn format(self: Path, out: *Writer) error{WriteFailed}!void {
         if (self.path_allowed) {
-            const required = cleanPath(self.text, null) catch return error.WriteFailed;
-            if (required > buffer.len) return error.WriteFailed;
-            _ = cleanPath(self.text, &buffer) catch return error.WriteFailed;
-            try out.writeAll(buffer[0..required]);
+            var reader: Reader = .fixed(self.text);
+            cleanPath(&reader, out) catch |err| switch (err) {
+                error.WriteFailed => return error.WriteFailed,
+                error.ReadFailed => unreachable,
+            };
         } else {
-            for (self.text) |chr|
-                try out.writeAll(buffer[0 .. cleanFilename(chr, &buffer) catch return error.WriteFailed]);
+            for (self.text) |chr| try cleanFilename(chr, out);
         }
     }
 };
@@ -157,162 +103,105 @@ pub const Path = struct {
 test Path {
     const a = std.testing.allocator;
 
-    var array: std.ArrayList(u8) = .{};
-    defer array.deinit(a);
+    var w: Writer.Allocating = .init(a);
+    defer w.deinit();
 
-    var w = array.writer(a);
+    try w.writer.print("{f}", .{Path{ .text = "valid.txt" }});
+    try std.testing.expectEqualStrings("valid.txt", w.written());
+    w.clearRetainingCapacity();
 
-    try w.print("{f}", .{Path{ .text = "valid.txt" }});
-    try std.testing.expectEqualStrings("valid.txt", array.items);
-    array.clearRetainingCapacity();
+    try w.writer.print("{f}", .{Path{ .text = "../valid.txt", .path_allowed = true }});
+    try std.testing.expectEqualStrings("valid.txt", w.written());
+    w.clearRetainingCapacity();
 
-    try w.print("{f}", .{Path{ .text = "../valid.txt", .path_allowed = true }});
-    try std.testing.expectEqualStrings("valid.txt", array.items);
-    array.clearRetainingCapacity();
+    try w.writer.print("{f}", .{Path{ .text = "../../valid.txt", .path_allowed = true }});
+    try std.testing.expectEqualStrings("valid.txt", w.written());
+    w.clearRetainingCapacity();
 
-    try w.print("{f}", .{Path{ .text = "../../valid.txt", .path_allowed = true }});
-    try std.testing.expectEqualStrings("valid.txt", array.items);
-    array.clearRetainingCapacity();
+    try w.writer.print("{f}", .{Path{ .text = "../../../../../..blerg/valid.txt", .path_allowed = true }});
+    try std.testing.expectEqualStrings("..blerg/valid.txt", w.written());
+    w.clearRetainingCapacity();
 
-    try w.print("{f}", .{Path{ .text = "../../../../../..blerg/valid.txt", .path_allowed = true }});
-    try std.testing.expectEqualStrings("..blerg/valid.txt", array.items);
-    array.clearRetainingCapacity();
-
-    try w.print("{f}", .{Path{ .text = "/valid.txt", .path_allowed = true }});
-    try std.testing.expectEqualStrings("valid.txt", array.items);
-    array.clearRetainingCapacity();
+    try w.writer.print("{f}", .{Path{ .text = "/valid.txt", .path_allowed = true }});
+    try std.testing.expectEqualStrings("/valid.txt", w.written());
+    w.clearRetainingCapacity();
 }
 
 /// This function is incomplete, and may be unsafe
-pub fn cleanPath(in: []const u8, out: ?[]u8) Error!usize {
-    var itr = std.mem.splitScalar(u8, in, '/');
-    var out_idx: usize = 0;
-    while (itr.next()) |next| {
-        if (next.len == 0) continue;
+pub fn cleanPath(in: *Reader, out: *Writer) Error!void {
+    while (in.takeDelimiterExclusive('/')) |next| {
         if (eql(u8, next, "..")) continue;
         for (next) |chr| {
-            out_idx += try cleanStem(chr, if (out) |o| o[out_idx..] else null);
+            try cleanStem(chr, out);
         }
-        if (itr.peek()) |_| {
-            if (out) |o| o[out_idx] = '/';
-            out_idx += 1;
+        if (in.bufferedLen() > 0) {
+            try out.writeByte('/');
         }
+    } else |err| switch (err) {
+        error.EndOfStream => return,
+        error.ReadFailed => return error.ReadFailed,
+        error.StreamTooLong => for (in.buffered()) |chr| try cleanStem(chr, out),
     }
-    return out_idx;
 }
 
-pub fn cleanStem(in: u8, out: ?[]u8) Error!usize {
-    const replace: u8 = switch (in) {
-        'a'...'z', 'A'...'Z', '0'...'9', '-', '_', '.' => in,
-        ' ' => '-',
-        '\n', '\t', '\\' => return 0,
-        else => return 0,
-    };
-
-    // I would like the null check to be comptime, but happy to defer that for now
-    if (out) |o| {
-        if (o.len < 1) return error.NoSpaceLeft;
-        o[0] = replace;
+pub fn cleanStem(in: u8, out: *Writer) error{WriteFailed}!void {
+    switch (in) {
+        'a'...'z', 'A'...'Z', '0'...'9', '-', '_', '.' => return out.writeByte(in),
+        ' ' => return out.writeByte('-'),
+        '\n', '\t', '\\' => return,
+        else => return,
     }
-    return 1;
 }
 
 /// Filters out anything that doesn't look like very boring standard ascii.
 /// Intended to be safe and mangle filenames, over allowing all correct/valid
 /// names. Patches to improve allowed filenames encouraged!
-pub fn cleanFilename(in: u8, out: ?[]u8) Error!usize {
-    const replace = switch (in) {
-        '/' => "-",
+pub fn cleanFilename(in: u8, out: *Writer) error{WriteFailed}!void {
+    switch (in) {
+        '/' => return out.writeByte('-'),
         else => return cleanStem(in, out),
-    };
-
-    // I would like the null check to be comptime, but happy to defer that for now
-    if (out) |o| {
-        if (replace.len > o.len) return error.NoSpaceLeft;
-        @memcpy(o[0..replace.len], replace);
     }
-    return replace.len;
 }
 
 test cleanFilename {
-    var a = std.testing.allocator;
+    const a = std.testing.allocator;
 
     const allowed = "this-filename-is-allowed";
+
+    var allowed_reader: Reader = .fixed(allowed);
+
+    var w: Writer.Allocating = .init(a);
+    var output = try clean(.path, &allowed_reader, &w.writer);
+    try std.testing.expectEqualStrings(allowed, w.written());
+    w.clearRetainingCapacity();
+
     const not_allowed = "this-file\nname is !really! me$$ed up?";
+    var not_allowed_reader: Reader = .fixed(not_allowed);
 
-    var output = try cleanAlloc(.path, a, allowed);
-    try std.testing.expectEqualStrings(allowed, output);
-    a.free(output);
-
-    output = try cleanAlloc(.path, a, not_allowed);
-    try std.testing.expectEqualStrings("this-filename-is-really-meed-up", output);
-    a.free(output);
+    output = try clean(.path, &not_allowed_reader, &w.writer);
+    try std.testing.expectEqualStrings("this-filename-is-really-meed-up", w.written());
+    w.deinit();
 }
 
 /// Allows subdirectories but not parents.
-pub fn cleanWord(in: u8, out: ?[]u8) Error!usize {
-    const replace: u8 = switch (in) {
-        'a'...'z', 'A'...'Z', '0'...'9', '-', '_' => in,
-        ' ', '.' => '-',
-        '\n', '\t', '\\' => return 0,
-        else => return 0,
-    };
-
-    // I would like the null check to be comptime, but happy to defer that for now
-    if (out) |o| {
-        if (o.len == 0) return error.NoSpaceLeft;
-        o[0] = replace;
+pub fn cleanWord(in: u8, out: *Writer) Error!void {
+    switch (in) {
+        'a'...'z', 'A'...'Z', '0'...'9', '-', '_' => try out.writeByte(in),
+        ' ', '.' => try out.writeByte('-'),
+        '\n', '\t', '\\' => return,
+        else => return,
     }
-    return 1;
 }
 
 test cleanWord {
-    var buf: [10]u8 = undefined;
-    try std.testing.expectEqual(1, try cleanWord('a', &buf));
-    try std.testing.expectEqualStrings("a", buf[0..1]);
-}
-
-pub fn streamCleaner(comptime rule: Rule, src: anytype) StreamCleaner(rule, @TypeOf(src)) {
-    return StreamCleaner(rule, @TypeOf(src)).init(src);
-}
-
-pub fn StreamCleaner(comptime rule: Rule, comptime Source: type) type {
-    return struct {
-        const Self = @This();
-
-        index: usize,
-        src: Source,
-        sanitizer: RuleFn,
-
-        fn init(src: Source) Self {
-            return Self{
-                .index = 0,
-                .src = src,
-                .sanitizer = rule.func(),
-            };
-        }
-
-        pub fn any(self: *const Self) std.io.AnyReader {
-            return .{
-                .context = @ptrCast(*self.context),
-                .readFn = typeErasedReadFn,
-            };
-        }
-
-        pub fn typeErasedReadFn(context: *const anyopaque, buffer: []u8) !usize {
-            const ptr: *const Source = @ptrCast(@alignCast(context));
-            return read(ptr.*, buffer);
-        }
-
-        pub fn read(self: *Self, buffer: []u8) Error!usize {
-            const count = try self.sanitizer(self.src[self.index..], buffer);
-            self.index += count;
-            return count;
-        }
-    };
+    var w_b: [50]u8 = undefined;
+    var w: Writer = .fixed(&w_b);
+    try cleanWord('a', &w);
+    try std.testing.expectEqualStrings("a", w.buffered());
 }
 
 const std = @import("std");
 const eql = std.mem.eql;
 const Allocator = std.mem.Allocator;
+const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
