@@ -130,12 +130,16 @@ test Path {
 /// This function is incomplete, and may be unsafe
 pub fn cleanPath(in: *Reader, out: *Writer) Error!void {
     while (in.takeDelimiterExclusive('/')) |next| {
-        if (eql(u8, next, "..")) continue;
+        if (eql(u8, next, "..")) {
+            if (in.bufferedLen() > 0) in.toss(1);
+            continue;
+        }
         for (next) |chr| {
             try cleanStem(chr, out);
         }
         if (in.bufferedLen() > 0) {
             try out.writeByte('/');
+            if (comptime builtin.zig_version.order(.{ .major = 0, .minor = 15, .patch = 1 }) == .gt) in.toss(1);
         }
     } else |err| switch (err) {
         error.EndOfStream => return,
@@ -201,6 +205,7 @@ test cleanWord {
 }
 
 const std = @import("std");
+const builtin = @import("builtin");
 const eql = std.mem.eql;
 const Allocator = std.mem.Allocator;
 const Reader = std.Io.Reader;
