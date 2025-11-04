@@ -8,6 +8,8 @@
 /// be used by endpoints, where allocated memory will exist until after the
 /// build function returns to the server handling the request.
 alloc: Allocator,
+///
+io: Io,
 /// Base Request object from the client.
 request: *const Request,
 /// Connection to the downstream client/request
@@ -51,9 +53,8 @@ const Frame = @This();
 
 pub const Downstream = struct {
     gateway: Gateway,
-    connection: *std.net.Server.Connection,
-    reader: *std.Io.Reader,
-    writer: *std.Io.Writer,
+    reader: *Reader,
+    writer: *Writer,
 
     pub const Gateway = union(enum) {
         zwsgi: *zWSGIRequest,
@@ -141,6 +142,7 @@ pub fn acceptWebsocket(frame: *Frame) !Websocket {
 
 pub fn init(
     a: Allocator,
+    io: Io,
     srv: *const Server,
     req: *const Request,
     downstream: Downstream,
@@ -148,6 +150,7 @@ pub fn init(
 ) !Frame {
     return .{
         .alloc = a,
+        .io = io,
         .request = req,
         .downstream = downstream,
         .uri = try splitUri(req.uri),
@@ -314,6 +317,9 @@ const splitUri = Router.splitUri;
 const std = @import("std");
 const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
+const Writer = Io.Writer;
+const Reader = Io.Reader;
+const Io = std.Io;
 
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;

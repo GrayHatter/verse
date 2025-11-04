@@ -19,8 +19,8 @@ pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
     std.debug.print("ua detection: {} \n", .{ua.agent});
     std.debug.print("bot detection: {} \n", .{bd});
     if (ua.agent == .browser) {
-        const age = ua.agent.browser.age() catch 0;
-        std.debug.print("age: days {} seconds {}  \n", .{ @divTrunc(age, 86400), age });
+        const age: Duration = ua.agent.browser.age(r.now) catch .fromSeconds(0);
+        std.debug.print("age: days {} seconds {}  \n", .{ @divTrunc(age.toSeconds(), 86400), age });
     }
 }
 
@@ -256,18 +256,19 @@ pub const Browser = struct {
         msie,
     };
 
-    pub fn age(b: Browser) !i96 {
+    pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
         if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
         const versions = BotDetection.browsers.Versions[@intFromEnum(b.name)];
         if (b.version >= versions.len) return error.UnknownVersion;
-        return std.time.timestamp() - versions[b.version];
+        return std.Io.Timestamp.fromNanoseconds(versions[b.version] * std.time.ns_per_s).durationTo(now);
     }
 
     test age {
         if (!BOTDETC_ENABLED) return error.SkipZigTest;
         const browser = Browser{ .name = .chrome, .version = 134 };
-        try std.testing.expect(try browser.age() < 86400 * 3650); // breaks in 10 years, good luck future me!
-        try std.testing.expect(try browser.age() > 3148551);
+        const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
+        try std.testing.expect((try browser.age(now)).toSeconds() < 86400 * 3650); // breaks in 10 years, good luck future me!
+        try std.testing.expect((try browser.age(now)).toSeconds() > 3148551);
     }
 };
 
@@ -308,6 +309,7 @@ test UserAgent {
 const Request = @import("request.zig");
 
 const std = @import("std");
+const Duration = std.Io.Duration;
 const log = std.log.scoped(.botdetection);
 const builtin = @import("builtin");
 const verse_buildopts = @import("verse_buildopts");

@@ -21,7 +21,7 @@ const Root = struct {
         for (0..10) |i| {
             var buffer: [0xff]u8 = undefined;
             try ws.send(try bufPrint(&buffer, "Iteration {}\n", .{i}));
-            std.Thread.sleep(1_000_000_000);
+            frame.io.sleep(.fromSeconds(1), .real) catch {};
             var read_buffer: [0x4000]u8 align(8) = undefined;
             const msg = ws.recieve(&read_buffer) catch return error.WriteFailed;
             std.debug.print("msg: {} -- {} -- {s}\n", .{ msg.header, msg.msg.len, msg.msg });

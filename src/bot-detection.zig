@@ -29,7 +29,7 @@ pub fn init(r: *const Request) BotDetection {
 
     var bot: BotDetection = .default;
 
-    inline for (rules.global) |rule| {
+    inline for (rules.age) |rule| {
         rule(ua, r, &bot.score) catch @panic("not implemented");
     }
 
@@ -75,7 +75,7 @@ const RuleError = error{
 const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
 
 const rules = struct {
-    const global = [_]RuleFn{
+    const age = [_]RuleFn{
         browsers.Rules.age,
     };
     const browser = [_]RuleFn{
@@ -183,3 +183,4 @@ const Request = @import("request.zig");
 
 const std = @import("std");
 const startsWith = std.mem.startsWith;
+const Timestamp = std.Io.Timestamp;

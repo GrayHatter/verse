@@ -209,7 +209,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
 pub fn initHttp(
     a: Allocator,
     http: *std.http.Server.Request,
-    connection: *std.net.Server.Connection,
+    stream: *Stream,
     data: Data,
     now: Timestamp,
 ) !Request {
@@ -246,7 +246,7 @@ pub fn initHttp(
 
     var remote_addr: RemoteAddr = undefined;
     var ipbuf: [48]u8 = undefined;
-    const ipport = try bufPrint(&ipbuf, "{f}", .{connection.address});
+    const ipport = try bufPrint(&ipbuf, "{f}", .{stream.socket.address});
     if (lastIndexOfScalar(u8, ipport, ':')) |i| {
         // TODO lower this to remove the a.dupe
         remote_addr = try a.dupe(u8, ipport[0..i]);

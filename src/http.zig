@@ -2,8 +2,8 @@
 alloc: Allocator,
 router: Router,
 auth: Auth.Provider,
+srv_address: net.IpAddress,
 
-listen_addr: std.net.Address,
 running: bool = true,
 alive: bool = false,
 threads: ?struct {
@@ -25,7 +25,7 @@ pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) 
         .alloc = a,
         .router = router,
         .auth = sopts.auth,
-        .listen_addr = try std.net.Address.parseIp(opts.host, opts.port),
+        .srv_address = try net.IpAddress.parse(opts.host, opts.port),
         .threads = if (sopts.threads) |tcount| brk: {
             var pool: std.Thread.Pool = undefined;
             try pool.init(.{ .allocator = a, .n_jobs = tcount });
@@ -38,40 +38,41 @@ pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) 
 }
 
 pub fn serve(http: *HTTP) !void {
-    var srv = try http.listen_addr.listen(.{ .reuse_address = true });
-    defer srv.deinit();
+    var future_buf: [20]OnceFuture = undefined;
+    var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
-    log.info("HTTP Server listening at http://{f}", .{http.listen_addr});
+    var threaded: std.Io.Threaded = .init(http.alloc);
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var srv = try http.srv_address.listen(io, .{ .reuse_address = true });
+    defer srv.deinit(io);
+
+    log.info("HTTP Server listening at http://{f}", .{http.srv_address});
     http.alive = true;
     while (http.running) {
-        const conn = try srv.accept();
-        if (http.threads) |*threads| {
-            try threads.pool.spawn(onceThreaded, .{ http, conn });
+        var stream: Stream = try srv.accept(io);
+        if (http.threads) |_| {
+            try future_list.appendBounded(try io.concurrent(once, .{ http, &stream, io }));
         } else {
-            try http.once(conn);
+            try future_list.appendBounded(io.async(once, .{ http, &stream, io }));
         }
+    }
+    while (future_list.pop()) |future_| {
+        var future = future_;
+        _ = try future.await(io);
     }
     log.info("Normal HTTPD shutdown", .{});
 }
 
-fn onceThreaded(http: *HTTP, acpt: net.Server.Connection) void {
-    once(http, acpt) catch |err| switch (err) {
-        error.HttpRequestTruncated => {
-            log.err("HttpRequestTruncated in threaded mode", .{});
-        },
-        else => {
-            log.err("Unexpected endpoint error {} in threaded mode", .{err});
-            http.running = false;
-        },
-    };
-}
+const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
+pub fn once(http: *HTTP, stream: *Stream, io: Io) !void {
     var timer = try std.time.Timer.start();
+    const now = try std.Io.Clock.now(.real, io);
 
-    var conn = sconn;
-    defer conn.stream.close();
-    log.info("HTTP connection from {f}", .{conn.address});
+    defer stream.close(io);
+    log.info("HTTP connection from {f}", .{stream.socket.address});
 
     var arena = std.heap.ArenaAllocator.init(http.alloc);
     defer arena.deinit();
@@ -79,21 +80,20 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
 
     const r_b: []u8 = try a.alloc(u8, 0x10000);
     const w_b: []u8 = try a.alloc(u8, 0x40000);
-    var reader = conn.stream.reader(r_b);
-    var writer = conn.stream.writer(w_b);
-    var hsrv = std.http.Server.init(reader.interface(), &writer.interface);
+    var reader = stream.reader(io, r_b);
+    var writer = stream.writer(io, w_b);
+    var hsrv = std.http.Server.init(&reader.interface, &writer.interface);
 
     var hreq = try hsrv.receiveHead();
     const reqdata = try requestData(a, &hreq);
-    const req = try Request.initHttp(a, &hreq, &conn, reqdata);
+    const req = try Request.initHttp(a, &hreq, stream, reqdata, now);
 
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
-    const srvr: *Server = @fieldParentPtr("interface", ifc);
+    const srvr: *Server = @alignCast(@fieldParentPtr("interface", ifc));
 
-    var frame: Frame = try .init(a, srvr, &req, .{
+    var frame: Frame = try .init(a, io, srvr, &req, .{
         .gateway = .{ .http = &hsrv },
-        .connection = &conn,
-        .reader = reader.interface(),
+        .reader = &reader.interface,
         .writer = &writer.interface,
     }, http.auth);
 
@@ -114,6 +114,7 @@ pub fn once(http: *HTTP, sconn: net.Server.Connection) !void {
             .addr = req.remote_addr,
             .code = frame.status orelse .internal_server_error,
             .page_size = 0,
+            .time = req.now.toSeconds(),
             .rss = arena.queryCapacity(),
             .ua = req.user_agent,
             .uri = req.uri,
@@ -175,7 +176,7 @@ test HTTP {
 
     var thread = try std.Thread.spawn(.{}, threadFn, .{&server.interface.http});
 
-    var client = std.http.Client{ .allocator = a };
+    var client = std.http.Client{ .allocator = a, .io = std.testing.io };
     defer client.deinit();
     while (!server.interface.http.alive) {}
 
@@ -197,7 +198,10 @@ const Request = @import("request.zig");
 const RequestData = @import("request-data.zig");
 
 const std = @import("std");
-const net = std.net;
+const net = std.Io.net;
+const Stream = net.Stream;
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 const log = std.log.scoped(.Verse);
 const HttpServer = std.http.Server;
+const Io = std.Io;

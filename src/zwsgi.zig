@@ -52,10 +52,6 @@ pub fn serve(z: *zWSGI) !void {
 
     signalListen(SIG.INT);
 
-    const uaddr = try std.net.Address.initUnix(z.unix_file);
-    var server = try uaddr.listen(.{});
-    defer server.deinit();
-
     if (z.options.chmod) |cmod| {
         var b: [2048:0]u8 = undefined;
         const path = try cwd.realpath(z.unix_file, b[0..]);
@@ -65,34 +61,51 @@ pub fn serve(z: *zWSGI) !void {
     }
     log.warn("Unix server listening", .{});
 
-    var thr_pool: std.Thread.Pool = undefined;
-    if (z.threads) |thread_count| {
-        try thr_pool.init(.{ .allocator = z.alloc, .n_jobs = thread_count });
-    }
-    defer thr_pool.deinit();
+    var future_buf: [20]OnceFuture = undefined;
+    var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
+
+    var threaded: std.Io.Threaded = .init(z.alloc);
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const uaddr = try net.UnixAddress.init(z.unix_file);
+    var server: net.Server = try uaddr.listen(io, .{});
+    defer server.deinit(io);
 
     while (running) {
         var pollfds = [1]std.os.linux.pollfd{
-            .{ .fd = server.stream.handle, .events = std.math.maxInt(i16), .revents = 0 },
+            .{
+                .fd = server.socket.handle,
+                .events = std.math.maxInt(i16),
+                .revents = 0,
+            },
         };
         const ready = try std.posix.poll(&pollfds, 100);
-        if (ready == 0) continue;
-        const acpt = try server.accept();
+        if (ready == 0) {
+            while (future_list.pop()) |future_| {
+                var future = future_;
+                try future.await(io);
+            }
+            continue;
+        }
+        var stream = try server.accept(io);
 
         if (z.threads) |_| {
-            try thr_pool.spawn(onceThreaded, .{ z, acpt });
+            try future_list.appendBounded(try io.concurrent(once, .{ z, &stream, io }));
         } else {
-            try once(z, acpt);
+            try future_list.appendBounded(io.async(once, .{ z, &stream, io }));
         }
     }
     log.warn("closing, and cleaning up", .{});
 }
 
-pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
-    var timer = try std.time.Timer.start();
+const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-    var conn = acpt;
-    defer acpt.stream.close();
+pub fn once(z: *const zWSGI, stream: *net.Stream, io: Io) !void {
+    var timer = try std.time.Timer.start();
+    const now = try std.Io.Clock.now(.real, io);
+
+    defer stream.close(io);
 
     var arena = std.heap.ArenaAllocator.init(z.alloc);
     defer arena.deinit();
@@ -100,20 +113,19 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
 
     const r_b: []u8 = try a.alloc(u8, 0x10000);
     const w_b: []u8 = try a.alloc(u8, 0x40000);
-    var reader = conn.stream.reader(r_b);
-    var writer = conn.stream.writer(w_b);
+    var reader = stream.reader(io, r_b);
+    var writer = stream.writer(io, w_b);
 
-    var zreq = try zWSGIRequest.init(a, &conn);
-    const request_data = try requestData(a, &zreq);
-    const request = try Request.initZWSGI(a, &zreq, request_data);
+    var zreq = try zWSGIRequest.init(a, &reader.interface);
+    const request_data = try requestData(a, &zreq, &reader.interface);
+    const request = try Request.initZWSGI(a, &zreq, request_data, now);
 
-    const ifc: *const Server.Interface = @fieldParentPtr("zwsgi", z);
-    const srvr: *Server = @constCast(@fieldParentPtr("interface", ifc));
+    const srv_interface: *const Server.Interface = @fieldParentPtr("zwsgi", z);
+    const srvr: *Server = @alignCast(@constCast(@fieldParentPtr("interface", srv_interface)));
 
-    var frame: Frame = try .init(a, srvr, &request, .{
+    var frame: Frame = try .init(a, io, srvr, &request, .{
         .gateway = .{ .zwsgi = &zreq },
-        .connection = &conn,
-        .reader = reader.interface(),
+        .reader = &reader.interface,
         .writer = &writer.interface,
     }, z.auth);
 
@@ -135,6 +147,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
                 .addr = request.remote_addr,
                 .code = frame.status orelse .internal_server_error,
                 .page_size = 0,
+                .time = request.now.toSeconds(),
                 .rss = arena.queryCapacity(),
                 .ua = request.user_agent,
                 .uri = request.uri,
@@ -148,14 +161,7 @@ pub fn once(z: *const zWSGI, acpt: net.Server.Connection) !void {
     writer.interface.flush() catch unreachable;
 }
 
-fn onceThreaded(z: *const zWSGI, acpt: net.Server.Connection) void {
-    once(z, acpt) catch |err| {
-        log.err("Unexpected endpoint error {} in threaded mode", .{err});
-        running = false;
-    };
-}
-
-export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv(.c) void {
+export fn sig_cb(sig: std.posix.SIG, _: *const siginfo_t, _: ?*anyopaque) callconv(.c) void {
     switch (sig) {
         std.posix.SIG.INT => {
             running = false;
@@ -166,8 +172,8 @@ export fn sig_cb(sig: c_int, _: *const siginfo_t, _: ?*const anyopaque) callconv
     }
 }
 
-fn signalListen(signal: u6) void {
-    std.posix.sigaction(signal, &std.posix.Sigaction{
+fn signalListen(signal: std.posix.SIG) void {
+    std.posix.sigaction(signal, &.{
         .handler = .{ .sigaction = sig_cb },
         .mask = std.posix.sigemptyset(),
         .flags = SA.SIGINFO,
@@ -212,46 +218,30 @@ pub const zWSGIParam = enum {
 };
 
 pub const zWSGIRequest = struct {
-    conn: *net.Server.Connection,
     header: uProtoHeader = uProtoHeader{},
-    buffer: []u8,
     known: std.EnumArray(zWSGIParam, ?[]const u8) = .initFill(null),
     vars: std.ArrayListUnmanaged(uWSGIVar) = .{},
 
-    pub fn init(a: Allocator, c: *net.Server.Connection) !zWSGIRequest {
-        const uwsgi_header = try uProtoHeader.init(c);
+    pub fn init(a: Allocator, r: *Reader) !zWSGIRequest {
+        const uwsgi_header = try uProtoHeader.init(r);
 
-        const buf: []u8 = try a.alloc(u8, uwsgi_header.size);
-        const read = try c.stream.read(buf);
-        if (read != uwsgi_header.size) {
-            std.log.err("unexpected read size {} {}", .{ read, uwsgi_header.size });
-            @panic("unreachable");
-        }
+        try r.fill(uwsgi_header.size);
 
-        var zr: zWSGIRequest = .{
-            .conn = c,
-            .header = uwsgi_header,
-            .buffer = buf,
-        };
-        try zr.readVars(a);
+        var zr: zWSGIRequest = .{ .header = uwsgi_header };
+        try zr.readVars(a, r);
         return zr;
     }
 
-    fn readVars(zr: *zWSGIRequest, a: Allocator) !void {
-        var buf = zr.buffer;
+    fn readVars(zr: *zWSGIRequest, a: Allocator, r: *Reader) !void {
         try zr.vars.ensureTotalCapacity(a, 10);
-        while (buf.len > 0) {
-            const key_len = readU16(buf[0..2]);
-            buf = buf[2..];
-            const key_str = buf[0..key_len];
-            buf = buf[key_len..];
+        while (r.bufferedLen() > 0) {
+            const key_len = try r.takeInt(u16, sys_endian);
+            const key_str = try r.take(key_len);
             const expected = zWSGIParam.fromStr(key_str);
 
-            const val_len = readU16(buf[0..2]);
-            buf = buf[2..];
+            const val_len = try r.takeInt(u16, sys_endian);
             if (val_len > 0) {
-                const val_str = buf[0..val_len];
-                buf = buf[val_len..];
+                const val_str = try r.take(val_len);
 
                 if (expected) |k| {
                     if (zr.known.get(k)) |old| {
@@ -273,29 +263,13 @@ pub const zWSGIRequest = struct {
     }
 };
 
-fn readU16(b: *const [2]u8) u16 {
-    std.debug.assert(b.len >= 2);
-    return @as(u16, @bitCast(b[0..2].*));
-}
-
-test "readu16" {
-    const buffer = [2]u8{ 238, 1 };
-    const size: u16 = 494;
-    try std.testing.expectEqual(size, readU16(&buffer));
-}
-
 const uProtoHeader = packed struct {
     mod1: u8 = 0,
     size: u16 = 0,
     mod2: u8 = 0,
 
-    pub fn init(c: *net.Server.Connection) !uProtoHeader {
-        var self: uProtoHeader = .{};
-        var ptr: [*]u8 = @ptrCast(&self);
-        if (try c.stream.read(ptr[0..4]) != 4) {
-            return error.InvalidRead;
-        }
-        return self;
+    pub fn init(r: *Reader) !uProtoHeader {
+        return r.takeStruct(uProtoHeader, sys_endian);
     }
 };
 
@@ -315,7 +289,7 @@ const uWSGIVar = struct {
     }
 };
 
-fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
+fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
     var post_data: ?Request.Data.PostData = null;
 
     if (zreq.known.get(.CONTENT_LENGTH)) |h_len| {
@@ -323,9 +297,7 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest) !Request.Data {
 
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {
-            var b: [0x800]u8 = undefined;
-            var reader = zreq.conn.stream.reader(&b);
-            post_data = try Request.Data.readPost(a, reader.interface(), post_size, h_type);
+            post_data = try Request.Data.readPost(a, r, post_size, h_type);
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },
@@ -353,12 +325,17 @@ test init {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
+const Io = std.Io;
+const Reader = std.Io.Reader;
 const log = std.log.scoped(.Verse);
-const net = std.net;
+const net = std.Io.net;
 const siginfo_t = std.posix.siginfo_t;
 const SIG = std.posix.SIG;
 const SA = std.posix.SA;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
+const zbuiltin = @import("builtin");
+const sys_endian = zbuiltin.target.cpu.arch.endian();
 
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");

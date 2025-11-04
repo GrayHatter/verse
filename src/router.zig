@@ -372,7 +372,7 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
                 // could provide a replacement default. But this does not.
                 log.err("Unrouteable", .{});
                 if (@errorReturnTrace()) |trace| {
-                    std.debug.dumpStackTrace(trace.*);
+                    std.debug.dumpStackTrace(trace);
                 }
                 @panic("Unroutable");
             },

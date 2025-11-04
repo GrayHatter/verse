@@ -114,6 +114,9 @@ pub fn main() !void {
     }
 
     const a = std.heap.page_allocator;
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    const io = threaded.ioBasic();
+    const cwd = std.Io.Dir.cwd();
 
     const wout_dname = std.fs.path.dirname(wout_path.?) orelse return error.InvalidPath;
     const wout_dir = try std.fs.cwd().openDir(wout_dname, .{});
@@ -161,24 +164,17 @@ pub fn main() !void {
     );
 
     for (compiled.data) |tplt| {
-        const fdata = std.fs.cwd().readFileAlloc(a, tplt.path, 0xffff) catch |err| br: {
-            if (err != error.FileNotFound) {
-                std.debug.print("template {s}\n", .{tplt.path});
-                std.debug.print("base {s}\n", .{try std.fs.cwd().realpathAlloc(a, ".")});
-                return err;
-            }
-
-            break :br try a.dupe(u8, tplt.blob);
-        };
-        defer a.free(fdata);
-
         const name = makeStructName(tplt.path);
         const this = try AbstTree.init(a, name);
         const gop = try global_tree.getOrPut(a, this.name);
         if (!gop.found_existing) {
             gop.value_ptr.* = this;
         }
-        try emitSourceVars(a, fdata, this, &global_tree);
+        const file = try cwd.openFile(io, tplt.path, .{});
+        var r_b: [0x8000]u8 = undefined;
+        var reader = file.reader(io, &r_b);
+        reader.interface.fillMore() catch |err| if (err != error.EndOfStream) return err;
+        try emitSourceVars(a, &reader.interface, this, &global_tree);
     }
 
     {
@@ -277,7 +273,8 @@ pub const Switch = struct {
         const first = try AbstTree.init(a, name);
         try tree.put(a, first.name, first);
 
-        emitSourceVars(a, text, first, &tree) catch unreachable;
+        var body: Reader = .fixed(text);
+        emitSourceVars(a, &body, first, &tree) catch unreachable;
         const self = try a.create(Switch);
         self.* = .{
             .name = name,
@@ -331,99 +328,104 @@ fn htmlType(a: Allocator, html_type: ?Directive.HtmlType, struct_name: []const u
     }
 }
 
-pub fn emitSourceVars(a: Allocator, fdata: []const u8, parent: *AbstTree, root: *StrHashMap(*AbstTree)) !void {
-    var data = fdata;
-    while (data.len > 0) {
-        if (indexOf(u8, data, "<")) |offset| {
-            data = data[offset..];
-            if (Directive.init(data)) |drct| {
-                //_ = genType(drct);
-                data = data[drct.tag_block.len..];
-                const s_name = makeStructName(drct.noun);
-                const f_name = try allocFieldName(a, drct.noun);
+pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHashMap(*AbstTree)) !void {
+    while (ir.bufferedLen() > 0) {
+        //if (ir.discardDelimiterExclusive('<')) |offset| {
+        _ = try ir.discardDelimiterExclusive('<');
+        //if (try ir.peekDelimiterInclusive('>')) |tag| _ = tag;
+        const str = ir.buffered();
+        std.debug.assert(str.len == 0 or str[0] == '<');
+        if (Directive.init(ir.buffered())) |drct| {
+            ir.toss(drct.tag_block.len);
+            //_ = genType(drct);
+            const s_name = makeStructName(drct.noun);
+            const f_name = try allocFieldName(a, drct.noun);
 
-                switch (drct.verb) {
-                    .variable => |_| {
-                        const kind: []u8 = switch (drct.otherwise) {
-                            .required => try htmlType(a, drct.html_type, s_name),
-                            .exact => unreachable,
-                            .default => |str| try allocPrint(a, ": []const u8 = \"{s}\",\n", .{str}),
-                            .delete => if (drct.html_type) |_|
-                                try htmlType(a, drct.html_type, s_name)
-                            else
-                                try allocPrint(a, ": ?[]const u8 = null,\n", .{}),
-                            .template => |_| {
-                                const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
-                                try parent.append(.{
-                                    .name = try a.dupe(u8, rf_name),
-                                    .kind = try allocPrint(a, ": ?{s},\n", .{s_name}),
-                                });
-                                continue;
-                            },
-                            .literal => |lit| kind: {
-                                try appendEnumLiteral(a, s_name, lit);
-                                break :kind try htmlType(a, drct.html_type, s_name);
-                            },
-                        };
+            switch (drct.verb) {
+                .variable => |_| {
+                    const kind: []u8 = switch (drct.otherwise) {
+                        .required => try htmlType(a, drct.html_type, s_name),
+                        .exact => unreachable,
+                        .default => |default| try allocPrint(a, ": []const u8 = \"{s}\",\n", .{default}),
+                        .delete => if (drct.html_type) |_|
+                            try htmlType(a, drct.html_type, s_name)
+                        else
+                            try allocPrint(a, ": ?[]const u8 = null,\n", .{}),
+                        .template => |_| {
+                            const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
+                            try parent.append(.{
+                                .name = try a.dupe(u8, rf_name),
+                                .kind = try allocPrint(a, ": ?{s},\n", .{s_name}),
+                            });
+                            continue;
+                        },
+                        .literal => |lit| kind: {
+                            try appendEnumLiteral(a, s_name, lit);
+                            break :kind try htmlType(a, drct.html_type, s_name);
+                        },
+                    };
 
-                        try parent.append(.{ .name = f_name, .kind = kind });
-                    },
-                    .directive => try createEnumLiteral(a, s_name, drct.otherwise.literal),
-                    .@"switch" => {
-                        const sw_name = try a.dupe(u8, s_name);
-                        try createSwitch(a, sw_name, drct.tag_block_body.?);
-                        try parent.append(.{ .name = f_name, .kind = try allocPrint(a, ": {s},\n", .{sw_name}) });
-                    },
-                    else => |verb| {
-                        var this: *AbstTree = try .init(a, s_name);
-                        const gop = try root.getOrPut(a, this.name);
-                        if (!gop.found_existing) {
-                            gop.value_ptr.* = this;
-                        } else {
-                            this = gop.value_ptr.*;
-                        }
+                    try parent.append(.{ .name = f_name, .kind = kind });
+                },
+                .directive => try createEnumLiteral(a, s_name, drct.otherwise.literal),
+                .@"switch" => {
+                    const sw_name = try a.dupe(u8, s_name);
+                    try createSwitch(a, sw_name, drct.tag_block_body.?);
+                    try parent.append(.{ .name = f_name, .kind = try allocPrint(a, ": {s},\n", .{sw_name}) });
+                },
+                else => |verb| {
+                    var this: *AbstTree = try .init(a, s_name);
+                    const gop = try root.getOrPut(a, this.name);
+                    if (!gop.found_existing) {
+                        gop.value_ptr.* = this;
+                    } else {
+                        this = gop.value_ptr.*;
+                    }
 
-                        switch (verb) {
-                            .directive => unreachable,
-                            .variable => unreachable,
-                            .@"switch" => unreachable, // recursive switch not implemented
-                            .foreach => {
-                                const body_blob: []const u8, const kind: []u8 = switch (drct.otherwise) {
-                                    .exact => |exact| .{ drct.tag_block_body.?, try allocPrint(a, ": [{}]{s},\n", .{ exact, s_name }) },
-                                    .template => |template| .{ template.blob, try allocPrint(a, ": []const {s},\n", .{s_name}) },
-                                    else => .{ drct.tag_block_body.?, try allocPrint(a, ": []const {s},\n", .{s_name}) },
-                                };
-                                try parent.append(.{ .name = f_name, .kind = kind });
-                                try emitSourceVars(a, body_blob, this, root);
-                            },
-                            .split => {
-                                const kind = try allocPrint(a, ": []const []const u8,\n", .{});
-                                try parent.append(.{ .name = f_name, .kind = kind });
-                            },
-                            .case => {
-                                const kind = try allocPrint(a, "{s}", .{s_name});
-                                try parent.append(.{ .name = f_name, .kind = kind });
-                                try emitSourceVars(a, drct.tag_block_body.?, this, root);
-                            },
-                            .with => {
-                                const kind = try allocPrint(a, ": ?{s},\n", .{s_name});
-                                try parent.append(.{ .name = f_name, .kind = kind });
-                                try emitSourceVars(a, drct.tag_block_body.?, this, root);
-                            },
-                            .build => {
-                                const tmpl_name = makeStructName(drct.otherwise.template.name);
-                                const kind = try allocPrint(a, ": {s},\n", .{tmpl_name});
-                                try parent.append(.{ .name = f_name, .kind = kind });
-                            },
-                        }
-                    },
-                }
-            } else if (constructor.commentTag(data)) |skip| {
-                data = data[skip..];
-            } else if (indexOfPos(u8, data, 1, "<")) |next| {
-                data = data[next..];
-            } else return;
-        } else return;
+                    switch (verb) {
+                        .directive => unreachable,
+                        .variable => unreachable,
+                        .@"switch" => unreachable, // recursive switch not implemented
+                        .foreach => {
+                            const body_blob: []const u8, const kind: []u8 = switch (drct.otherwise) {
+                                .exact => |exact| .{ drct.tag_block_body.?, try allocPrint(a, ": [{}]{s},\n", .{ exact, s_name }) },
+                                .template => |template| .{ template.blob, try allocPrint(a, ": []const {s},\n", .{s_name}) },
+                                else => .{ drct.tag_block_body.?, try allocPrint(a, ": []const {s},\n", .{s_name}) },
+                            };
+                            try parent.append(.{ .name = f_name, .kind = kind });
+                            var body: Reader = .fixed(body_blob);
+                            try emitSourceVars(a, &body, this, root);
+                        },
+                        .split => {
+                            const kind = try allocPrint(a, ": []const []const u8,\n", .{});
+                            try parent.append(.{ .name = f_name, .kind = kind });
+                        },
+                        .case => {
+                            const kind = try allocPrint(a, "{s}", .{s_name});
+                            try parent.append(.{ .name = f_name, .kind = kind });
+                            var body: Reader = .fixed(drct.tag_block_body.?);
+                            try emitSourceVars(a, &body, this, root);
+                        },
+                        .with => {
+                            const kind = try allocPrint(a, ": ?{s},\n", .{s_name});
+                            try parent.append(.{ .name = f_name, .kind = kind });
+                            var body: Reader = .fixed(drct.tag_block_body.?);
+                            try emitSourceVars(a, &body, this, root);
+                        },
+                        .build => {
+                            const tmpl_name = makeStructName(drct.otherwise.template.name);
+                            const kind = try allocPrint(a, ": {s},\n", .{tmpl_name});
+                            try parent.append(.{ .name = f_name, .kind = kind });
+                        },
+                    }
+                },
+            }
+        } else if (constructor.commentTag(str)) |skip| {
+            ir.toss(skip);
+        } else {
+            if (ir.buffered().len == 0) return;
+            ir.toss(1);
+        }
     }
     return;
 }
@@ -530,6 +532,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const StrHashMap = std.StringHashMapUnmanaged;
+const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 const eql = std.mem.eql;
 const bufPrint = std.fmt.bufPrint;

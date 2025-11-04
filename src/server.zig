@@ -36,13 +36,17 @@ pub fn init(a: Allocator, router: Router, opts: Options) !Server {
     if (opts.stats) |so| {
         stats_.options = so;
     }
+
+    // TODO FIXME
+    const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
+
     return .{
         .interface = switch (opts.mode) {
             .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, router, z, opts) },
             .http => |h| .{ .http = try Http.init(a, router, h, opts) },
             .other => unreachable,
         },
-        .stats = if (opts.stats) |_| .init(opts.threads != null) else null,
+        .stats = if (opts.stats) |_| .init(opts.threads != null, now) else null,
     };
 }
 

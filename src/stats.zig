@@ -16,7 +16,7 @@ pub var options: Options = .default;
 
 pub const Stats = struct {
     mutex: ?std.Thread.Mutex,
-    start_time: i64,
+    start_time: Timestamp,
     count: usize,
     mean: Mean,
     rows: [256]Line,
@@ -90,19 +90,20 @@ pub const Stats = struct {
         addr: []const u8,
         code: std.http.Status,
         page_size: usize,
+        time: i96,
         rss: usize,
         ua: ?UserAgent,
         uri: []const u8,
         us: u64,
     };
 
-    pub fn init(threaded: bool) Stats {
+    pub fn init(threaded: bool, now: Timestamp) Stats {
         return .{
             .count = 0,
             .mean = .{},
             .mutex = if (threaded) .{} else null,
             .rows = @splat(.empty),
-            .start_time = std.time.timestamp(),
+            .start_time = now,
         };
     }
 
@@ -116,7 +117,7 @@ pub const Stats = struct {
             .number = stats.count,
             .page_size = data.page_size,
             .rss = data.rss,
-            .time = @intCast(std.time.timestamp()),
+            .time = @intCast(data.time), // TODO FIXME
             .ua = data.ua,
             .uri = .init(data.uri),
             .us = data.us,
@@ -181,12 +182,12 @@ pub const Endpoint = struct {
             },
         );
         var count: usize = 0;
-        var uptime = std.time.timestamp();
+        var uptime: i96 = if (std.Io.Clock.now(.real, f.io)) |clock| clock.toSeconds() else |_| 0;
         var mean_time: u64 = 0;
 
-        if (@as(*Server, @ptrCast(@constCast(f.server))).stats) |active| {
+        if (@as(*Server, @ptrCast(@alignCast(@constCast(f.server)))).stats) |active| {
             count = active.count;
-            uptime -|= active.start_time;
+            uptime -|= active.start_time.toSeconds();
             mean_time = active.mean.mean(@truncate(count));
             for (0..data.len) |i| {
                 if (i >= count) break;
@@ -258,3 +259,4 @@ const std = @import("std");
 const Frame = @import("frame.zig");
 const Server = @import("server.zig");
 const UserAgent = @import("user-agent.zig");
+const Timestamp = std.Io.Timestamp;

@@ -206,14 +206,14 @@ pub const Rules = struct {
     const DAY: i64 = 86400;
     pub const AGE_STEP: usize = DAY * 45;
 
-    pub fn age(ua: UA, _: *const Request, score: *f16) !void {
+    pub fn age(ua: UA, r: *const Request, score: *f16) !void {
         if (ua.agent != .browser) return;
         if (ua.agent.browser.name == .unknown) return;
-        const delta: i64 = @intCast(ua.agent.browser.age() catch return);
+        const delta: Duration = ua.agent.browser.age(r.now) catch return;
 
         const YEAR: i64 = 86400 * 365;
         // These are all just made up based on feeling, TODO real data analysis
-        switch (delta) {
+        switch (delta.toSeconds()) {
             std.math.minInt(i64)...0 => {},
             1...AGE_STEP => {},
             AGE_STEP + 1...AGE_STEP * 3 => score.* = score.* + 0.1,
@@ -227,10 +227,12 @@ pub const Rules = struct {
     }
 
     test age {
+        var req: Request = undefined;
+        req.now = try std.Io.Clock.now(.real, std.testing.io);
         var score: f16 = 0.0;
         try age(.{ .string = "", .agent = .{
             .browser = .{ .name = .chrome, .version = 0 },
-        } }, undefined, &score);
+        } }, &req, &score);
         try std.testing.expectEqual(score, 0.9);
         score = 0;
         try age(.{ .string = "", .agent = .{
@@ -238,9 +240,9 @@ pub const Rules = struct {
                 .name = .chrome,
                 .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
             },
-        } }, undefined, &score);
+        } }, &req, &score);
         std.testing.expectEqual(0.0, score) catch |err| {
-            if (Chrome.Version.revision_date < std.time.timestamp() - AGE_STEP) {
+            if (Chrome.Version.revision_date < req.now.toSeconds() - AGE_STEP) {
                 std.debug.print("bot-detection.browsers.version is out of date\n", .{});
                 return error.SkipZigTest;
             }
@@ -250,7 +252,7 @@ pub const Rules = struct {
         score = 0.0;
         try age(.{ .string = "", .agent = .{
             .browser = .{ .name = .unknown, .version = 0 },
-        } }, undefined, &score);
+        } }, &req, &score);
         try std.testing.expectEqual(score, 0.0);
     }
 
@@ -306,3 +308,5 @@ const UA = @import("../user-agent.zig");
 const Request = @import("../request.zig");
 
 const eql = std.mem.eql;
+const Timestamp = std.Io.Timestamp;
+const Duration = std.Io.Duration;

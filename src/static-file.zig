@@ -13,9 +13,6 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
     };
     if (std.mem.indexOf(u8, fname, "/../")) |_| return error.Abuse;
 
-    const static = std.fs.cwd().openDir("static", .{}) catch return error.Unrouteable;
-    const fdata = static.readFileAlloc(frame.alloc, fname, 0xFFFFFF) catch return error.Unknown;
-
     var content_type: ContentType = .@"text/plain";
     const period_index = std.mem.indexOf(u8, fname, ".");
     if (period_index) |index| {
@@ -25,6 +22,16 @@ pub fn fileOnDisk(frame: *Frame) Route.Error!void {
     frame.status = .ok;
     frame.content_type = content_type;
 
+    const static = std.Io.Dir.cwd().openDir(frame.io, "static", .{}) catch return error.Unrouteable;
+    defer static.close(frame.io);
+    const file = static.openFile(frame.io, fname, .{}) catch return error.Unknown;
+    var r_b: [0x4000]u8 = undefined;
+    var reader = file.reader(frame.io, &r_b);
+
     try frame.sendHeaders(.close);
-    try frame.downstream.writer.writeAll(fdata);
+    _ = reader.interface.stream(frame.downstream.writer, .limited(0xFFFFFF)) catch |err| switch (err) {
+        error.EndOfStream => {},
+        error.ReadFailed => return error.ServerFault,
+        error.WriteFailed => return error.WriteFailed,
+    };
 }
