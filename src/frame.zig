@@ -153,7 +153,8 @@ pub fn init(
         .uri = try splitUri(req.uri),
         .auth_provider = auth,
         .headers = Headers.init(),
-        .user = auth.authenticate(&req.headers) catch null,
+        .user = auth.authenticate(&req.headers, req.now.toSeconds()) catch null,
+        // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),
         .response_data = .{},
         .server = @ptrCast(srv),

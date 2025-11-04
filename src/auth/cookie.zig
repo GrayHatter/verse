@@ -47,10 +47,16 @@ pub fn CookieAuth(HMAC: type) type {
             /// Negative version numbers are reserved for users
             pub const Version: i8 = 0;
 
-            pub fn expired(t: Token, max_age: i64) bool {
-                const time = littleToNative(i64, @as(*const i64, @ptrCast(&t.time)).*);
-                if (time > std.time.timestamp() + max_age) return true;
-                return false;
+            pub fn expired(t: Token, now: Timestamp, max_age: Duration) bool {
+                const token_created: i64 = littleToNative(i64, @as(*const i64, @ptrCast(&t.time)).*);
+                var token_time: Timestamp = token_created;
+                if (token_time > now) return true;
+                token_time +|= max_age;
+                return token_time < now;
+                //var token_time: Timestamp = .fromSeconds(token_created);
+                //if (token_time.nanoseconds > now.nanoseconds) return true;
+                //token_time.addDuration(max_age);
+                //return token_time.nanoseconds < now.nanoseconds;
             }
         };
 
@@ -70,7 +76,7 @@ pub fn CookieAuth(HMAC: type) type {
             };
         }
 
-        pub fn validateToken(hm: *HMAC, b64data: []const u8, user_buffer: []u8, maxage: i64) Error![]u8 {
+        pub fn validateToken(hm: *HMAC, b64data: []const u8, user_buffer: []u8, now: Timestamp, maxage: Duration) Error![]u8 {
             var buffer: [ibuf_size]u8 = undefined;
             const len = b64_dec.calcSizeForSlice(b64data) catch return error.InvalidAuth;
             if (len > ibuf_size) return error.InvalidAuth;
@@ -98,7 +104,7 @@ pub fn CookieAuth(HMAC: type) type {
                 if (t.extra_data) |ed| hm.update(ed);
                 hm.final(our_hash[0..]);
                 if (timing_safe.eql([HMAC.mac_length]u8, t.mac, our_hash)) {
-                    if (t.expired(maxage)) return error.TokenExpired;
+                    if (t.expired(now, maxage)) return error.TokenExpired;
                     if (user_buffer.len < t.userid.len) return error.NoSpaceLeft;
                     @memcpy(user_buffer[0..t.userid.len], t.userid);
                     return user_buffer[0..t.userid.len];
@@ -109,12 +115,12 @@ pub fn CookieAuth(HMAC: type) type {
             return error.InvalidAuth;
         }
 
-        pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
+        pub fn authenticate(ptr: *anyopaque, headers: *const Headers, now: Timestamp) Error!User {
             const ca: *Self = @ptrCast(@alignCast(ptr));
             if (ca.base) |base| {
                 // If base provider offers authenticate, we should defer to it
                 if (base.vtable.authenticate) |_| {
-                    return base.authenticate(headers);
+                    return base.authenticate(headers, now);
                 }
 
                 if (headers.getCustom("Cookie")) |cookies| {
@@ -131,6 +137,7 @@ pub fn CookieAuth(HMAC: type) type {
                                 &hmac,
                                 tkn[ca.cookie_name.len + 1 ..],
                                 un_buf[0..],
+                                now,
                                 ca.max_age,
                             );
 
@@ -155,11 +162,11 @@ pub fn CookieAuth(HMAC: type) type {
             return error.UnknownUser;
         }
 
-        pub fn mkToken(hm: *HMAC, token: []u8, user: *const User) Error!usize {
+        pub fn mkToken(hm: *HMAC, token: []u8, user: *const User, now: Timestamp) Error!usize {
             var buffer: [Self.ibuf_size]u8 = [_]u8{0} ** Self.ibuf_size;
             buffer[0] = Token.Version;
             var b: []u8 = buffer[1..];
-            const time = toBytes(nativeToLittle(i64, std.time.timestamp()));
+            const time = toBytes(nativeToLittle(i64, @intCast(now)));
             hm.update(time[0..8]);
             @memcpy(b[0..8], time[0..8]);
             b = b[8..];
@@ -187,9 +194,9 @@ pub fn CookieAuth(HMAC: type) type {
             return b64_enc.encode(token, final).len;
         }
 
-        pub fn createSession(ptr: *anyopaque, user: *User) Error!void {
+        pub fn createSession(ptr: *anyopaque, user: *User, now: Timestamp) Error!void {
             const ca: *Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| base.createSession(user) catch |e| switch (e) {
+            if (ca.base) |base| base.createSession(user, now) catch |e| switch (e) {
                 error.NotProvided => {},
                 else => return e,
             };
@@ -202,7 +209,7 @@ pub fn CookieAuth(HMAC: type) type {
             }
 
             var hmac = HMAC.init(ca.server_secret_key);
-            const len = try mkToken(&hmac, ca.session_buffer[0..], user);
+            const len = try mkToken(&hmac, ca.session_buffer[0..], user, now);
             user.session_next = ca.session_buffer[0..len];
         }
 
@@ -243,6 +250,7 @@ pub fn CookieAuth(HMAC: type) type {
 
 test Cookie {
     const a = std.testing.allocator;
+    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
     var ath = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
@@ -253,7 +261,7 @@ test Cookie {
         .unique_id = "testing user",
     };
 
-    try provider.createSession(&user);
+    try provider.createSession(&user, now);
 
     try std.testing.expect(user.session_next != null);
     const cookie = try provider.getCookie(user);
@@ -271,6 +279,8 @@ test Cookie {
 
 test "Cookie ExtraData" {
     const a = std.testing.allocator;
+    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
+
     var ath = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
@@ -282,7 +292,7 @@ test "Cookie ExtraData" {
         .session_extra_data = "extra data",
     };
 
-    try provider.createSession(&user);
+    try provider.createSession(&user, now);
 
     try std.testing.expect(user.session_next != null);
     const cookie = try provider.getCookie(user);
@@ -302,6 +312,7 @@ test "Cookie ExtraData" {
 
 test "Cookie token" {
     const a = std.testing.allocator;
+    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
     var ath = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
@@ -310,7 +321,7 @@ test "Cookie token" {
 
     var user = User{ .unique_id = "testing user" };
 
-    try provider.createSession(&user);
+    try provider.createSession(&user, now);
 
     try std.testing.expect(user.session_next != null);
     const cookie = try provider.getCookie(user);
@@ -320,16 +331,21 @@ test "Cookie token" {
 
     var uid_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(ath.server_secret_key);
-    const valid = try Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], 2);
+    const valid = try Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, 2);
     try std.testing.expectEqualStrings(user.unique_id.?, valid);
 
     hm = Hmac.sha2.HmacSha256.init(ath.server_secret_key);
-    const expired = Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], -100);
+    const expired = Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, -100);
     try std.testing.expectError(error.TokenExpired, expired);
 }
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+// the expectation for these is to use the std.Io types, but that API is still immature
+const Timestamp = i96;
+const Duration = i96;
+//const Timestamp = std.Io.Clock.Timestamp;
+//const Duration = std.Io.Duration;
 const Hmac = std.crypto.auth.hmac;
 const nativeToLittle = std.mem.nativeToLittle;
 const littleToNative = std.mem.littleToNative;

@@ -17,6 +17,9 @@ cookie_jar: Cookies.Jar,
 /// POST or QUERY data
 data: Data,
 
+// Tentative API
+now: Timestamp,
+
 const Request = @This();
 
 pub const Data = @import("request-data.zig");
@@ -129,6 +132,7 @@ fn initCommon(
     proto: []const u8,
     data: Data,
     secure: bool,
+    now: Timestamp,
 ) !Request {
     var method = _method;
     if (headers.getCustom("Upgrade")) |val| {
@@ -151,10 +155,11 @@ fn initCommon(
         .user_agent = if (ua) |u| .init(u) else null,
         .protocol = .parse(proto),
         .secure = secure,
+        .now = now,
     };
 }
 
-pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
+pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp) !Request {
     const zk = &zwsgi.known;
     const uri: ?[]const u8 = zk.get(.REQUEST_PATH);
     const method = Methods.fromStr(zk.get(.REQUEST_METHOD) orelse "GET") catch {
@@ -197,6 +202,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data) !Request {
         proto,
         data,
         secure,
+        now,
     );
 }
 
@@ -205,6 +211,7 @@ pub fn initHttp(
     http: *std.http.Server.Request,
     connection: *std.net.Server.Connection,
     data: Data,
+    now: Timestamp,
 ) !Request {
     var headers = Headers.init();
 
@@ -261,6 +268,7 @@ pub fn initHttp(
         proto,
         data,
         false, // https isn't currently supported using verse internal http
+        now,
     );
 }
 
@@ -284,6 +292,8 @@ test Request {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Stream = std.Io.net.Stream;
+const Timestamp = std.Io.Timestamp;
 const indexOf = std.mem.indexOf;
 const startsWith = std.mem.startsWith;
 const lastIndexOfScalar = std.mem.lastIndexOfScalar;

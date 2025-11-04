@@ -15,10 +15,10 @@ pub const VTable = struct {
     createSession: ?CreateSessionFn,
     getCookie: ?GetCookieFn,
 
-    pub const AuthenticateFn = *const fn (*anyopaque, *const Headers) Error!User;
+    pub const AuthenticateFn = *const fn (*anyopaque, *const Headers, Timestamp) Error!User;
     pub const LookupUserFn = *const fn (*anyopaque, []const u8) Error!User;
     pub const ValidFn = *const fn (*const anyopaque, *const User) bool;
-    pub const CreateSessionFn = *const fn (*anyopaque, *User) Error!void;
+    pub const CreateSessionFn = *const fn (*anyopaque, *User, Timestamp) Error!void;
     pub const GetCookieFn = *const fn (*anyopaque, User) Error!?RequestCookie;
 
     pub const empty: VTable = .{
@@ -30,9 +30,9 @@ pub const VTable = struct {
     };
 };
 
-pub fn authenticate(self: *const Provider, headers: *const Headers) Error!User {
+pub fn authenticate(self: *const Provider, headers: *const Headers, now: Timestamp) Error!User {
     if (self.vtable.authenticate) |func| {
-        return try func(self.ctx, headers);
+        return try func(self.ctx, headers, now);
     }
 
     return error.NotProvided;
@@ -55,9 +55,9 @@ pub fn lookupUser(self: *const Provider, user_id: []const u8) Error!User {
     return error.NotProvided;
 }
 
-pub fn createSession(self: *const Provider, user: *User) Error!void {
+pub fn createSession(self: *const Provider, user: *User, now: Timestamp) Error!void {
     if (self.vtable.createSession) |func| {
-        return try func(self.ctx, user);
+        return try func(self.ctx, user, now);
     }
 
     return error.NotProvided;
@@ -80,10 +80,10 @@ test "Provider" {
         .vtable = .empty,
     };
 
-    try std.testing.expectError(error.NotProvided, p.authenticate(undefined));
+    try std.testing.expectError(error.NotProvided, p.authenticate(undefined, undefined));
     try std.testing.expectEqual(false, p.valid(undefined));
     try std.testing.expectError(error.NotProvided, p.lookupUser(undefined));
-    try std.testing.expectError(error.NotProvided, p.createSession(undefined));
+    try std.testing.expectError(error.NotProvided, p.createSession(undefined, undefined));
     try std.testing.expectEqual(null, p.getCookie(undefined));
 }
 
@@ -99,10 +99,10 @@ pub const invalid: Provider = .{
 };
 
 pub const Invalid = struct {
-    fn authenticate(_: *const anyopaque, _: *const Headers) Error!User {
+    fn authenticate(_: *const anyopaque, _: *const Headers, _: Timestamp) Error!User {
         return error.UnknownUser;
     }
-    fn createSession(_: *const anyopaque, _: *const User) Error!void {
+    fn createSession(_: *const anyopaque, _: *const User, _: Timestamp) Error!void {
         return error.Unauthenticated;
     }
     fn getCookie(_: *const anyopaque, _: User) Error!?RequestCookie {
@@ -121,3 +121,10 @@ const Error = Auth.Error;
 const Headers = @import("../headers.zig");
 const RequestCookie = @import("../cookies.zig").Cookie;
 const User = @import("user.zig");
+
+// the expectation for these is to use the std.Io types, but that API is still immature
+const Timestamp = i96;
+const Duration = i96;
+//const std = @import("std");
+//const Timestamp = std.Io.Timestamp;
+//const Duration = std.Io.Duration;

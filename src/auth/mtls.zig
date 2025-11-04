@@ -11,7 +11,7 @@ base: ?Provider = null,
 const MTLS = @This();
 
 /// TODO document misuse of default without a base provider
-pub fn authenticate(ptr: *anyopaque, headers: *const Headers) Error!User {
+pub fn authenticate(ptr: *anyopaque, headers: *const Headers, _: Timestamp) Error!User {
     const mtls: *MTLS = @ptrCast(@alignCast(ptr));
 
     if (headers.getCustom("MTLS_ENABLED")) |enabled| {
@@ -77,6 +77,7 @@ pub fn provider(mtls: *MTLS) Provider {
 
 test MTLS {
     const a = std.testing.allocator;
+    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
     var mtls = MTLS{};
     var provider_ = mtls.provider();
 
@@ -85,27 +86,23 @@ test MTLS {
     try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
     try headers.addCustom(a, "MTLS_FINGERPRINT", "LOLTOTALLYVALID");
 
-    const user = try provider_.authenticate(&headers);
+    const user = try provider_.authenticate(&headers, now);
 
     try std.testing.expectEqual(null, user.user_ptr);
     try std.testing.expectEqual(false, provider_.valid(&user));
 
     try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
-    const err = provider_.authenticate(&headers);
+    const err = provider_.authenticate(&headers, now);
     try std.testing.expectError(error.InvalidAuth, err);
 
     headers.raze(a);
     headers = Headers.init();
 
     try headers.addCustom(a, "MTLS_ENABLED", "FAILURE!");
-    const err2 = provider_.authenticate(&headers);
+    const err2 = provider_.authenticate(&headers, now);
     try std.testing.expectError(error.UnknownUser, err2);
 
     {
-        // authenticate will return .invalid_user when the mTLS proxy is able to
-        // validate the cert/key, but we're unable to find/lookup the given
-        // user. We defer to userspace here but require that the default user
-        // can not be considered valid.
         var iv_user: User = .invalid_user;
         try std.testing.expectEqual(false, iv_user.authenticated);
         try std.testing.expectEqual(false, provider_.valid(&iv_user));
@@ -128,3 +125,7 @@ const Provider = @import("Provider.zig");
 const User = @import("user.zig");
 const Error = @import("../auth.zig").Error;
 const Headers = @import("../headers.zig");
+
+// the expectation for these is to use the std.Io types, but that API is still immature
+const Timestamp = i96;
+//const Timestamp = std.Io.Clock.Timestamp;

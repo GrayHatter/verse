@@ -110,7 +110,7 @@ fn create(frame: *Frame) Router.Error!void {
         .username = "example_user",
     };
 
-    frame.auth_provider.createSession(&user) catch return error.Unknown;
+    frame.auth_provider.createSession(&user, frame.request.now.toSeconds()) catch return error.Unknown;
     if (frame.auth_provider.getCookie(user) catch null) |cookie| {
         try frame.cookie_jar.add(cookie);
     }
