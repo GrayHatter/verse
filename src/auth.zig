@@ -61,9 +61,9 @@ pub const TestingAuth = struct {
             .vtable = .{
                 .authenticate = null,
                 .valid = valid,
-                .lookup_user = lookupUserUntyped,
-                .create_session = null,
-                .get_cookie = null,
+                .lookupUser = lookupUserUntyped,
+                .createSession = null,
+                .getCookie = null,
             },
         };
     }

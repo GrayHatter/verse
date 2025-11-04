@@ -10,10 +10,10 @@ const Provider = @This();
 
 pub const VTable = struct {
     authenticate: ?AuthenticateFn,
-    lookup_user: ?LookupUserFn,
+    lookupUser: ?LookupUserFn,
     valid: ?ValidFn,
-    create_session: ?CreateSessionFn,
-    get_cookie: ?GetCookieFn,
+    createSession: ?CreateSessionFn,
+    getCookie: ?GetCookieFn,
 
     pub const AuthenticateFn = *const fn (*anyopaque, *const Headers) Error!User;
     pub const LookupUserFn = *const fn (*anyopaque, []const u8) Error!User;
@@ -23,10 +23,10 @@ pub const VTable = struct {
 
     pub const empty: VTable = .{
         .authenticate = null,
-        .lookup_user = null,
+        .lookupUser = null,
         .valid = null,
-        .create_session = null,
-        .get_cookie = null,
+        .createSession = null,
+        .getCookie = null,
     };
 };
 
@@ -48,7 +48,7 @@ pub fn valid(self: *const Provider, user: *const User) bool {
 
 /// TODO document the implications of non consttime function
 pub fn lookupUser(self: *const Provider, user_id: []const u8) Error!User {
-    if (self.vtable.lookup_user) |func| {
+    if (self.vtable.lookupUser) |func| {
         return try func(self.ctx, user_id);
     }
 
@@ -56,7 +56,7 @@ pub fn lookupUser(self: *const Provider, user_id: []const u8) Error!User {
 }
 
 pub fn createSession(self: *const Provider, user: *User) Error!void {
-    if (self.vtable.create_session) |func| {
+    if (self.vtable.createSession) |func| {
         return try func(self.ctx, user);
     }
 
@@ -66,7 +66,7 @@ pub fn createSession(self: *const Provider, user: *User) Error!void {
 /// Note getCookie will return `null` instead of an error when no function is
 /// provided.
 pub fn getCookie(self: *const Provider, user: User) Error!?RequestCookie {
-    if (self.vtable.get_cookie) |func| {
+    if (self.vtable.getCookie) |func| {
         return try func(self.ctx, user);
     }
 
@@ -92,9 +92,9 @@ pub const invalid: Provider = .{
     .vtable = .{
         .authenticate = Invalid.authenticate,
         .valid = Invalid.valid,
-        .lookup_user = Invalid.lookupUser,
-        .create_session = Invalid.createSession,
-        .get_cookie = Invalid.getCookie,
+        .lookupUser = Invalid.lookupUser,
+        .createSession = Invalid.createSession,
+        .getCookie = Invalid.getCookie,
     },
 };
 

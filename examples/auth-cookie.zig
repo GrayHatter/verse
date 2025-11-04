@@ -10,9 +10,9 @@ const UserFinder = struct {
             .vtable = .{
                 .authenticate = null,
                 .valid = null,
-                .create_session = null,
-                .get_cookie = null,
-                .lookup_user = lookupUser,
+                .createSession = null,
+                .getCookie = null,
+                .lookupUser = lookupUser,
             },
         };
     }

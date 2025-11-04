@@ -208,7 +208,7 @@ pub fn CookieAuth(HMAC: type) type {
 
         pub fn getCookie(ptr: *anyopaque, user: User) Error!?ReqCookie {
             const ca: *Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| if (base.vtable.get_cookie) |_| {
+            if (ca.base) |base| if (base.vtable.getCookie) |_| {
                 return base.getCookie(user);
             };
 
@@ -232,9 +232,9 @@ pub fn CookieAuth(HMAC: type) type {
                 .vtable = .{
                     .authenticate = authenticate,
                     .valid = valid,
-                    .lookup_user = lookupUser,
-                    .create_session = createSession,
-                    .get_cookie = getCookie,
+                    .lookupUser = lookupUser,
+                    .createSession = createSession,
+                    .getCookie = getCookie,
                 },
             };
         }

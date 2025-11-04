@@ -68,9 +68,9 @@ pub fn provider(mtls: *MTLS) Provider {
         .vtable = .{
             .authenticate = authenticate,
             .valid = valid,
-            .lookup_user = lookupUser,
-            .create_session = null,
-            .get_cookie = null,
+            .lookupUser = lookupUser,
+            .createSession = null,
+            .getCookie = null,
         },
     };
 }
