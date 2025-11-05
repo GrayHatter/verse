@@ -33,8 +33,8 @@ pub fn Endpoints(endpoints: anytype) type {
         };
 
         pub fn serve(a: Allocator, options: Options) !void {
-            var server = try Server.init(a, router, options);
-            try server.serve();
+            var server = try Server.init(&router, options);
+            try server.serve(a);
         }
 
         pub fn smokeTest(a: Allocator, comptime opts: testing.SmokeTestOptions) !void {

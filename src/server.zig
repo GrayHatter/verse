@@ -1,3 +1,4 @@
+options: Options,
 interface: Interface,
 stats: ?Stats,
 
@@ -25,43 +26,54 @@ pub const Interface = union(RunModes) {
 };
 
 pub const Options = struct {
-    mode: RunMode = .{ .http = .{} },
-    auth: Auth.Provider = .invalid,
-    threads: ?u16 = null,
-    stats: ?stats_.Options = null,
+    mode: RunMode,
+    auth: Auth.Provider,
+    stats: ?Stats.Options = null,
+    threads: u16 = 1,
     logging: Logging = .stdout,
+
+    pub const default: Options = .{
+        .mode = .{ .http = .localdevel },
+        .auth = .disabled,
+        .threads = 1,
+        .stats = .disabled,
+        .logging = .stdout,
+    };
 };
 
-pub fn init(a: Allocator, router: Router, opts: Options) !Server {
-    if (opts.stats) |so| {
-        stats_.options = so;
-    }
-
-    // TODO FIXME
-    const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
-
+pub fn init(router: *const Router, opts: Options) !Server {
     return .{
+        .options = opts,
         .interface = switch (opts.mode) {
-            .zwsgi => |z| .{ .zwsgi = zWSGI.init(a, router, z, opts) },
-            .http => |h| .{ .http = try Http.init(a, router, h, opts) },
-            .other => unreachable,
+            .zwsgi => |z| .{ .zwsgi = zWSGI.init(router, z, opts) },
+            .http => |h| .{ .http = try Http.init(router, h, opts) },
+            .other => .{ .other = {} },
         },
-        .stats = if (opts.stats) |_| .init(opts.threads != null, now) else null,
+        .stats = null,
     };
 }
 
-pub fn serve(srv: *Server) !void {
+pub fn serve(srv: *Server, gpa: Allocator) !void {
+    var threaded: std.Io.Threaded = .init(gpa);
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const now = try std.Io.Clock.now(.real, io);
+    if (srv.options.stats) |opt| {
+        srv.stats = .init(opt, now);
+    }
+
     switch (srv.interface) {
-        .zwsgi => |*zw| try zw.serve(),
-        .http => |*ht| try ht.serve(),
-        else => {},
+        .zwsgi => |*zw| try zw.serve(gpa, io),
+        .http => |*ht| try ht.serve(gpa, io),
+        .other => unreachable,
     }
 }
 
 test Server {
     std.testing.refAllDecls(@This());
 
-    const srv = try init(std.testing.allocator, Router.Routes(&.{}), .{});
+    const srv = try init(&Router.Routes(&.{}), .default);
     _ = srv;
 }
 
@@ -70,6 +82,5 @@ const Allocator = std.mem.Allocator;
 
 const Auth = @import("auth.zig");
 const Router = @import("router.zig");
-const stats_ = @import("stats.zig");
+const Stats = @import("stats.zig");
 const Logging = @import("Logging.zig");
-const Stats = stats_.Stats;

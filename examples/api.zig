@@ -109,9 +109,9 @@ pub fn main() !void {
     try user_list.append(alloc, .{ .id = 2, .name = "Jane Smith", .age = 28, .role = .admin, .active = true });
     defer user_list.deinit(alloc);
 
-    var server = try verse.Server.init(alloc, routes, .{ .mode = .{ .http = .{ .port = 8080 } } });
+    var server = try verse.Server.init(&routes, .default);
 
-    server.serve() catch |err| {
+    server.serve(alloc) catch |err| {
         std.debug.print("error: {any}", .{err});
         std.posix.exit(1);
     };

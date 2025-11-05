@@ -15,7 +15,7 @@ request: *const Request,
 /// Connection to the downstream client/request
 downstream: Downstream,
 /// Request URI as received by Verse
-uri: Router.UriIterator,
+uri: Uri.Iterator,
 
 // TODO fix this unstable API
 auth_provider: Auth.Provider,
@@ -47,7 +47,7 @@ status: ?std.http.Status = null,
 headers_done: bool = false,
 
 /// Unstable API; may be altered or removed in the future
-server: if (false) *const Server else *align(8) const anyopaque,
+server: *const anyopaque,
 
 const Frame = @This();
 
@@ -153,7 +153,7 @@ pub fn init(
         .io = io,
         .request = req,
         .downstream = downstream,
-        .uri = try splitUri(req.uri),
+        .uri = try Uri.split(req.uri),
         .auth_provider = auth,
         .headers = Headers.init(),
         .user = auth.authenticate(&req.headers, req.now.toSeconds()) catch null,
@@ -307,13 +307,13 @@ const IOVec = iov.IOVec;
 const NetworkError = errors.NetworkError;
 const Request = @import("request.zig");
 const ResponseData = @import("response-data.zig");
+const Uri = @import("uri.zig");
 const Router = @import("router.zig");
 const Server = @import("server.zig");
 const Websocket = @import("websocket.zig");
 const errors = @import("errors.zig");
 const iov = @import("iovec.zig");
 const log = std.log.scoped(.Verse);
-const splitUri = Router.splitUri;
 const std = @import("std");
 const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
 const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;

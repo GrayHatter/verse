@@ -1,134 +1,141 @@
+options: Options,
+mutex: ?std.Thread.Mutex,
+start_time: Timestamp,
+count: usize,
+mean: Mean,
+rows: [256]Line,
+
+const Stats = @This();
+
 pub const Options = struct {
     auth_mode: AuthMode,
+    threaded: bool = true,
 
     pub const AuthMode = enum {
         auth_required,
         sensitive,
         open,
+        stats_disabled,
     };
 
     pub const default: Options = .{
         .auth_mode = .sensitive,
     };
+
+    pub const disabled: Options = .{
+        .auth_mode = .stats_disabled,
+    };
 };
 
-pub var options: Options = .default;
+const Mean = struct {
+    time: [256]u64 = undefined,
+    idx: u8 = 0,
 
-pub const Stats = struct {
-    mutex: ?std.Thread.Mutex,
-    start_time: Timestamp,
-    count: usize,
-    mean: Mean,
-    rows: [256]Line,
+    ///
+    fn mean(m: Mean, count: u8) u64 {
+        if (count == 0) return 0;
+        // TODO vectorize
+        //if (count < m.idx) {
+        //    const sum = @reduce(.Add, m.time[m.idx - count .. m.idx]);
+        //    return sum / count;
+        //} else {
+        //    var sum = @reduce(.Add, m.time[0..m.idx]);
+        //    sum += @reduce(.Add, m.time[m.time.len - count - m.idx .. m.time.len]);
+        //    return sum / count;
+        //}
+        var sum: u128 = 0;
+        for (0..count) |i| {
+            sum += m.time[m.idx -| 1 -| i];
+        }
+        return @truncate(sum / count);
+    }
+};
 
-    const Mean = struct {
-        time: [256]u64 = undefined,
-        idx: u8 = 0,
+pub const Line = struct {
+    addr: ArrBuf,
+    code: std.http.Status,
+    number: usize,
+    page_size: usize,
+    rss: usize,
+    time: u64,
+    ua: ?UserAgent,
+    uri: ArrBuf,
+    us: usize,
 
-        ///
-        fn mean(m: Mean, count: u8) u64 {
-            if (count == 0) return 0;
-            // TODO vectorize
-            //if (count < m.idx) {
-            //    const sum = @reduce(.Add, m.time[m.idx - count .. m.idx]);
-            //    return sum / count;
-            //} else {
-            //    var sum = @reduce(.Add, m.time[0..m.idx]);
-            //    sum += @reduce(.Add, m.time[m.time.len - count - m.idx .. m.time.len]);
-            //    return sum / count;
-            //}
-            var sum: u128 = 0;
-            for (0..count) |i| {
-                sum += m.time[m.idx -| 1 -| i];
-            }
-            return @truncate(sum / count);
+    pub const ArrBuf = struct {
+        buf: [size]u8 = undefined,
+        len: usize = 0,
+
+        pub fn init(str: []const u8) ArrBuf {
+            var ab: ArrBuf = undefined;
+            ab.len = @min(size, str.len);
+            @memcpy(ab.buf[0..ab.len], str[0..ab.len]);
+            return ab;
+        }
+
+        pub fn slice(ab: *const ArrBuf) []const u8 {
+            return ab.buf[0..ab.len];
         }
     };
 
-    pub const Line = struct {
-        addr: ArrBuf,
-        code: std.http.Status,
-        number: usize,
-        page_size: usize,
-        rss: usize,
-        time: u64,
-        ua: ?UserAgent,
-        uri: ArrBuf,
-        us: usize,
-
-        pub const ArrBuf = struct {
-            buf: [size]u8 = undefined,
-            len: usize = 0,
-
-            pub fn init(str: []const u8) ArrBuf {
-                var ab: ArrBuf = undefined;
-                ab.len = @min(size, str.len);
-                @memcpy(ab.buf[0..ab.len], str[0..ab.len]);
-                return ab;
-            }
-
-            pub fn slice(ab: *const ArrBuf) []const u8 {
-                return ab.buf[0..ab.len];
-            }
-        };
-
-        pub const size = 2048;
-        pub const empty: Line = .{
-            .addr = .{},
-            .code = .internal_server_error,
-            .number = 0,
-            .page_size = 0,
-            .rss = 0,
-            .time = 0,
-            .ua = null,
-            .uri = .{},
-            .us = 0,
-        };
+    pub const size = 2048;
+    pub const empty: Line = .{
+        .addr = .{},
+        .code = .internal_server_error,
+        .number = 0,
+        .page_size = 0,
+        .rss = 0,
+        .time = 0,
+        .ua = null,
+        .uri = .{},
+        .us = 0,
     };
-
-    pub const Data = struct {
-        addr: []const u8,
-        code: std.http.Status,
-        page_size: usize,
-        time: i96,
-        rss: usize,
-        ua: ?UserAgent,
-        uri: []const u8,
-        us: u64,
-    };
-
-    pub fn init(threaded: bool, now: Timestamp) Stats {
-        return .{
-            .count = 0,
-            .mean = .{},
-            .mutex = if (threaded) .{} else null,
-            .rows = @splat(.empty),
-            .start_time = now,
-        };
-    }
-
-    pub fn log(stats: *Stats, data: Data) void {
-        if (stats.mutex) |*mx| mx.lock();
-        defer if (stats.mutex) |*mx| mx.unlock();
-        const row: *Line = &stats.rows[stats.count % stats.rows.len];
-        row.* = .{
-            .addr = .init(data.addr),
-            .code = data.code,
-            .number = stats.count,
-            .page_size = data.page_size,
-            .rss = data.rss,
-            .time = @intCast(data.time), // TODO FIXME
-            .ua = data.ua,
-            .uri = .init(data.uri),
-            .us = data.us,
-        };
-        stats.count += 1;
-        stats.mean.time[stats.mean.idx] = data.us;
-        stats.mean.idx +%= 1;
-
-        return;
-    }
 };
+
+pub const Data = struct {
+    addr: []const u8,
+    code: std.http.Status,
+    page_size: usize,
+    time: i96,
+    rss: usize,
+    ua: ?UserAgent,
+    uri: []const u8,
+    us: u64,
+};
+
+pub fn init(opts: Options, now: Timestamp) Stats {
+    return .{
+        .options = opts,
+        .count = 0,
+        .mean = .{},
+        .mutex = if (opts.threaded) .{} else null,
+        .rows = @splat(.empty),
+        .start_time = now,
+    };
+}
+
+pub fn log(stats: *Stats, data: Data) void {
+    if (stats.options.auth_mode == .stats_disabled) return;
+    if (stats.mutex) |*mx| mx.lock();
+    defer if (stats.mutex) |*mx| mx.unlock();
+    const row: *Line = &stats.rows[stats.count % stats.rows.len];
+    row.* = .{
+        .addr = .init(data.addr),
+        .code = data.code,
+        .number = stats.count,
+        .page_size = data.page_size,
+        .rss = data.rss,
+        .time = @intCast(data.time), // TODO FIXME
+        .ua = data.ua,
+        .uri = .init(data.uri),
+        .us = data.us,
+    };
+    stats.count += 1;
+    stats.mean.time[stats.mean.idx] = data.us;
+    stats.mean.idx +%= 1;
+
+    return;
+}
 
 pub const Endpoint = struct {
     //const EP = @import("endpoint.zig");
@@ -153,7 +160,11 @@ pub const Endpoint = struct {
 
     pub fn index(f: *Frame) Router.Error!void {
         var include_ip: bool = false;
-        switch (options.auth_mode) {
+        const server: *Server = @ptrCast(@alignCast(@constCast(f.server)));
+        switch (server.stats.?.options.auth_mode) {
+            .stats_disabled => {
+                return f.sendDefaultErrorPage(.gone);
+            },
             .auth_required => {
                 if (f.auth_provider.vtable.valid == null)
                     return f.sendDefaultErrorPage(.not_implemented);
@@ -185,7 +196,7 @@ pub const Endpoint = struct {
         var uptime: i96 = if (std.Io.Clock.now(.real, f.io)) |clock| clock.toSeconds() else |_| 0;
         var mean_time: u64 = 0;
 
-        if (@as(*Server, @ptrCast(@alignCast(@constCast(f.server)))).stats) |active| {
+        if (server.stats) |active| {
             count = active.count;
             uptime -|= active.start_time.toSeconds();
             mean_time = active.mean.mean(@truncate(count));

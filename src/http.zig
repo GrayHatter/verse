@@ -1,49 +1,53 @@
 //! Verse HTTP server
-alloc: Allocator,
-router: Router,
+router: *const Router,
 auth: Auth.Provider,
 srv_address: net.IpAddress,
 
 running: bool = true,
 alive: bool = false,
-threads: ?struct {
-    count: usize,
-    pool: std.Thread.Pool,
-} = null,
 
 const HTTP = @This();
 
 const MAX_HEADER_SIZE = 1 <<| 13;
 
 pub const Options = struct {
-    host: []const u8 = "127.0.0.1",
-    port: u16 = 8080,
+    host: []const u8,
+    port: u16,
+
+    pub fn localPort(comptime port: u16) Options {
+        return .{
+            .host = "127.0.0.1",
+            .port = port,
+        };
+    }
+
+    pub const public: Options = .{
+        .host = "0.0.0.0",
+        .port = 80,
+    };
+
+    pub const localhost: Options = .{
+        .host = "127.0.0.1",
+        .port = 80,
+    };
+
+    pub const localdevel: Options = .{
+        .host = "127.0.0.1",
+        .port = 8080,
+    };
 };
 
-pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) !HTTP {
+pub fn init(router: *const Router, opts: Options, sopts: Server.Options) !HTTP {
     return .{
-        .alloc = a,
         .router = router,
         .auth = sopts.auth,
         .srv_address = try net.IpAddress.parse(opts.host, opts.port),
-        .threads = if (sopts.threads) |tcount| brk: {
-            var pool: std.Thread.Pool = undefined;
-            try pool.init(.{ .allocator = a, .n_jobs = tcount });
-            break :brk .{
-                .count = tcount,
-                .pool = pool,
-            };
-        } else null,
     };
 }
 
-pub fn serve(http: *HTTP) !void {
+pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
-
-    var threaded: std.Io.Threaded = .init(http.alloc);
-    defer threaded.deinit();
-    const io = threaded.io();
 
     var srv = try http.srv_address.listen(io, .{ .reuse_address = true });
     defer srv.deinit(io);
@@ -51,11 +55,17 @@ pub fn serve(http: *HTTP) !void {
     log.info("HTTP Server listening at http://{f}", .{http.srv_address});
     http.alive = true;
     while (http.running) {
-        var stream: Stream = try srv.accept(io);
-        if (http.threads) |_| {
-            try future_list.appendBounded(try io.concurrent(once, .{ http, &stream, io }));
-        } else {
-            try future_list.appendBounded(io.async(once, .{ http, &stream, io }));
+        // TODO implement accept timeout
+        const ready: usize = 1;
+        if (ready > 0 and future_list.items.len < 20) {
+            var stream = try srv.accept(io);
+            try future_list.appendBounded(io.async(once, .{ http, &stream, gpa, io }));
+            continue;
+        }
+
+        while (future_list.pop()) |future_| {
+            var future = future_;
+            try future.await(io);
         }
     }
     while (future_list.pop()) |future_| {
@@ -67,14 +77,14 @@ pub fn serve(http: *HTTP) !void {
 
 const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn once(http: *HTTP, stream: *Stream, io: Io) !void {
+pub fn once(http: *HTTP, stream: *Stream, gpa: Allocator, io: Io) !void {
     var timer = try std.time.Timer.start();
     const now = try std.Io.Clock.now(.real, io);
 
     defer stream.close(io);
     log.info("HTTP connection from {f}", .{stream.socket.address});
 
-    var arena = std.heap.ArenaAllocator.init(http.alloc);
+    var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
     const a = arena.allocator();
 
@@ -160,21 +170,25 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
     };
 }
 
-fn threadFn(server: *HTTP) void {
-    server.serve() catch |err| {
+fn threadFn(server: *HTTP, gpa: Allocator, io: Io) void {
+    server.serve(gpa, io) catch |err| {
         log.err("Server failed! {}", .{err});
     };
 }
 
 test HTTP {
     const a = std.testing.allocator;
+    const io = std.testing.io;
 
     var server: Server = .{
-        .interface = .{ .http = try init(a, Router.TestingRouter, .{ .port = 9345 }, .{}) },
+        .interface = .{
+            .http = try init(&Router.TestingRouter, .localPort(9345), .default),
+        },
         .stats = null,
+        .options = .default,
     };
 
-    var thread = try std.Thread.spawn(.{}, threadFn, .{&server.interface.http});
+    var thread = try std.Thread.spawn(.{}, threadFn, .{ &server.interface.http, a, io });
 
     var client = std.http.Client{ .allocator = a, .io = std.testing.io };
     defer client.deinit();

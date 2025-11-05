@@ -75,11 +75,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var server = try verse.Server.init(alloc, routes, .{
-        .mode = .{ .http = .{ .port = 8082 } },
+    var server = try verse.Server.init(&routes, .{
+        .mode = .{ .http = .localPort(8082) },
+        .auth = .disabled,
     });
 
-    server.serve() catch |err| {
+    server.serve(alloc) catch |err| {
         std.debug.print("error: {any}", .{err});
         std.posix.exit(1);
     };

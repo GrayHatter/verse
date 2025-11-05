@@ -1,35 +1,37 @@
 //! Verse zwsgi server
 //! Speaks the uwsgi protocol
-alloc: Allocator,
-router: Router,
+router: *const Router,
 options: Options,
 auth: Auth.Provider,
-threads: ?u16,
 
 unix_file: []const u8,
 
 const zWSGI = @This();
 
 pub const Options = struct {
-    file: []const u8 = "./zwsgi_file.sock",
-    chmod: ?std.posix.mode_t = null,
-    stats: bool = false,
+    file: []const u8,
+    chmod: ?std.posix.mode_t,
+    stats: bool,
+
+    pub const default: Options = .{
+        .file = "./zwsgi_file.sock",
+        .chmod = null,
+        .stats = false,
+    };
 };
 
-pub fn init(a: Allocator, router: Router, opts: Options, sopts: Server.Options) zWSGI {
+pub fn init(router: *const Router, opts: Options, sopts: Server.Options) zWSGI {
     return .{
-        .alloc = a,
         .unix_file = opts.file,
         .router = router,
         .options = opts,
         .auth = sopts.auth,
-        .threads = sopts.threads,
     };
 }
 
 var running: bool = true;
 
-pub fn serve(z: *zWSGI) !void {
+pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
     var cwd = std.fs.cwd();
     if (cwd.access(z.unix_file, .{})) {
         log.warn("File {s} already exists, zwsgi can not start.", .{z.unix_file});
@@ -54,46 +56,32 @@ pub fn serve(z: *zWSGI) !void {
 
     if (z.options.chmod) |cmod| {
         var b: [2048:0]u8 = undefined;
-        const path = try cwd.realpath(z.unix_file, b[0..]);
-        const zpath = try z.alloc.dupeZ(u8, path);
-        defer z.alloc.free(zpath);
-        _ = std.os.linux.chmod(zpath, cmod);
+        var path: []u8 = try cwd.realpath(z.unix_file, b[0..]);
+        path[path.len] = 0;
+        _ = std.os.linux.chmod(@ptrCast(path), cmod);
     }
     log.warn("Unix server listening", .{});
 
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
-    var threaded: std.Io.Threaded = .init(z.alloc);
-    defer threaded.deinit();
-    const io = threaded.io();
-
     const uaddr = try net.UnixAddress.init(z.unix_file);
     var server: net.Server = try uaddr.listen(io, .{});
     defer server.deinit(io);
+    var pollfds: [1]pollfd = undefined;
 
     while (running) {
-        var pollfds = [1]std.os.linux.pollfd{
-            .{
-                .fd = server.socket.handle,
-                .events = std.math.maxInt(i16),
-                .revents = 0,
-            },
-        };
+        pollfds = .{.{ .fd = server.socket.handle, .events = std.math.maxInt(i16), .revents = 0 }};
         const ready = try std.posix.poll(&pollfds, 100);
-        if (ready == 0) {
-            while (future_list.pop()) |future_| {
-                var future = future_;
-                try future.await(io);
-            }
+        if (ready > 0 and future_list.items.len < 20) {
+            var stream = try server.accept(io);
+            try future_list.appendBounded(io.async(once, .{ z, &stream, gpa, io }));
             continue;
         }
-        var stream = try server.accept(io);
 
-        if (z.threads) |_| {
-            try future_list.appendBounded(try io.concurrent(once, .{ z, &stream, io }));
-        } else {
-            try future_list.appendBounded(io.async(once, .{ z, &stream, io }));
+        while (future_list.pop()) |future_| {
+            var future = future_;
+            try future.await(io);
         }
     }
     log.warn("closing, and cleaning up", .{});
@@ -101,13 +89,13 @@ pub fn serve(z: *zWSGI) !void {
 
 const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn once(z: *const zWSGI, stream: *net.Stream, io: Io) !void {
+pub fn once(z: *const zWSGI, stream: *net.Stream, gpa: Allocator, io: Io) !void {
     var timer = try std.time.Timer.start();
     const now = try std.Io.Clock.now(.real, io);
 
     defer stream.close(io);
 
-    var arena = std.heap.ArenaAllocator.init(z.alloc);
+    var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
     const a = arena.allocator();
 
@@ -316,11 +304,8 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
 }
 
 test init {
-    const a = std.testing.allocator;
-
     const router = Router.Routes(&.{});
-
-    _ = init(a, router, .{}, .{});
+    _ = init(&router, .default, .{ .mode = .{ .zwsgi = .default }, .auth = .disabled });
 }
 
 const std = @import("std");
@@ -336,6 +321,7 @@ const SA = std.posix.SA;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 const zbuiltin = @import("builtin");
 const sys_endian = zbuiltin.target.cpu.arch.endian();
+const pollfd = std.os.linux.pollfd;
 
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");

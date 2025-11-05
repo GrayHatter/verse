@@ -119,14 +119,12 @@ const Root = struct {
 };
 
 pub fn main() !void {
-    const Endpoints = verse.Endpoints(.{
-        Root,
-    });
+    const Endpoints = verse.Endpoints(.{Root});
 
-    Endpoints.serve(
-        std.heap.page_allocator,
-        .{ .mode = .{ .http = .{ .port = 8084 } } },
-    ) catch |err| {
+    Endpoints.serve(std.heap.page_allocator, .{
+        .mode = .{ .http = .localPort(8084) },
+        .auth = .disabled,
+    }) catch |err| {
         std.log.err("Unable to serve endpoints! err: [{}]", .{err});
         @panic("endpoint error");
     };

@@ -20,7 +20,10 @@ const Endpoints = verse.Endpoints(.{
 pub fn main() !void {
     Endpoints.serve(
         std.heap.page_allocator,
-        .{ .mode = .{ .http = .{ .port = 8084 } } },
+        .{
+            .mode = .{ .http = .localPort(8084) },
+            .auth = .disabled,
+        },
     ) catch |err| {
         std.log.err("Unable to serve endpoints! err: [{}]", .{err});
         @panic("endpoint error");

@@ -98,6 +98,8 @@ pub const invalid: Provider = .{
     },
 };
 
+pub const disabled: Provider = .invalid;
+
 pub const Invalid = struct {
     fn authenticate(_: *const anyopaque, _: *const Headers, _: Timestamp) Error!User {
         return error.UnknownUser;

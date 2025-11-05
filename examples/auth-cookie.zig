@@ -56,12 +56,12 @@ pub fn main() !void {
     });
 
     // Step 2: Start a normal Verse Server with an authentication Provider
-    var server = try verse.Server.init(std.heap.page_allocator, routes, .{
-        .mode = .{ .http = .{ .port = 8089 } },
+    var server = try verse.Server.init(&routes, .{
+        .mode = .{ .http = .localPort(8089) },
         .auth = cookie_auth.provider(),
     });
 
-    server.serve() catch |err| {
+    server.serve(std.heap.page_allocator) catch |err| {
         std.debug.print("error: {any}", .{err});
         std.posix.exit(1);
     };
