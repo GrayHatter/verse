@@ -170,11 +170,18 @@ pub fn main() !void {
         if (!gop.found_existing) {
             gop.value_ptr.* = this;
         }
-        const file = try cwd.openFile(io, tplt.path, .{});
+
         var r_b: [0x8000]u8 = undefined;
-        var reader = file.reader(io, &r_b);
-        reader.interface.fillMore() catch |err| if (err != error.EndOfStream) return err;
-        try emitSourceVars(a, &reader.interface, this, &global_tree);
+
+        if (cwd.openFile(io, tplt.path, .{})) |file| {
+            defer file.close(io);
+            var reader = file.reader(io, &r_b);
+            reader.interface.fillMore() catch |err| if (err != error.EndOfStream) return err;
+            try emitSourceVars(a, &reader.interface, this, &global_tree);
+        } else |_| {
+            var reader: Reader = .fixed(tplt.blob);
+            try emitSourceVars(a, &reader, this, &global_tree);
+        }
     }
 
     {
