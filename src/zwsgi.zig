@@ -4,7 +4,7 @@ router: *const Router,
 options: Options,
 auth: Auth.Provider,
 
-unix_file: []const u8,
+unix_file_name: []const u8,
 
 const zWSGI = @This();
 
@@ -22,7 +22,7 @@ pub const Options = struct {
 
 pub fn init(router: *const Router, opts: Options, sopts: Server.Options) zWSGI {
     return .{
-        .unix_file = opts.file,
+        .unix_file_name = opts.file,
         .router = router,
         .options = opts,
         .auth = sopts.auth,
@@ -32,9 +32,9 @@ pub fn init(router: *const Router, opts: Options, sopts: Server.Options) zWSGI {
 var running: bool = true;
 
 pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
-    var cwd = std.fs.cwd();
-    if (cwd.access(z.unix_file, .{})) {
-        log.warn("File {s} already exists, zwsgi can not start.", .{z.unix_file});
+    var cwd = Io.Dir.cwd();
+    if (cwd.access(io, z.unix_file_name, .{})) {
+        log.warn("File {s} already exists, zwsgi can not start.", .{z.unix_file_name});
         return error.FileExists;
     } else |err| switch (err) {
         error.FileNotFound => {},
@@ -44,31 +44,34 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
         },
     }
 
-    defer cwd.deleteFile(z.unix_file) catch |err| {
-        log.err(
-            "Unable to delete file {s} during cleanup ({}this is unrecoverable)",
-            .{ z.unix_file, err },
-        );
-        @panic("Cleanup failed");
+    defer std.fs.Dir.adaptFromNewApi(cwd).deleteFile(z.unix_file_name) catch |err| switch (err) {
+        error.FileNotFound => {}, // Not optimal, but not fatal.
+        else => {
+            log.err(
+                "Unable to delete file {s} during cleanup ({}this is unrecoverable)",
+                .{ z.unix_file_name, err },
+            );
+            @panic("Cleanup failed");
+        },
     };
 
     signalListen(SIG.INT);
 
-    if (z.options.chmod) |cmod| {
-        var b: [2048:0]u8 = undefined;
-        var path: []u8 = try cwd.realpath(z.unix_file, b[0..]);
-        path[path.len] = 0;
-        _ = std.os.linux.chmod(@ptrCast(path), cmod);
-    }
-    log.warn("Unix server listening", .{});
-
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
-    const uaddr = try net.UnixAddress.init(z.unix_file);
+    const uaddr = try net.UnixAddress.init(z.unix_file_name);
     var server: net.Server = try uaddr.listen(io, .{});
+    log.warn("Unix server listening", .{});
     defer server.deinit(io);
     var pollfds: [1]pollfd = undefined;
+
+    if (z.options.chmod) |cmod| {
+        var b: [2048:0]u8 = undefined;
+        const path: []u8 = try std.fs.Dir.adaptFromNewApi(cwd).realpath(z.unix_file_name, b[0..]);
+        b[path.len] = 0;
+        _ = std.os.linux.chmod(@ptrCast(path), cmod);
+    }
 
     while (running) {
         pollfds = .{.{ .fd = server.socket.handle, .events = std.math.maxInt(i16), .revents = 0 }};
