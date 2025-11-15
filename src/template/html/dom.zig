@@ -1,11 +1,10 @@
 alloc: Allocator,
-elems: ElemArray,
+elems: ArrayList(Elem),
 parent: ?*DOM = null,
 child: ?*DOM = null,
 opened: ?Elem = null,
 
 const DOM = @This();
-const ElemArray = std.ArrayList(Elem);
 
 pub fn create(a: Allocator) *DOM {
     const self = a.create(DOM) catch unreachable;
@@ -64,21 +63,35 @@ fn freeChildren(a: Allocator, elems: []const Elem) void {
     }
 }
 
-pub fn render(self: *DOM, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
-    if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
-    defer self.alloc.destroy(self);
+pub fn raze(d: *DOM) void {
+    freeChildren(d.alloc, d.elems.items);
+    d.elems.deinit(d.alloc);
+    d.alloc.destroy(d);
+}
+
+pub fn fmtFull(d: DOM, w: *Writer) Writer.Error!void {
+    if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
+    for (d.elems.items) |e| {
+        w.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
+    }
+}
+
+pub fn format(d: DOM, w: *Writer) Writer.Error!void {
+    for (d.elems.items) |e| {
+        w.print("{f}", .{e}) catch unreachable;
+    }
+}
+
+pub fn render(d: *DOM, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
+    if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
+    defer d.raze();
 
     var html: Writer.Allocating = .init(a);
-    for (self.elems.items) |e| {
-        if (comptime style == .full) {
-            html.writer.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
-        } else {
-            html.writer.print("{f}", .{e}) catch unreachable;
-        }
+    if (comptime style == .full) {
+        try d.fmtFull(&html.writer);
+    } else {
+        try d.format(&html.writer);
     }
-    freeChildren(a, self.elems.items);
-    self.elems.deinit(self.alloc);
-
     return try html.toOwnedSlice();
 }
 
@@ -151,6 +164,7 @@ test "open close" {
 }
 
 const std = @import("std");
+const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 const HTML = @import("../html.zig");
