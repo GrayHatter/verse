@@ -14,7 +14,7 @@ pub const WriteError = error{
 } || MemError;
 
 pub const ReadError = error{
-    IOReadFailure,
+    ReadFailed,
     RequiredHeaderMissing,
 } || MemError;
 
@@ -55,7 +55,7 @@ pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
 pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
     return Message.read(ws.frame.downstream.reader, buffer) catch |err| {
         std.debug.print("reader failed! {}\n", .{err});
-        return error.IOReadFailure;
+        return error.ReadFailed;
     };
 }
 
@@ -77,22 +77,41 @@ pub const Message = struct {
         }
     };
 
-    pub const Header = if (endian == .big)
-        packed struct(u16) {
-            extlen: u7,
-            mask: bool = false,
-            opcode: Opcode,
-            reserved: u3 = 0,
-            final: bool = true,
+    pub const Header = packed struct(u16) {
+        extlen: u7,
+        mask: bool = false,
+        opcode: Opcode,
+        reserved: u3 = 0,
+        final: bool = true,
+    };
+
+    test Header {
+        {
+            const h: Header = .{
+                .opcode = .continuation,
+                .reserved = 0,
+                .final = false,
+                .extlen = std.math.maxInt(u7),
+                .mask = true,
+            };
+            const bits: u16 = 0b0000_0000_1111_1111;
+            const t: Header = @bitCast(bits);
+            try std.testing.expectEqualDeep(t, h);
         }
-    else
-        packed struct(u16) {
-            opcode: Opcode,
-            reserved: u3 = 0,
-            final: bool = true,
-            extlen: u7,
-            mask: bool = false,
-        };
+        {
+            const h: Header = .{
+                .opcode = .continuation,
+                .reserved = 0,
+                .final = false,
+                .extlen = std.math.maxInt(u7),
+                .mask = true,
+            };
+            const bytes: [2]u8 = .{ 0b0000_0000, 0b1111_1111 };
+            var r: Reader = .fixed(&bytes);
+            const t = r.takeStruct(Header, .big);
+            try std.testing.expectEqualDeep(t, h);
+        }
+    }
 
     pub fn init(msg: []const u8, code: Opcode) Message {
         const message: Message = .{
@@ -184,7 +203,7 @@ pub const Message = struct {
         try std.testing.expectEqualStrings(expected, &dest);
     }
 
-    pub fn write(m: *const Message, w: *std.Io.Writer) !void {
+    pub fn write(m: *const Message, w: *Writer) !void {
         try w.writeAll(@ptrCast(&m.header));
         switch (m.length) {
             .tiny => {},
@@ -198,20 +217,32 @@ pub const Message = struct {
 test Message {
     {
         const msg = Message.init("Hi, Mom!", .text);
-        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 8 }, &@as([2]u8, @bitCast(msg.header)));
+        var bytes: [2]u8 = undefined;
+        var w: Writer = .fixed(&bytes);
+        try w.writeStruct(msg.header, .big);
+        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 8 }, &bytes);
     }
     {
         const msg = Message.init("Hi, Mom!" ** 15, .text);
-        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 120 }, &@as([2]u8, @bitCast(msg.header)));
+        var bytes: [2]u8 = undefined;
+        var w: Writer = .fixed(&bytes);
+        try w.writeStruct(msg.header, .big);
+        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 120 }, &bytes);
     }
     {
         const msg = Message.init("Hi, Mom!" ** 16, .text);
-        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 0x7E }, &@as([2]u8, @bitCast(msg.header)));
+        var bytes: [2]u8 = undefined;
+        var w: Writer = .fixed(&bytes);
+        try w.writeStruct(msg.header, .big);
+        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 0x7E }, &bytes);
     }
     {
         const text: [0xffff + 1]u8 = undefined;
         const msg = Message.init(&text, .text);
-        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 0x7F }, &@as([2]u8, @bitCast(msg.header)));
+        var bytes: [2]u8 = undefined;
+        var w: Writer = .fixed(&bytes);
+        try w.writeStruct(msg.header, .big);
+        try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 0x7F }, &bytes);
     }
 }
 
@@ -227,9 +258,11 @@ const Opcode = enum(u4) {
 
 const std = @import("std");
 const builtin = @import("builtin");
+const Io = std.Io;
+const Reader = Io.Reader;
+const Writer = Io.Writer;
 const endian = builtin.target.cpu.arch.endian();
 const Frame = @import("frame.zig");
 const Hash = std.crypto.hash.Sha1;
 const base64 = std.base64.standard.Encoder;
 const nativeToBig = std.mem.nativeToBig;
-const Reader = std.Io.Reader;

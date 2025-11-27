@@ -72,7 +72,11 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
     }
 
     const sigset = system.defaultSigSet();
-    const sigfd: Io.File = .{ .handle = posix.signalfd(-1, &sigset, @bitCast(linux.O{ .NONBLOCK = false })) catch @panic("fd failed") };
+    const sigfd: Io.File = .{ .handle = posix.signalfd(
+        -1,
+        &sigset,
+        @bitCast(linux.O{ .NONBLOCK = false }),
+    ) catch @panic("fd failed") };
 
     while (true) {
         pollfds = .{
@@ -95,7 +99,10 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
                 log.err("signal", .{});
                 var r_b: [@sizeOf(linux.signalfd_siginfo)]u8 = undefined;
                 var r = sigfd.reader(io, &r_b);
-                const siginfo: linux.signalfd_siginfo = r.interface.takeStruct(linux.signalfd_siginfo, system.endian) catch unreachable;
+                const siginfo: linux.signalfd_siginfo = r.interface.takeStruct(
+                    linux.signalfd_siginfo,
+                    system.endian,
+                ) catch unreachable;
                 std.debug.print("siginfo {}\n\n\n", .{siginfo});
                 break;
             }
