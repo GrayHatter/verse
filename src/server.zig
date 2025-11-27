@@ -54,8 +54,11 @@ pub fn init(router: *const Router, opts: Options) !Server {
 }
 
 pub fn serve(srv: *Server, gpa: Allocator) !void {
+    system.installSignals();
+
     var threaded: std.Io.Threaded = .init(gpa);
     defer threaded.deinit();
+    threaded.cpu_count = srv.options.threads;
     const io = threaded.io();
 
     const now = try std.Io.Clock.now(.real, io);
@@ -79,8 +82,8 @@ test Server {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-
 const Auth = @import("auth.zig");
 const Router = @import("router.zig");
 const Stats = @import("stats.zig");
 const Logging = @import("Logging.zig");
+const system = @import("system.zig");

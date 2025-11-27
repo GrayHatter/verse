@@ -55,8 +55,6 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
         },
     };
 
-    signalListen(SIG.INT);
-
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
@@ -64,33 +62,63 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
     var server: net.Server = try uaddr.listen(io, .{});
     log.warn("Unix server listening", .{});
     defer server.deinit(io);
-    var pollfds: [1]pollfd = undefined;
+    var pollfds: [2]pollfd = undefined;
 
     if (z.options.chmod) |cmod| {
         var b: [2048:0]u8 = undefined;
         const path: []u8 = try std.fs.Dir.adaptFromNewApi(cwd).realpath(z.unix_file_name, b[0..]);
         b[path.len] = 0;
-        _ = std.os.linux.chmod(@ptrCast(path), cmod);
+        _ = std.os.linux.chmod(b[0..path.len :0], cmod);
     }
 
-    while (running) {
-        pollfds = .{.{ .fd = server.socket.handle, .events = std.math.maxInt(i16), .revents = 0 }};
-        const ready = try std.posix.poll(&pollfds, 100);
+    const sigset = system.defaultSigSet();
+    const sigfd: Io.File = .{ .handle = posix.signalfd(-1, &sigset, @bitCast(linux.O{ .NONBLOCK = false })) catch @panic("fd failed") };
+
+    while (true) {
+        pollfds = .{
+            .{ .fd = sigfd.handle, .events = std.math.maxInt(i16), .revents = 0 },
+            .{ .fd = server.socket.handle, .events = std.math.maxInt(i16), .revents = 0 },
+        };
+        const ready = posix.ppoll(
+            &pollfds,
+            &.{ .sec = 10, .nsec = 100 * ns_per_ms },
+            &sigset,
+        ) catch |err| switch (err) {
+            error.SignalInterrupt => {
+                log.warn("signaled, cleaning up", .{});
+                break;
+            },
+            else => return err,
+        };
         if (ready > 0 and future_list.items.len < 20) {
-            var stream = try server.accept(io);
-            try future_list.appendBounded(io.async(once, .{ z, &stream, gpa, io }));
-            continue;
+            if (pollfds[0].revents != 0) {
+                log.err("signal", .{});
+                var r_b: [@sizeOf(linux.signalfd_siginfo)]u8 = undefined;
+                var r = sigfd.reader(io, &r_b);
+                const siginfo: linux.signalfd_siginfo = r.interface.takeStruct(linux.signalfd_siginfo, system.endian) catch unreachable;
+                std.debug.print("siginfo {}\n\n\n", .{siginfo});
+                break;
+            }
+            if (pollfds[1].revents != 0) {
+                var stream = try server.accept(io);
+                try future_list.appendBounded(io.async(once, .{ z, &stream, gpa, io }));
+                continue;
+            }
         }
 
         while (future_list.pop()) |future_| {
             var future = future_;
-            try future.await(io);
+            _ = try future.await(io);
         }
+    }
+    while (future_list.pop()) |future_| {
+        var future = future_;
+        _ = try future.await(io);
     }
     log.warn("closing, and cleaning up", .{});
 }
 
-const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
+const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
 pub fn once(z: *const zWSGI, stream: *net.Stream, gpa: Allocator, io: Io) !void {
     var timer = try std.time.Timer.start();
@@ -149,26 +177,7 @@ pub fn once(z: *const zWSGI, stream: *net.Stream, gpa: Allocator, io: Io) !void 
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);
     z.router.builder(&frame, routed_endpoint);
-    writer.interface.flush() catch unreachable;
-}
-
-export fn sig_cb(sig: std.posix.SIG, _: *const siginfo_t, _: ?*anyopaque) callconv(.c) void {
-    switch (sig) {
-        std.posix.SIG.INT => {
-            running = false;
-            log.err("SIGINT received", .{});
-        },
-        // should be unreachable
-        else => @panic("Unexpected, or unimplemented signal recieved"),
-    }
-}
-
-fn signalListen(signal: std.posix.SIG) void {
-    std.posix.sigaction(signal, &.{
-        .handler = .{ .sigaction = sig_cb },
-        .mask = std.posix.sigemptyset(),
-        .flags = SA.SIGINFO,
-    }, null);
+    writer.interface.flush() catch {};
 }
 
 pub const zWSGIParam = enum {
@@ -226,11 +235,11 @@ pub const zWSGIRequest = struct {
     fn readVars(zr: *zWSGIRequest, a: Allocator, r: *Reader) !void {
         try zr.vars.ensureTotalCapacity(a, 10);
         while (r.bufferedLen() > 0) {
-            const key_len = try r.takeInt(u16, sys_endian);
+            const key_len = try r.takeInt(u16, system.endian);
             const key_str = try r.take(key_len);
             const expected = zWSGIParam.fromStr(key_str);
 
-            const val_len = try r.takeInt(u16, sys_endian);
+            const val_len = try r.takeInt(u16, system.endian);
             if (val_len > 0) {
                 const val_str = try r.take(val_len);
 
@@ -260,7 +269,7 @@ const uProtoHeader = packed struct {
     mod2: u8 = 0,
 
     pub fn init(r: *Reader) !uProtoHeader {
-        return r.takeStruct(uProtoHeader, sys_endian);
+        return r.takeStruct(uProtoHeader, system.endian);
     }
 };
 
@@ -323,8 +332,11 @@ const SIG = std.posix.SIG;
 const SA = std.posix.SA;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 const zbuiltin = @import("builtin");
-const sys_endian = zbuiltin.target.cpu.arch.endian();
-const pollfd = std.os.linux.pollfd;
+const pollfd = linux.pollfd;
+const posix = std.posix;
+const linux = std.os.linux;
+const ns_per_ms = std.time.ns_per_ms;
+const system = @import("system.zig");
 
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");
