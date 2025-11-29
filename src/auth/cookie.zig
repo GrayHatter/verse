@@ -126,8 +126,8 @@ pub fn CookieAuth(HMAC: type) type {
                 if (headers.getCustom("Cookie")) |cookies| {
                     // This actually isn't technically invalid, it's only
                     // currently not implemented.
-                    if (cookies.list.len > 1) return error.InvalidAuth;
-                    const cookie = cookies.list[0];
+                    if (cookies.list.items.len > 1) return error.InvalidAuth;
+                    const cookie = cookies.list.items[0];
                     var itr = tokenizeSequence(u8, cookie, "; ");
                     while (itr.next()) |tkn| {
                         if (startsWith(u8, tkn, ca.cookie_name)) {

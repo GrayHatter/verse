@@ -14,33 +14,32 @@ const MTLS = @This();
 pub fn authenticate(ptr: *anyopaque, headers: *const Headers, _: Timestamp) Error!User {
     const mtls: *MTLS = @ptrCast(@alignCast(ptr));
 
-    if (headers.getCustom("MTLS_ENABLED")) |enabled| {
-        if (enabled.list.len > 1) return error.InvalidAuth;
+    if (headers.getCustomValue("MTLS_ENABLED")) |enabled| {
         // MTLS validation as currently supported here is done by the
         // reverse proxy. Constant time compare would provide no security
         // benefits here.
-        if (!std.mem.eql(u8, enabled.list[0], "SUCCESS"))
+        if (!std.mem.eql(u8, enabled, "SUCCESS"))
             return error.UnknownUser;
-    } else {
+    } else |_| {
         log.debug("MTLS not enabled", .{});
         return error.InvalidAuth;
     }
 
     if (mtls.base) |base| {
         var user: ?User = null;
-        if (headers.getCustom("MTLS_FINGERPRINT")) |enabled| {
-            // Verse does not specify an order for which is valid so it is
-            // an error if there is ever more than a single value for the
-            // mTLS fingerprint
-            if (enabled.list.len > 1) return error.InvalidAuth;
-            user = try base.lookupUser(enabled.list[0]);
+        if (headers.getCustomValue("MTLS_FINGERPRINT")) |enabled| {
+            user = try base.lookupUser(enabled);
             if (user) |*u| {
                 u.authenticated = true;
                 u.origin_provider = @ptrCast(@alignCast(ptr));
                 return u.*;
             }
-        } else {
-            log.warn("MTLS fingerprint missing", .{});
+        } else |err| switch (err) {
+            error.Missing => log.warn("MTLS fingerprint missing", .{}),
+            // Verse does not specify an order for which is valid so it is
+            // an error if there is ever more than a single value for the
+            // mTLS fingerprint
+            error.MultipleValues => return error.InvalidAuth,
         }
     }
 
@@ -81,7 +80,7 @@ test MTLS {
     var mtls = MTLS{};
     var provider_ = mtls.provider();
 
-    var headers = Headers.init();
+    var headers: Headers = .empty;
     defer headers.raze(a);
     try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
     try headers.addCustom(a, "MTLS_FINGERPRINT", "LOLTOTALLYVALID");
@@ -96,7 +95,7 @@ test MTLS {
     try std.testing.expectError(error.InvalidAuth, err);
 
     headers.raze(a);
-    headers = Headers.init();
+    headers = .empty;
 
     try headers.addCustom(a, "MTLS_ENABLED", "FAILURE!");
     const err2 = provider_.authenticate(&headers, now);

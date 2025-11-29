@@ -155,7 +155,7 @@ pub fn init(
         .downstream = downstream,
         .uri = try Uri.split(req.uri),
         .auth_provider = auth,
-        .headers = Headers.init(),
+        .headers = .empty,
         .user = auth.authenticate(&req.headers, req.now.toSeconds()) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),

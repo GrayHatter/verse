@@ -77,6 +77,20 @@ pub const Methods = enum(u9) {
         return error.UnknownMethod;
     }
 
+    pub fn fromStdHttp(m: std.http.Method) Methods {
+        return switch (m) {
+            .GET => .GET,
+            .POST => .POST,
+            .HEAD => .HEAD,
+            .PUT => .PUT,
+            .DELETE => .DELETE,
+            .CONNECT => .CONNECT,
+            .OPTIONS => .OPTIONS,
+            .TRACE => .TRACE,
+            else => @panic("not implemented"),
+        };
+    }
+
     pub fn readOnly(m: Methods) bool {
         return switch (m) {
             .GET, .HEAD, .OPTIONS => true,
@@ -135,10 +149,10 @@ fn initCommon(
     now: Timestamp,
 ) !Request {
     var method = _method;
-    if (headers.getCustom("Upgrade")) |val| {
-        std.debug.print("Upgrade: {s}\n", .{val.list[0]});
+    if (headers.getCustomValue("Upgrade")) |val| {
+        log.info("Upgrade Header: {s}", .{val});
         method = Methods.WEBSOCKET;
-    }
+    } else |_| {}
 
     return .{
         .accept = accept,
@@ -163,7 +177,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
     const zk = &zwsgi.known;
     const uri: ?[]const u8 = zk.get(.REQUEST_PATH);
     const method = Methods.fromStr(zk.get(.REQUEST_METHOD) orelse "GET") catch {
-        std.debug.print("Unsupported Method seen '{any}'", .{zk.get(.REQUEST_METHOD)});
+        log.err("Unsupported Method seen '{any}'", .{zk.get(.REQUEST_METHOD)});
         return error.InvalidRequest;
     };
     const remote_addr: ?RemoteAddr = zk.get(.REMOTE_ADDR);
@@ -177,7 +191,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
     const proto: []const u8 = zk.get(.SERVER_PROTOCOL) orelse "ERROR";
     const secure: bool = if (zk.get(.HTTPS)) |sec| eql(u8, sec, "on") else false;
 
-    var headers = Headers.init();
+    var headers: Headers = .empty;
     for (zwsgi.vars.items) |v| {
         try headers.addCustom(a, v.key, v.val);
     }
@@ -213,7 +227,7 @@ pub fn initHttp(
     data: Data,
     now: Timestamp,
 ) !Request {
-    var headers = Headers.init();
+    var headers: Headers = .empty;
 
     var accept: ?Accept = null;
     var host: ?Host = null;
@@ -255,7 +269,7 @@ pub fn initHttp(
     return initCommon(
         a,
         remote_addr,
-        translateStdHttp(http.head.method),
+        .fromStdHttp(http.head.method),
         http.head.target,
         host,
         ua_string,
@@ -272,20 +286,6 @@ pub fn initHttp(
     );
 }
 
-fn translateStdHttp(m: std.http.Method) Methods {
-    return switch (m) {
-        .GET => .GET,
-        .POST => .POST,
-        .HEAD => .HEAD,
-        .PUT => .PUT,
-        .DELETE => .DELETE,
-        .CONNECT => .CONNECT,
-        .OPTIONS => .OPTIONS,
-        .TRACE => .TRACE,
-        else => @panic("not implemented"),
-    };
-}
-
 test Request {
     std.testing.refAllDecls(Request);
 }
@@ -294,6 +294,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Stream = std.Io.net.Stream;
 const Timestamp = std.Io.Timestamp;
+const log = std.log.scoped(.verse);
 const indexOf = std.mem.indexOf;
 const startsWith = std.mem.startsWith;
 const lastIndexOfScalar = std.mem.lastIndexOfScalar;

@@ -1,7 +1,9 @@
 known: KnownMap,
-extended: ExtendedMap,
+extra: ExtendedMap,
 
 const Headers = @This();
+
+pub const empty: Headers = .{ .known = .{}, .extra = .{} };
 
 pub const Expected = enum {
     accept,
@@ -23,52 +25,44 @@ pub const Header = struct {
 /// Unstable API that may get removed
 pub const HeaderList = struct {
     name: []const u8,
-    list: [][]const u8,
+    list: ArrayList([]const u8),
 };
 
 const KnownMap = std.EnumMap(Expected, []const u8);
 const ExtendedMap = std.StringArrayHashMapUnmanaged(HeaderList);
 
-pub fn init() Headers {
-    return .{
-        .known = KnownMap{},
-        .extended = ExtendedMap{},
-    };
-}
-
 pub fn raze(h: *Headers, a: Allocator) void {
-    const values = h.extended.values();
-    for (values) |val| {
-        a.free(val.list);
+    const values = h.extra.values();
+    for (values) |*val| {
+        val.list.deinit(a);
     }
-    h.extended.deinit(a);
+    h.extra.deinit(a);
 }
 
 fn normalize(_: []const u8) !void {
     comptime unreachable;
 }
 
+/// Caller is responsible for the lifetime of both `name` and `value`. Both must outlive
+/// `Headers`
 pub fn addCustom(h: *Headers, a: Allocator, name: []const u8, value: []const u8) !void {
     // TODO normalize lower
-    const gop = try h.extended.getOrPut(a, name);
+    const gop = try h.extra.getOrPut(a, name);
     const hl: *HeaderList = gop.value_ptr;
     if (gop.found_existing) {
-        if (!a.resize(hl.list, hl.list.len + 1)) {
-            hl.list = try a.realloc(hl.list, hl.list.len + 1);
-        }
-        hl.list[hl.list.len - 1] = value;
+        try hl.*.list.append(a, value);
     } else {
         hl.* = .{
             .name = name,
-            .list = try a.alloc([]const u8, 1),
+            .list = try .initCapacity(a, 4),
         };
-        hl.list[0] = value;
+        hl.list.appendAssumeCapacity(value);
     }
 }
 
 pub fn getCustom(h: *const Headers, name: []const u8) ?HeaderList {
     // TODO fix me
-    if (h.extended.get(name)) |header| {
+    if (h.extra.get(name)) |header| {
         return .{
             .name = name,
             .list = header.list,
@@ -76,10 +70,24 @@ pub fn getCustom(h: *const Headers, name: []const u8) ?HeaderList {
     } else return null;
 }
 
+/// Returns the value associated with the given header or an error if it's missing or there is
+/// more than one header for `name`.
+pub fn getCustomValue(h: *const Headers, name: []const u8) error{ Missing, MultipleValues }![]const u8 {
+    // TODO fix me
+    if (h.extra.get(name)) |header| {
+        if (header.list.items.len == 1) {
+            return header.list.items[0];
+        } else if (header.list.items.len > 1) {
+            return error.MultipleValues;
+        }
+    }
+    return error.Missing;
+}
+
 /// Starting an iteration will lock the map pointers, callers must complete the
 /// iteration, or manually unlock internal pointers. See also: Iterator.finish();
 pub fn iterator(h: *Headers) Iterator {
-    return Iterator.init(h);
+    return .init(h);
 }
 
 pub const Iterator = struct {
@@ -90,20 +98,20 @@ pub const Iterator = struct {
     current_idx: usize = 0,
 
     pub fn init(h: *Headers) Iterator {
-        h.extended.lockPointers();
+        h.extra.lockPointers();
         return .{
             .header = h,
-            .inner = h.extended.iterator(),
+            .inner = h.extra.iterator(),
         };
     }
 
     pub fn next(i: *Iterator) ?Header {
         if (i.current) |current| {
-            if (i.current_idx < current.list.len) {
+            if (i.current_idx < current.list.items.len) {
                 defer i.current_idx += 1;
                 return .{
                     .name = current.name,
-                    .value = current.list[i.current_idx],
+                    .value = current.list.items[i.current_idx],
                 };
             }
         }
@@ -113,7 +121,7 @@ pub const Iterator = struct {
         if (i.entry) |entry| {
             i.current = entry.value_ptr;
         } else {
-            i.header.extended.unlockPointers();
+            i.header.extra.unlockPointers();
             return null;
         }
         return i.next();
@@ -139,10 +147,10 @@ pub fn toSlice(h: *Headers, a: Allocator) ![]Header {
 }
 
 pub fn fmt(h: Headers, w: *Writer) !void {
-    var iter = h.extended.iterator();
+    var iter = h.extra.iterator();
 
     while (iter.next()) |next| {
-        for (next.value_ptr.list) |this| {
+        for (next.value_ptr.list.items) |this| {
             try w.print("{s}: {s}\r\n", .{ next.value_ptr.name, this });
         }
     }
@@ -154,23 +162,24 @@ test {
 
 test Headers {
     const a = std.testing.allocator;
-    var hmap = init();
+    var hmap: Headers = .empty;
     defer hmap.raze(a);
     try hmap.addCustom(a, "first", "1");
     try hmap.addCustom(a, "first", "2");
     try hmap.addCustom(a, "first", "3");
     try hmap.addCustom(a, "second", "4");
 
-    try std.testing.expectEqual(2, hmap.extended.count());
-    const first = hmap.extended.get("first");
-    try std.testing.expectEqualStrings(first.?.list[0], "1");
-    try std.testing.expectEqualStrings(first.?.list[1], "2");
-    try std.testing.expectEqualStrings(first.?.list[2], "3");
-    const second = hmap.extended.get("second");
-    try std.testing.expectEqualStrings(second.?.list[0], "4");
+    try std.testing.expectEqual(2, hmap.extra.count());
+    const first = hmap.extra.get("first");
+    try std.testing.expectEqualStrings(first.?.list.items[0], "1");
+    try std.testing.expectEqualStrings(first.?.list.items[1], "2");
+    try std.testing.expectEqualStrings(first.?.list.items[2], "3");
+    const second = hmap.extra.get("second");
+    try std.testing.expectEqualStrings(second.?.list.items[0], "4");
 }
 
 const std = @import("std");
+const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 const EnumMap = std.EnumMap;

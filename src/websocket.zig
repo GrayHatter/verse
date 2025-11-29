@@ -19,9 +19,7 @@ pub const ReadError = error{
 } || MemError;
 
 pub fn accept(frame: *Frame) Error!Websocket {
-    const key = if (frame.request.headers.getCustom("Sec-WebSocket-Key")) |key|
-        key.list[0]
-    else
+    const key: []const u8 = frame.request.headers.getCustomValue("Sec-WebSocket-Key") catch
         return error.RequiredHeaderMissing;
 
     try respond(frame, key);
