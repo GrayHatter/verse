@@ -1,4 +1,5 @@
-const std = @import("std");
+const ThisBuild = @This();
+
 const zon: struct {
     name: @TypeOf(.enum_literal),
     version: []const u8,
@@ -19,8 +20,9 @@ pub fn build(b: *std.Build) !void {
     //std.debug.print("default: {s}\n", .{b.default_step.name});
 
     // root build options
-    const template_path: ?std.Build.LazyPath = b.option(std.Build.LazyPath, "template-path", "path for the templates generated at comptime");
-    const bot_detection = b.option(bool, "bot-detection", "path for the templates generated at comptime") orelse
+    const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
+    const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
+    const bot_detection = b.option(bool, "bot-detection", "[not-implemented] disable bot detection") orelse
         false;
 
     const options = b.addOptions();
@@ -38,15 +40,16 @@ pub fn build(b: *std.Build) !void {
 
     // Set up template compiler
     var compiler = Compiler.init(b);
-    if (template_path) |path| {
-        compiler.addDir(path);
-    } else {
-        compiler.addDir(b.path("examples/templates/"));
-        compiler.addDir(b.path("src/builtin-html/"));
+    if (templates_enabled) {
+        if (template_path) |path| {
+            compiler.addDir(path);
+        } else {
+            compiler.addDir(b.path("examples/templates/"));
+            compiler.addDir(b.path("src/builtin-html/"));
+        }
+        compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
+        compiler.collect() catch @panic("unreachable");
     }
-    compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
-    compiler.collect() catch @panic("unreachable");
-
     const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
 
     const structc = b.addExecutable(.{
@@ -76,7 +79,7 @@ pub fn build(b: *std.Build) !void {
     const run_lib_tests = b.addRunArtifact(lib_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_tests.step);
-    const quick_test_step = b.step("unit-test", "Run unit tests only [exclude examples]");
+    const quick_test_step = b.step("quicktest", "Run unit tests only [exclude examples]");
     quick_test_step.dependOn(&run_lib_tests.step);
 
     const docs = b.addObject(.{ .name = "verse", .root_module = verse_lib });
@@ -121,15 +124,13 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-const ThisBuild = @This();
-
 const Compiler = struct {
     b: *std.Build,
-    dirs: std.ArrayListUnmanaged(std.Build.LazyPath),
-    files: std.ArrayListUnmanaged(std.Build.LazyPath),
-    collected: std.ArrayListUnmanaged(std.Build.LazyPath),
-    templates: ?*std.Build.Module = null,
-    structs: ?*std.Build.Module = null,
+    dirs: ArrayList(LazyPath),
+    files: ArrayList(LazyPath),
+    collected: ArrayList(LazyPath),
+    templates: ?*Module = null,
+    structs: ?*Module = null,
     debugging: bool = false,
 
     pub fn init(b: *std.Build) Compiler {
@@ -145,26 +146,26 @@ const Compiler = struct {
         self.collected.deinit();
     }
 
-    pub fn depPath(self: *Compiler, path: []const u8) std.Build.LazyPath {
+    pub fn depPath(self: *Compiler, path: []const u8) LazyPath {
         return if (self.b.available_deps.len > 0)
             self.b.dependencyFromBuildZig(ThisBuild, .{}).path(path)
         else
             self.b.path(path);
     }
 
-    pub fn addDir(self: *Compiler, dir: std.Build.LazyPath) void {
+    pub fn addDir(self: *Compiler, dir: LazyPath) void {
         self.dirs.append(self.b.allocator, dir) catch @panic("OOM");
         self.templates = null;
         self.structs = null;
     }
 
-    pub fn addFile(self: *Compiler, file: std.Build.LazyPath) void {
+    pub fn addFile(self: *Compiler, file: LazyPath) void {
         self.files.append(self.b.allocator, file) catch @panic("OOM");
         self.templates = null;
         self.structs = null;
     }
 
-    pub fn buildTemplates(self: *Compiler) !*std.Build.Module {
+    pub fn buildTemplates(self: *Compiler) !*Module {
         if (self.templates) |t| return t;
         const compiled = self.b.createModule(.{
             .root_source_file = self.depPath("src/template/comptime.zig"),
@@ -184,7 +185,7 @@ const Compiler = struct {
         return compiled;
     }
 
-    pub fn buildStructs(self: *Compiler, comp: *std.Build.Step.Compile) !*std.Build.Module {
+    pub fn buildStructs(self: *Compiler, comp: *std.Build.Step.Compile) !*Module {
         if (self.structs) |s| return s;
 
         if (self.debugging) std.debug.print("building structs for {}\n", .{self.collected.items.len});
@@ -205,7 +206,7 @@ const Compiler = struct {
         }
     }
 
-    fn collectDir(self: *Compiler, path: std.Build.LazyPath) !void {
+    fn collectDir(self: *Compiler, path: LazyPath) !void {
         var idir = path.getPath3(self.b, null).openDir("", .{ .iterate = true }) catch |err| {
             std.debug.print("template build error {} for srcdir {}\n", .{ err, path });
             return err;
@@ -261,3 +262,8 @@ fn version(b: *std.Build) []const u8 {
     //std.debug.print("version {s}\n", .{final});
     return final;
 }
+
+const std = @import("std");
+const ArrayList = std.ArrayList;
+const LazyPath = std.Build.LazyPath;
+const Module = std.Build.Module;
