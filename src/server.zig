@@ -26,6 +26,7 @@ pub const Interface = union(RunModes) {
 };
 
 pub const Options = struct {
+    io: ?Io = null,
     mode: RunMode,
     auth: Auth.Provider,
     stats: ?Stats.Options = null,
@@ -33,6 +34,7 @@ pub const Options = struct {
     logging: Logging = .stdout,
 
     pub const default: Options = .{
+        .io = null,
         .mode = .{ .http = .localdevel },
         .auth = .disabled,
         .threads = 1,
@@ -59,7 +61,7 @@ pub fn serve(srv: *Server, gpa: Allocator) !void {
     var threaded: std.Io.Threaded = .init(gpa);
     defer threaded.deinit();
     threaded.cpu_count = srv.options.threads;
-    const io = threaded.io();
+    const io: Io = srv.options.io orelse threaded.io();
 
     const now = try std.Io.Clock.now(.real, io);
     if (srv.options.stats) |opt| {
@@ -81,6 +83,7 @@ test Server {
 }
 
 const std = @import("std");
+const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const Auth = @import("auth.zig");
 const Router = @import("router.zig");
