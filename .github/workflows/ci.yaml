@@ -21,6 +21,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: '0.14.0'
+          mirror: 'https://gr.ht/zig/'
+          version: '0.16.0-dev.1484+d0ba6642b'
       - name: Run Tests
         run: zig build test
