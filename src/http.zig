@@ -202,7 +202,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
 }
 
 fn threadFn(server: *HTTP, gpa: Allocator, io: Io) void {
-    var srv = server.srv_address.listen(io, .{}) catch unreachable;
+    var srv = server.srv_address.listen(io, .{ .reuse_address = true }) catch unreachable;
     defer srv.deinit(io);
     var stream = srv.accept(io) catch unreachable;
 

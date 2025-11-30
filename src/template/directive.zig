@@ -5,8 +5,9 @@ tag_block: []const u8,
 tag_block_body: ?[]const u8 = null,
 tag_block_skip: ?usize = null,
 html_type: ?HtmlType = null,
+scope: Scope = .local,
 
-pub const Directive = @This();
+const Directive = @This();
 
 pub const Otherwise = union(enum) {
     required: void,
@@ -46,15 +47,13 @@ pub const HtmlType = enum {
     }
 
     pub fn nullable(kt: HtmlType) bool {
-        return switch (kt) {
-            .usize,
-            .isize,
-            .@"enum",
-            .humanize,
-            => false,
-            .@"?usize" => true,
-        };
+        return @tagName(kt)[0] == '?';
     }
+};
+
+pub const Scope = enum {
+    local,
+    global,
 };
 
 pub fn init(str: []const u8) ?Directive {
@@ -251,13 +250,22 @@ fn findTag(blob: []const u8) ![]const u8 {
 }
 
 pub const TagAttribute = enum {
+    /// adds the specified string to the generate enum
     @"enum",
+    /// Provides default text for <Tags>
     default,
+    /// Use a comptime known length and array
     exact,
+    /// Used in <Directives>, specifies the name for the following tags
     name,
+    /// Used in <Directives>, specifies the text returned for the given/active tag
     text,
+    /// Use supported zig type
     type,
+    /// Use a builtin template for the "body" of this tag
     use,
+    /// Defines the scope for the tag body, either global or local
+    scope,
 };
 
 pub const TagAttrMap = std.EnumMap(TagAttribute, []const u8);

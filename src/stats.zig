@@ -177,7 +177,7 @@ pub const Endpoint = struct {
             .open => include_ip = true,
         }
 
-        var data: [60]S.VerseStatsList = @splat(
+        var data: [60]S.VerseStatsHtml.VerseStatsList = @splat(
             .{
                 .code = 500,
                 .ip_address = "",

@@ -1,15 +1,14 @@
 pub const AbstTree = struct {
     name: []u8,
     children: ArrayList(Member),
+    trees: StrHashMap(*AbstTree),
 
     pub const Member = struct {
         name: []u8,
         kind: []u8,
 
-        pub fn format(self: Member, w: *Writer) !void {
-            try w.writeAll("    ");
-            try w.writeAll(self.name);
-            try w.writeAll(self.kind);
+        pub fn format(m: Member, w: *Writer) !void {
+            try w.print("    {s}: {s},\n", .{ m.name, m.kind });
         }
     };
 
@@ -18,6 +17,7 @@ pub const AbstTree = struct {
         self.* = .{
             .name = try a.dupe(u8, name),
             .children = .initBuffer(try a.alloc(Member, 50)),
+            .trees = .{},
         };
         return self;
     }
@@ -53,20 +53,25 @@ pub const AbstTree = struct {
         try self.children.appendBounded(new);
     }
 
-    pub fn format(self: AbstTree, w: *Writer) !void {
+    pub fn format(at: AbstTree, w: *Writer) !void {
         try w.writeAll("pub const ");
-        try w.writeAll(self.name);
+        try w.writeAll(at.name);
         try w.writeAll(" = struct {\n");
-        for (self.children.items) |child| {
+        for (at.children.items) |child| {
             try w.print("{f}", .{child});
         }
         try w.writeAll(
             \\
-            \\    pub const Translate = AutoTranslate(@This());
-            \\    pub const translate = Translate.translate;
-            \\    pub const translateAlloc = Translate.translateAlloc;
+            \\    pub const translate = AutoTranslate(@This()).translate;
+            \\    pub const translateAlloc = AutoTranslate(@This()).translateAlloc;
             \\
         );
+        var itr = at.trees.iterator();
+        while (itr.next()) |each| {
+            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            try w.print("{f}\n", .{each.value_ptr.*});
+        }
+
         try w.writeAll("};\n");
     }
 };
@@ -323,28 +328,25 @@ fn createSwitch(a: Allocator, name: []const u8, text: []const u8) !void {
 fn htmlType(a: Allocator, html_type: ?Directive.HtmlType, struct_name: []const u8) ![]u8 {
     if (html_type) |htype| {
         return switch (htype) {
-            .@"enum" => try allocPrint(a, ": {s},\n", .{struct_name}),
+            .@"enum" => try a.dupe(u8, struct_name),
             .usize,
             .isize,
             .@"?usize",
-            => try allocPrint(a, ": {s},\n", .{@tagName(htype)}),
-            .humanize => try allocPrint(a, ": i64,\n", .{}),
+            => try a.dupe(u8, @tagName(htype)),
+            .humanize => try a.dupe(u8, "i64"),
         };
     } else {
-        return try allocPrint(a, ": []const u8,\n", .{});
+        return try a.dupe(u8, "[]const u8");
     }
 }
 
 pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHashMap(*AbstTree)) !void {
     while (ir.bufferedLen() > 0) {
-        //if (ir.discardDelimiterExclusive('<')) |offset| {
         _ = try ir.discardDelimiterExclusive('<');
-        //if (try ir.peekDelimiterInclusive('>')) |tag| _ = tag;
         const str = ir.buffered();
         std.debug.assert(str.len == 0 or str[0] == '<');
         if (Directive.init(ir.buffered())) |drct| {
             ir.toss(drct.tag_block.len);
-            //_ = genType(drct);
             const s_name = makeStructName(drct.noun);
             const f_name = try allocFieldName(a, drct.noun);
 
@@ -353,16 +355,16 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                     const kind: []u8 = switch (drct.otherwise) {
                         .required => try htmlType(a, drct.html_type, s_name),
                         .exact => unreachable,
-                        .default => |default| try allocPrint(a, ": []const u8 = \"{s}\",\n", .{default}),
+                        .default => |default| try allocPrint(a, "[]const u8 = \"{s}\"", .{default}),
                         .delete => if (drct.html_type) |_|
                             try htmlType(a, drct.html_type, s_name)
                         else
-                            try allocPrint(a, ": ?[]const u8 = null,\n", .{}),
+                            try allocPrint(a, "?[]const u8 = null", .{}),
                         .template => |_| {
                             const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
                             try parent.append(.{
                                 .name = try a.dupe(u8, rf_name),
-                                .kind = try allocPrint(a, ": ?{s},\n", .{s_name}),
+                                .kind = try allocPrint(a, "?{s}", .{s_name}),
                             });
                             continue;
                         },
@@ -378,16 +380,13 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                 .@"switch" => {
                     const sw_name = try a.dupe(u8, s_name);
                     try createSwitch(a, sw_name, drct.tag_block_body.?);
-                    try parent.append(.{ .name = f_name, .kind = try allocPrint(a, ": {s},\n", .{sw_name}) });
+                    try parent.append(.{ .name = f_name, .kind = try a.dupe(u8, sw_name) });
                 },
                 else => |verb| {
-                    var this: *AbstTree = try .init(a, s_name);
-                    const gop = try root.getOrPut(a, this.name);
-                    if (!gop.found_existing) {
-                        gop.value_ptr.* = this;
-                    } else {
-                        this = gop.value_ptr.*;
-                    }
+                    const tree: *StrHashMap(*AbstTree) = if (drct.scope == .global)
+                        root
+                    else
+                        &parent.trees;
 
                     switch (verb) {
                         .directive => unreachable,
@@ -395,33 +394,48 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                         .@"switch" => unreachable, // recursive switch not implemented
                         .foreach => {
                             const body_blob: []const u8, const kind: []u8 = switch (drct.otherwise) {
-                                .exact => |exact| .{ drct.tag_block_body.?, try allocPrint(a, ": [{}]{s},\n", .{ exact, s_name }) },
-                                .template => |template| .{ template.blob, try allocPrint(a, ": []const {s},\n", .{s_name}) },
-                                else => .{ drct.tag_block_body.?, try allocPrint(a, ": []const {s},\n", .{s_name}) },
+                                .exact => |exact| .{ drct.tag_block_body.?, try allocPrint(a, "[{}]{s}", .{ exact, s_name }) },
+                                .template => |template| .{ template.blob, try allocPrint(a, "[]const {s}", .{s_name}) },
+                                else => .{ drct.tag_block_body.?, try allocPrint(a, "[]const {s}", .{s_name}) },
                             };
                             try parent.append(.{ .name = f_name, .kind = kind });
+
+                            const gop = try tree.getOrPut(a, s_name);
+                            if (!gop.found_existing) gop.value_ptr.* = try .init(a, s_name);
+                            const this: *AbstTree = gop.value_ptr.*;
+
                             var body: Reader = .fixed(body_blob);
-                            try emitSourceVars(a, &body, this, root);
+                            try emitSourceVars(a, &body, this, tree);
                         },
                         .split => {
-                            const kind = try allocPrint(a, ": []const []const u8,\n", .{});
+                            const kind = try allocPrint(a, "[]const []const u8", .{});
                             try parent.append(.{ .name = f_name, .kind = kind });
                         },
                         .case => {
-                            const kind = try allocPrint(a, "{s}", .{s_name});
+                            const kind = try a.dupe(u8, s_name);
                             try parent.append(.{ .name = f_name, .kind = kind });
+
+                            const gop = try root.getOrPut(a, s_name);
+                            if (!gop.found_existing) gop.value_ptr.* = try .init(a, s_name);
+                            const this: *AbstTree = gop.value_ptr.*;
+
                             var body: Reader = .fixed(drct.tag_block_body.?);
-                            try emitSourceVars(a, &body, this, root);
+                            try emitSourceVars(a, &body, this, tree);
                         },
                         .with => {
-                            const kind = try allocPrint(a, ": ?{s},\n", .{s_name});
+                            const kind = try allocPrint(a, "?{s}", .{s_name});
                             try parent.append(.{ .name = f_name, .kind = kind });
+
+                            const gop = try tree.getOrPut(a, s_name);
+                            if (!gop.found_existing) gop.value_ptr.* = try .init(a, s_name);
+                            const this: *AbstTree = gop.value_ptr.*;
+
                             var body: Reader = .fixed(drct.tag_block_body.?);
-                            try emitSourceVars(a, &body, this, root);
+                            try emitSourceVars(a, &body, this, tree);
                         },
                         .build => {
                             const tmpl_name = makeStructName(drct.otherwise.template.name);
-                            const kind = try allocPrint(a, ": {s},\n", .{tmpl_name});
+                            const kind = try a.dupe(u8, tmpl_name);
                             try parent.append(.{ .name = f_name, .kind = kind });
                         },
                     }
