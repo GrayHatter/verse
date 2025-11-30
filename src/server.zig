@@ -60,7 +60,7 @@ pub fn serve(srv: *Server, gpa: Allocator) !void {
 
     var threaded: std.Io.Threaded = .init(gpa);
     defer threaded.deinit();
-    threaded.cpu_count = srv.options.threads;
+    threaded.cpu_count = @max(2, srv.options.threads);
     const io: Io = srv.options.io orelse threaded.io();
 
     const now = try std.Io.Clock.now(.real, io);

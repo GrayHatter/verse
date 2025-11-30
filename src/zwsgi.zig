@@ -72,10 +72,10 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
     }
 
     const sigset = system.defaultSigSet();
-    const sigfd: Io.File = .{ .handle = posix.signalfd(
+    const sigfd: Io.File = .{ .handle = system.signalfd(
         -1,
         &sigset,
-        @bitCast(linux.O{ .NONBLOCK = false }),
+        @bitCast(system.O{ .NONBLOCK = false }),
     ) catch @panic("fd failed") };
 
     while (true) {
@@ -83,7 +83,7 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
             .{ .fd = sigfd.handle, .events = std.math.maxInt(i16), .revents = 0 },
             .{ .fd = server.socket.handle, .events = std.math.maxInt(i16), .revents = 0 },
         };
-        const ready = posix.ppoll(
+        const ready = system.ppoll(
             &pollfds,
             &.{ .sec = 10, .nsec = 100 * ns_per_ms },
             &sigset,
@@ -97,10 +97,10 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
         if (ready > 0 and future_list.items.len < 20) {
             if (pollfds[0].revents != 0) {
                 log.err("signal", .{});
-                var r_b: [@sizeOf(linux.signalfd_siginfo)]u8 = undefined;
+                var r_b: [@sizeOf(system.signalfd_siginfo)]u8 = undefined;
                 var r = sigfd.reader(io, &r_b);
-                const siginfo: linux.signalfd_siginfo = r.interface.takeStruct(
-                    linux.signalfd_siginfo,
+                const siginfo: system.signalfd_siginfo = r.interface.takeStruct(
+                    system.signalfd_siginfo,
                     system.endian,
                 ) catch unreachable;
                 std.debug.print("siginfo {}\n\n\n", .{siginfo});
@@ -339,11 +339,9 @@ const SIG = std.posix.SIG;
 const SA = std.posix.SA;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 const zbuiltin = @import("builtin");
-const pollfd = linux.pollfd;
-const posix = std.posix;
-const linux = std.os.linux;
 const ns_per_ms = std.time.ns_per_ms;
 const system = @import("system.zig");
+const pollfd = system.pollfd;
 
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");

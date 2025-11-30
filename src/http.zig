@@ -3,9 +3,6 @@ router: *const Router,
 auth: Auth.Provider,
 srv_address: net.IpAddress,
 
-running: bool = true,
-alive: bool = false,
-
 const HTTP = @This();
 
 const MAX_HEADER_SIZE = 1 <<| 13;
@@ -49,18 +46,52 @@ pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
-    var srv = try http.srv_address.listen(io, .{ .reuse_address = true });
+    var srv = try http.srv_address.listen(io, .{});
     defer srv.deinit(io);
 
+    var pollfds: [2]pollfd = undefined;
+
+    const sigset = system.defaultSigSet();
+    const sigfd: Io.File = .{ .handle = system.signalfd(
+        -1,
+        &sigset,
+        @bitCast(system.O{ .NONBLOCK = false }),
+    ) catch @panic("fd failed") };
+
     log.info("HTTP Server listening at http://{f}", .{http.srv_address});
-    http.alive = true;
-    while (http.running) {
-        // TODO implement accept timeout
-        const ready: usize = 1;
+    while (true) {
+        pollfds = .{
+            .{ .fd = sigfd.handle, .events = std.math.maxInt(i16), .revents = 0 },
+            .{ .fd = srv.socket.handle, .events = std.math.maxInt(i16), .revents = 0 },
+        };
+        const ready = system.ppoll(
+            &pollfds,
+            &.{ .sec = 10, .nsec = 100 * ns_per_ms },
+            &sigset,
+        ) catch |err| switch (err) {
+            error.SignalInterrupt => {
+                log.warn("signaled, cleaning up", .{});
+                break;
+            },
+            else => return err,
+        };
         if (ready > 0 and future_list.items.len < 20) {
-            var stream = try srv.accept(io);
-            try future_list.appendBounded(io.async(once, .{ http, &stream, gpa, io }));
-            continue;
+            if (pollfds[0].revents != 0) {
+                log.err("signal", .{});
+                var r_b: [@sizeOf(system.signalfd_siginfo)]u8 = undefined;
+                var r = sigfd.reader(io, &r_b);
+                const siginfo: system.signalfd_siginfo = r.interface.takeStruct(
+                    system.signalfd_siginfo,
+                    system.endian,
+                ) catch unreachable;
+                log.debug("siginfo {}\n\n\n", .{siginfo});
+                break;
+            }
+            if (pollfds[1].revents != 0) {
+                var stream = try srv.accept(io);
+                try future_list.appendBounded(io.async(once, .{ http, &stream, gpa, io }));
+                continue;
+            }
         }
 
         while (future_list.pop()) |future_| {
@@ -171,7 +202,11 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
 }
 
 fn threadFn(server: *HTTP, gpa: Allocator, io: Io) void {
-    server.serve(gpa, io) catch |err| {
+    var srv = server.srv_address.listen(io, .{}) catch unreachable;
+    defer srv.deinit(io);
+    var stream = srv.accept(io) catch unreachable;
+
+    once(server, &stream, gpa, io) catch |err| {
         log.err("Server failed! {}", .{err});
     };
 }
@@ -192,9 +227,8 @@ test HTTP {
 
     var client = std.http.Client{ .allocator = a, .io = std.testing.io };
     defer client.deinit();
-    while (!server.interface.http.alive) {}
+    try io.sleep(.fromMilliseconds(100), .real);
 
-    server.interface.http.running = false;
     const fetch = try client.fetch(.{
         .location = .{ .url = "http://localhost:9345/" },
         .method = .GET,
@@ -219,3 +253,7 @@ const ArrayList = std.ArrayList;
 const log = std.log.scoped(.Verse);
 const HttpServer = std.http.Server;
 const Io = std.Io;
+const ns_per_ms = std.time.ns_per_ms;
+
+const system = @import("system.zig");
+const pollfd = system.pollfd;
