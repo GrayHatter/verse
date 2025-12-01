@@ -135,7 +135,7 @@ fn comptimeFields(text: []const u8) [comptimeCountNames(text)]std.builtin.Type.S
 
 fn comptimeStruct(text: []const u8) type {
     @setEvalBranchQuota(10000);
-    return @Type(.{ .@"struct" = .{
+    return @TypeOf(.{ .@"struct" = .{
         .layout = .auto,
         .fields = &comptimeFields(text),
         .decls = &.{},
