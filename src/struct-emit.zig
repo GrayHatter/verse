@@ -217,7 +217,7 @@ pub fn main() !void {
 fn genType(d: Directive) type {
     std.debug.print("dir {any}\n", .{d});
 
-    return @Type(.{});
+    return @TypeOf(.{});
 }
 
 pub const EnumLiteral = struct {
