@@ -169,7 +169,8 @@ pub fn main() !void {
     );
 
     for (compiled.data) |tplt| {
-        const name = makeStructName(tplt.path);
+        var sn_b: [0xffff]u8 = undefined;
+        const name = makeStructName(tplt.path, &sn_b);
         const this = try AbstTree.init(a, name);
         const gop = try global_tree.getOrPut(a, this.name);
         if (!gop.found_existing) {
@@ -212,12 +213,6 @@ pub fn main() !void {
             try wout.print("{f}\n", .{each.value_ptr.*});
         }
     }
-}
-
-fn genType(d: Directive) type {
-    std.debug.print("dir {any}\n", .{d});
-
-    return @TypeOf(.{});
 }
 
 pub const EnumLiteral = struct {
@@ -282,11 +277,12 @@ pub const Switch = struct {
     pub fn init(a: Allocator, sname: []const u8, text: []const u8) error{ OutOfMemory, WriteError }!*Switch {
         const name = try a.dupe(u8, sname);
         var tree: StrHashMap(*AbstTree) = .{};
+        try tree.ensureTotalCapacity(a, 2);
         const first = try AbstTree.init(a, name);
         try tree.put(a, first.name, first);
 
         var body: Reader = .fixed(text);
-        emitSourceVars(a, &body, first, &tree) catch unreachable;
+        emitSourceVars(a, &body, first, &tree) catch @panic("unreachable");
         const self = try a.create(Switch);
         self.* = .{
             .name = name,
@@ -294,7 +290,7 @@ pub const Switch = struct {
             .members = .{},
             .tree = tree,
         };
-        const kv = tree.fetchRemove(first.name) orelse unreachable;
+        const kv = tree.fetchRemove(first.name) orelse @panic("unreachable");
         for (kv.value.children.items) |child| {
             try self.members.append(a, .{ .name = child.name, .flavor = child.kind });
         }
@@ -347,7 +343,8 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
         std.debug.assert(str.len == 0 or str[0] == '<');
         if (Directive.init(ir.buffered())) |drct| {
             ir.toss(drct.tag_block.len);
-            const s_name = makeStructName(drct.noun);
+            // TODO optimize
+            const s_name = try allocStructName(a, drct.noun);
             const f_name = try allocFieldName(a, drct.noun);
 
             switch (drct.verb) {
@@ -361,9 +358,9 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                         else
                             try allocPrint(a, "?[]const u8 = null", .{}),
                         .template => |_| {
-                            const rf_name = makeFieldName(drct.noun[1 .. drct.noun.len - 5]);
+                            const rf_name = try allocFieldName(a, drct.noun[1 .. drct.noun.len - 5]);
                             try parent.append(.{
-                                .name = try a.dupe(u8, rf_name),
+                                .name = rf_name,
                                 .kind = try allocPrint(a, "?{s}", .{s_name}),
                             });
                             continue;
@@ -420,7 +417,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                             const this: *AbstTree = gop.value_ptr.*;
 
                             var body: Reader = .fixed(drct.tag_block_body.?);
-                            try emitSourceVars(a, &body, this, tree);
+                            try emitSourceVars(a, &body, this, root);
                         },
                         .with => {
                             const kind = try allocPrint(a, "?{s}", .{s_name});
@@ -434,8 +431,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                             try emitSourceVars(a, &body, this, tree);
                         },
                         .build => {
-                            const tmpl_name = makeStructName(drct.otherwise.template.name);
-                            const kind = try a.dupe(u8, tmpl_name);
+                            const kind = try allocStructName(a, drct.otherwise.template.name);
                             try parent.append(.{ .name = f_name, .kind = kind });
                         },
                     }
@@ -452,52 +448,51 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
 }
 
 pub fn allocFieldName(a: Allocator, in: []const u8) ![]u8 {
-    const name = makeFieldName(in);
+    var fn_b: [0xffff]u8 = undefined;
+    const name = makeFieldName(in, &fn_b);
     return try a.dupe(u8, name);
 }
 
-pub fn makeFieldName(in: []const u8) []const u8 {
-    const local = struct {
-        var name: [0xFFFF]u8 = undefined;
-    };
-
+pub fn makeFieldName(in: []const u8, buffer: []u8) []const u8 {
     var i: usize = 0;
     for (in) |chr| {
         switch (chr) {
             'a'...'z' => {
-                local.name[i] = chr;
+                buffer[i] = chr;
                 i += 1;
             },
             'A'...'Z' => {
                 if (i != 0) {
-                    local.name[i] = '_';
+                    buffer[i] = '_';
                     i += 1;
                 }
-                local.name[i] = std.ascii.toLower(chr);
+                buffer[i] = std.ascii.toLower(chr);
                 i += 1;
             },
             '0'...'9' => {
                 for (intToWord(chr)) |cchr| {
-                    local.name[i] = cchr;
+                    buffer[i] = cchr;
                     i += 1;
                 }
             },
             '-', '_', '.' => {
-                local.name[i] = '_';
+                buffer[i] = '_';
                 i += 1;
             },
             else => {},
         }
     }
 
-    return local.name[0..i];
+    return buffer[0..i];
 }
 
-pub fn makeStructName(in: []const u8) []const u8 {
-    const local = struct {
-        var name: [0xFFFF]u8 = undefined;
-    };
+pub fn allocStructName(a: Allocator, in: []const u8) ![]u8 {
+    var sn_b: [0xffff]u8 = undefined;
+    const name = makeStructName(in, &sn_b);
+    return try a.dupe(u8, name);
+}
 
+pub fn makeStructName(in: []const u8, buffer: []u8) []const u8 {
     var tail = in;
 
     if (std.mem.lastIndexOf(u8, in, "/")) |i| {
@@ -510,16 +505,16 @@ pub fn makeStructName(in: []const u8) []const u8 {
         switch (chr) {
             'a'...'z', 'A'...'Z' => {
                 if (next_upper) {
-                    local.name[i] = std.ascii.toUpper(chr);
+                    buffer[i] = std.ascii.toUpper(chr);
                 } else {
-                    local.name[i] = chr;
+                    buffer[i] = chr;
                 }
                 next_upper = false;
                 i += 1;
             },
             '0'...'9' => {
                 for (intToWord(chr)) |cchr| {
-                    local.name[i] = cchr;
+                    buffer[i] = cchr;
                     i += 1;
                 }
             },
@@ -530,7 +525,7 @@ pub fn makeStructName(in: []const u8) []const u8 {
         }
     }
 
-    return local.name[0..i];
+    return buffer[0..i];
 }
 
 fn intToWord(in: u8) []const u8 {

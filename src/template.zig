@@ -66,7 +66,7 @@ fn testPrint(comptime fmt: []const u8, args: anytype) void {
     }
 }
 
-fn comptimeCountNames(text: []const u8) usize {
+fn countNames(comptime text: []const u8) usize {
     var last: usize = 0;
     var count: usize = 0;
     while (std.mem.indexOfScalarPos(u8, text, last, '<')) |idx| {
@@ -81,10 +81,18 @@ fn comptimeCountNames(text: []const u8) usize {
     return count;
 }
 
-fn comptimeFields(text: []const u8) [comptimeCountNames(text)]std.builtin.Type.StructField {
-    var fields: [comptimeCountNames(text)]std.builtin.Type.StructField = undefined;
+pub fn CTFields(count: usize) type {
+    return struct {
+        names: [count][]const u8,
+        ftypes: [count]type,
+        attrs: [count]std.builtin.Type.StructField.Attributes,
+    };
+}
+
+fn comptimeFields(comptime count: usize, comptime text: []const u8) CTFields(count) {
+    var fields: CTFields(count) = undefined;
     var last: usize = 0;
-    for (&fields) |*field| {
+    for (0..count) |loop| {
         while (std.mem.indexOfScalarPos(u8, text, last, '<')) |idx| {
             last = idx + 1;
             if (last >= text.len) unreachable;
@@ -97,13 +105,9 @@ fn comptimeFields(text: []const u8) [comptimeCountNames(text)]std.builtin.Type.S
                     lower[llen] = 0;
                     const lname: [:0]const u8 = @as([:0]u8, lower[0..llen :0]);
 
-                    field.* = .{
-                        .name = lname,
-                        .type = []const u8,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf([]const u8),
-                    };
+                    fields.names[loop] = lname;
+                    fields.ftypes[loop] = []const u8;
+                    fields.attrs[loop] = .{};
                     break;
                 },
                 .foreach => {
@@ -114,16 +118,12 @@ fn comptimeFields(text: []const u8) [comptimeCountNames(text)]std.builtin.Type.S
 
                     const body_type = comptimeStruct(drct.tag_block_body.?);
 
-                    field.* = .{
-                        .name = lname,
-                        .type = switch (drct.otherwise) {
-                            .exact => |ex| [ex]body_type,
-                            else => []const body_type,
-                        },
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf([]const u8),
+                    fields.names[loop] = lname;
+                    fields.ftypes[loop] = switch (drct.otherwise) {
+                        .exact => |ex| [ex]body_type,
+                        else => []const body_type,
                     };
+                    fields.attrs[loop] = .{};
                     break;
                 },
                 else => unreachable,
@@ -133,14 +133,11 @@ fn comptimeFields(text: []const u8) [comptimeCountNames(text)]std.builtin.Type.S
     return fields;
 }
 
-fn comptimeStruct(text: []const u8) type {
+fn comptimeStruct(comptime text: []const u8) type {
     @setEvalBranchQuota(10000);
-    return @TypeOf(.{ .@"struct" = .{
-        .layout = .auto,
-        .fields = &comptimeFields(text),
-        .decls = &.{},
-        .is_tuple = false,
-    } });
+    const count = countNames(text);
+    const ctfields = comptimeFields(count, text);
+    return @Struct(.auto, null, &ctfields.names, &ctfields.ftypes, &ctfields.attrs);
 }
 
 test findPageType {
