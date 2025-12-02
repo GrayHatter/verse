@@ -194,6 +194,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             const tag_map = findAttrs(noun[1 + name.len ..]) catch return null;
             const exact: ?usize = if (tag_map.get(.exact)) |e| std.fmt.parseInt(usize, e, 10) catch null else null;
             const use: ?[]const u8 = tag_map.get(.use);
+            const scope: []const u8 = tag_map.get(.scope) orelse "local";
 
             const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
             const body_end: usize = end - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
@@ -212,6 +213,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 .tag_block = blob[0..end],
                 .tag_block_body = tag_block_body,
                 .tag_block_skip = body_start,
+                .scope = if (eql(u8, scope, "global")) .global else .local,
             };
         },
         .@"switch", .case => {
