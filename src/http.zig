@@ -178,7 +178,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
             const h_type = req.head.content_type orelse "text/plain";
             var r_b: [0x100000]u8 = undefined;
             const reader = req.readerExpectNone(&r_b);
-            post_data = try RequestData.readPost(a, reader, hlen, h_type);
+            post_data = try .init(a, hlen, reader, try .fromStr(h_type));
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },

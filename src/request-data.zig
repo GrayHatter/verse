@@ -96,8 +96,17 @@ pub const PostData = struct {
     items: []DataItem,
 
     pub fn init(a: Allocator, size: usize, reader: *Reader, ct: ContentType) !PostData {
-        reader.fillMore() catch {}; // TODO fix me
-        const read_b = try reader.readAlloc(a, size);
+        //reader.fillMore() catch {}; // TODO fix me
+        const read_b = reader.readAlloc(a, size) catch |err| switch (err) {
+            error.EndOfStream => {
+                log.err("unable to read full amount, {} seek {} end {}", .{ size, reader.seek, reader.end });
+                return err;
+            },
+            else => {
+                log.err("read alloc failed, {}", .{err});
+                return err;
+            },
+        };
         if (read_b.len != size) return error.UnexpectedHttpBodySize;
 
         const items = switch (ct.base) {
@@ -297,7 +306,9 @@ test RequestData {
     ;
 
     var reader = std.Io.Reader.fixed(all_valid);
-    const post = try readPost(a, &reader, all_valid.len, "application/x-www-form-urlencoded");
+    const post: PostData = try .init(a, all_valid.len, &reader, try .fromStr(
+        "application/x-www-form-urlencoded",
+    ));
     const data = try post.validate(Struct);
 
     try std.testing.expectEqualDeep(Struct{
@@ -511,10 +522,6 @@ fn parseText(a: Allocator, tx: ContentType.Text, data: []const u8) ![]DataItem {
     }});
 }
 
-pub fn readPost(a: Allocator, reader: *Reader, size: usize, htype: []const u8) !PostData {
-    return PostData.init(a, size, reader, try ContentType.fromStr(htype));
-}
-
 pub fn readQuery(a: Allocator, query: []const u8) !QueryData {
     return QueryData.init(a, query);
 }
@@ -531,13 +538,15 @@ test "multipart/multipart" {}
 
 test "application/x-www-form-urlencoded" {}
 
-test readPost {
+test "postdata init" {
     const a = std.testing.allocator;
     const vect =
         \\title=&desc=&thing=
     ;
     var reader = std.Io.Reader.fixed(vect);
-    const post = try readPost(a, &reader, vect.len, "application/x-www-form-urlencoded");
+    const post: PostData = try .init(a, vect.len, &reader, try .fromStr(
+        "application/x-www-form-urlencoded",
+    ));
 
     try std.testing.expectEqual(3, post.items.len);
 
@@ -554,7 +563,9 @@ test readPost {
         \\title=&desc=&thing=%22double quote%22
     ;
     reader = std.Io.Reader.fixed(vectextra);
-    const postextra = try readPost(a, &reader, vectextra.len, "application/x-www-form-urlencoded");
+    const postextra: PostData = try .init(a, vectextra.len, &reader, try .fromStr(
+        "application/x-www-form-urlencoded",
+    ));
 
     inline for (postextra.items, .{ .{ "title", "" }, .{ "desc", "" }, .{ "thing", "\"double quote\"" } }) |item, expect| {
         try std.testing.expectEqualStrings(expect[0], item.name);
@@ -625,3 +636,4 @@ const splitSequence = std.mem.splitSequence;
 const indexOf = std.mem.indexOf;
 const indexOfPos = std.mem.indexOfPos;
 const json = std.json;
+const log = std.log.scoped(.verse_request_data);

@@ -304,7 +304,7 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
 
         const post_size = try std.fmt.parseInt(usize, h_len, 10);
         if (post_size > 0) {
-            post_data = try Request.Data.readPost(a, r, post_size, h_type);
+            post_data = try .init(a, post_size, r, try .fromStr(h_type));
             log.debug(
                 "post data \"{s}\" {{{any}}}",
                 .{ post_data.?.rawpost, post_data.?.rawpost },
