@@ -74,24 +74,6 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
     try frame.sendHeaders(.close);
     try frame.downstream.writer.print("{f}", .{page});
     return;
-
-    //var vec_buffer: [2048]IOVec = @splat(undefined);
-    //var varr: IOVArray = .initBuffer(&vec_buffer);
-    //const required = page.iovecCountAll();
-    //if (required > varr.capacity) {
-    //    varr = IOVArray.initCapacity(frame.alloc, required) catch @panic("OOM");
-    //}
-    //defer if (varr.capacity > vec_buffer.len) varr.deinit(frame.alloc);
-
-    //var stkfb = std.heap.stackFallback(0xffff, frame.alloc);
-    //const stkalloc = stkfb.get();
-
-    //page.ioVec(&varr, stkalloc) catch |iovec_err| {
-    //log.err("Error building iovec ({}) fallback to writer", .{iovec_err});
-    //};
-    //frame.dowstream.writer.writevAll(@ptrCast(varr.items)) catch |err| switch (err) {
-    //    else => log.err("iovec write error Error {} len {}", .{ err, varr.items.len }),
-    //};
 }
 
 /// Takes a any object, that can be represented by json, converts it into a
