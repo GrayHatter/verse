@@ -108,6 +108,7 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
             }
             if (pollfds[1].revents != 0) {
                 var stream = try server.accept(io);
+                log.debug("accept", .{});
                 try future_list.appendBounded(io.async(once, .{ z, &stream, gpa, io }));
                 continue;
             }
@@ -115,7 +116,9 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
         while (future_list.pop()) |future_| {
             var future = future_;
-            _ = try future.await(io);
+            future.await(io) catch |err| {
+                log.err("await error {}", .{err});
+            };
         }
     }
     while (future_list.pop()) |future_| {
@@ -142,6 +145,7 @@ pub fn once(z: *const zWSGI, stream: *net.Stream, gpa: Allocator, io: Io) !void 
     var reader = stream.reader(io, r_b);
     var writer = stream.writer(io, w_b);
 
+    log.debug("setting up request", .{});
     var zreq = try zWSGIRequest.init(a, &reader.interface);
     const request_data = try requestData(a, &zreq, &reader.interface);
     const request = try Request.initZWSGI(a, &zreq, request_data, now);
@@ -230,18 +234,18 @@ pub const zWSGIRequest = struct {
     vars: std.ArrayListUnmanaged(uWSGIVar) = .{},
 
     pub fn init(a: Allocator, r: *Reader) !zWSGIRequest {
-        const uwsgi_header = try uProtoHeader.init(r);
-
+        const uwsgi_header: uProtoHeader = try .init(r);
         try r.fill(uwsgi_header.size);
 
+        var subr: Reader = .fixed(try r.take(uwsgi_header.size));
         var zr: zWSGIRequest = .{ .header = uwsgi_header };
-        try zr.readVars(a, r);
+        try zr.readVars(a, &subr);
         return zr;
     }
 
     fn readVars(zr: *zWSGIRequest, a: Allocator, r: *Reader) !void {
         try zr.vars.ensureTotalCapacity(a, 10);
-        while (r.bufferedLen() > 0) {
+        while (r.seek < zr.header.size) {
             const key_len = try r.takeInt(u16, system.endian);
             const key_str = try r.take(key_len);
             const expected = zWSGIParam.fromStr(key_str);
