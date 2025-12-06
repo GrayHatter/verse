@@ -107,9 +107,9 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
                 break;
             }
             if (pollfds[1].revents != 0) {
-                var stream = try server.accept(io);
+                const stream = try server.accept(io);
                 log.debug("accept", .{});
-                try future_list.appendBounded(io.async(once, .{ z, &stream, gpa, io }));
+                try future_list.appendBounded(io.async(once, .{ z, stream, gpa, io }));
                 continue;
             }
         }
@@ -130,11 +130,10 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn once(z: *const zWSGI, stream: *net.Stream, gpa: Allocator, io: Io) !void {
+pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
+    defer stream.close(io);
     var timer = try std.time.Timer.start();
     const now = try std.Io.Clock.now(.real, io);
-
-    defer stream.close(io);
 
     var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();

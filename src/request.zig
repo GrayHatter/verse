@@ -217,7 +217,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
 pub fn initHttp(
     a: Allocator,
     http: *std.http.Server.Request,
-    stream: *Stream,
+    stream: *const Stream,
     data: Data,
     now: Timestamp,
 ) !Request {
