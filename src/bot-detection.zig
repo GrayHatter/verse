@@ -67,6 +67,16 @@ pub fn init(r: *const Request) BotDetection {
     return bot;
 }
 
+pub const Label = enum {
+    subnet_tagged_suspicious,
+    subnet_tagged_hostile,
+    ua_age_months,
+    ua_age_years,
+    headers_missing,
+    headers_unexpected,
+    protocol_mismatch,
+};
+
 const RuleError = error{
     Generic,
     NotABot,
