@@ -22,14 +22,14 @@ pub fn build(b: *std.Build) !void {
     // root build options
     const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
     const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
-    const bot_detection = b.option(bool, "bot-detection", "[not-implemented] disable bot detection") orelse
-        false;
+    const ua_validation = b.option(bool, "ua_validation", "[not-implemented] disable user agent validation") orelse
+        true;
 
     const options = b.addOptions();
 
     const ver = version(b);
     options.addOption([]const u8, "version", ver);
-    options.addOption(bool, "botdetection", bot_detection);
+    options.addOption(bool, "ua_validation", ua_validation);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),

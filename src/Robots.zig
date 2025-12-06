@@ -7,15 +7,15 @@ bot: bool,
 malicious: bool,
 score: f16,
 
-const BotDetection = @This();
+const Robots = @This();
 
-const default: BotDetection = .{
+const default: Robots = .{
     .bot = false,
     .malicious = false,
     .score = 0.0,
 };
 
-const default_malicious: BotDetection = .{
+const default_malicious: Robots = .{
     .bot = true,
     .malicious = true,
     .score = 1.0,
@@ -24,10 +24,10 @@ const default_malicious: BotDetection = .{
 pub const ANOMALY_MAX: f16 = 0.5;
 pub const BOT_DEVIANCE: f16 = 0.2;
 
-pub fn init(r: *const Request) BotDetection {
+pub fn init(r: *const Request) Robots {
     const ua: UA = r.user_agent orelse return .default_malicious;
 
-    var bot: BotDetection = .default;
+    var bot: Robots = .default;
 
     inline for (rules.age) |rule| {
         rule(ua, r, &bot.score) catch @panic("not implemented");
@@ -97,7 +97,7 @@ const rules = struct {
     };
 };
 
-test BotDetection {
+test Robots {
     _ = std.testing.refAllDecls(@This());
     _ = &browsers;
 }
@@ -183,8 +183,8 @@ test robotsTxt {
     _ = robotsTxt(&[_]bots.TxtRules{.{ .name = "googlebot", .allow = false }}, .default);
 }
 
-pub const browsers = @import("bot-detection/browsers.zig");
-pub const bots = @import("bot-detection/bots.zig");
+pub const browsers = @import("Robots/browsers.zig");
+pub const bots = @import("Robots/bots.zig");
 
 const Router = @import("router.zig");
 const Frame = @import("frame.zig");
