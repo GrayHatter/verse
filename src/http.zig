@@ -88,8 +88,8 @@ pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
                 break;
             }
             if (pollfds[1].revents != 0) {
-                var stream = try srv.accept(io);
-                try future_list.appendBounded(io.async(once, .{ http, &stream, gpa, io }));
+                const stream = try srv.accept(io);
+                try future_list.appendBounded(io.async(once, .{ http, stream, gpa, io }));
                 continue;
             }
         }
@@ -108,11 +108,11 @@ pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn once(http: *HTTP, stream: *Stream, gpa: Allocator, io: Io) !void {
+pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
+    defer stream.close(io);
     var timer = try std.time.Timer.start();
     const now = try std.Io.Clock.now(.real, io);
 
-    defer stream.close(io);
     log.info("HTTP connection from {f}", .{stream.socket.address});
 
     var arena = std.heap.ArenaAllocator.init(gpa);
@@ -127,7 +127,7 @@ pub fn once(http: *HTTP, stream: *Stream, gpa: Allocator, io: Io) !void {
 
     var hreq = try hsrv.receiveHead();
     const reqdata = try requestData(a, &hreq);
-    const req = try Request.initHttp(a, &hreq, stream, reqdata, now);
+    const req = try Request.initHttp(a, &hreq, &stream, reqdata, now);
 
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
     const srvr: *Server = @alignCast(@fieldParentPtr("interface", ifc));
@@ -204,9 +204,9 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
 fn threadFn(server: *HTTP, gpa: Allocator, io: Io) void {
     var srv = server.srv_address.listen(io, .{ .reuse_address = true }) catch unreachable;
     defer srv.deinit(io);
-    var stream = srv.accept(io) catch unreachable;
+    const stream = srv.accept(io) catch unreachable;
 
-    once(server, &stream, gpa, io) catch |err| {
+    once(server, stream, gpa, io) catch |err| {
         log.err("Server failed! {}", .{err});
     };
 }
