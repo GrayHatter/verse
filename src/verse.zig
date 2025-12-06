@@ -23,7 +23,7 @@ const endpoint = @import("endpoint.zig");
 pub const Endpoints = endpoint.Endpoints;
 
 // TODO this needs a better home (namespace)
-pub const robotsTxt = Request.UserAgent.BotDetection.robotsTxt;
+pub const Robots = @import("Robots.zig");
 
 const errors = @import("errors.zig");
 pub const RoutingError = Router.RoutingError;

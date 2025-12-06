@@ -5,26 +5,24 @@
 //! TODO write doc comments
 string: []const u8,
 agent: Agent,
-bot_validation: if (BOTDETC_ENABLED) ?BotDetection else ?void = null,
+validation: ?Robots = if (UA_VALIDATION) null else {},
 
 const UserAgent = @This();
 
-pub const BotDetection = @import("bot-detection.zig");
+pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
+    if (comptime !UA_VALIDATION) @compileError("Bot Detection is currently disabled");
 
-pub fn botDetectionDump(ua: UserAgent, r: *const Request) void {
-    if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
-
-    const bd: BotDetection = ua.bot_validation orelse .init(r);
+    const bd: Robots = ua.validation orelse .init(r);
     //std.debug.print("ua detection: {s} \n", .{ua.string});
-    std.debug.print("ua detection: {} \n", .{ua.agent});
-    std.debug.print("bot detection: {} \n", .{bd});
+    log.err("ua detection: {} \n", .{ua.agent});
+    log.err("bot detection: {} \n", .{bd});
     if (ua.agent == .browser) {
         const age: Duration = ua.agent.browser.age(r.now) catch .fromSeconds(0);
-        std.debug.print("age: days {} seconds {}  \n", .{ @divTrunc(age.toSeconds(), 86400), age });
+        log.err("age: days {} seconds {}  \n", .{ @divTrunc(age.toSeconds(), 86400), age });
     }
 }
 
-pub const Bot = BotDetection.bots.Bot;
+pub const Bot = UABot;
 
 pub const Agent = union(enum) {
     bot: Bot,
@@ -257,14 +255,14 @@ pub const Browser = struct {
     };
 
     pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
-        if (comptime !BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
-        const versions = BotDetection.browsers.Versions[@intFromEnum(b.name)];
+        if (comptime !UA_VALIDATION) @compileError("User Agent Validation is disabled");
+        const versions = Robots.browsers.Versions[@intFromEnum(b.name)];
         if (b.version >= versions.len) return error.UnknownVersion;
         return std.Io.Timestamp.fromNanoseconds(versions[b.version] * std.time.ns_per_s).durationTo(now);
     }
 
     test age {
-        if (!BOTDETC_ENABLED) return error.SkipZigTest;
+        if (!UA_VALIDATION) return error.SkipZigTest;
         const browser = Browser{ .name = .chrome, .version = 134 };
         const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
         try std.testing.expect((try browser.age(now)).toSeconds() < 86400 * 3650); // breaks in 10 years, good luck future me!
@@ -288,25 +286,27 @@ pub fn init(ua_str: []const u8) UserAgent {
     return .{
         .string = ua_str,
         .agent = .init(ua_str),
-        .bot_validation = null,
+        .validation = null,
     };
 }
 
 pub fn validate(source: UserAgent, r: *const Request) UserAgent {
-    if (!BOTDETC_ENABLED) @compileError("Bot Detection is currently disabled");
+    if (!UA_VALIDATION) @compileError("User Agent Validation is disabled");
     var ua = source;
-    ua.bot_validation = .init(r);
+    ua.validation = .init(r);
     return ua;
 }
 
-const BOTDETC_ENABLED: bool = verse_buildopts.botdetection or builtin.is_test;
+const UA_VALIDATION: bool = verse_buildopts.ua_validation or builtin.is_test;
 
 test UserAgent {
     std.testing.refAllDecls(@This());
-    _ = &BotDetection;
+    _ = &Robots;
 }
 
 const Request = @import("request.zig");
+const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
+const UABot = if (UA_VALIDATION) Robots.bots.Bot else void;
 
 const std = @import("std");
 const Duration = std.Io.Duration;

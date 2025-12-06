@@ -217,8 +217,8 @@ pub const Endpoint = struct {
                 var is_bot: ?[]const u8 = null;
                 if (src.ua) |sua| {
                     if (sua.agent == .bot) is_bot = " verse-bot";
-                    if (@TypeOf(sua.bot_validation) != ?void) {
-                        const bv: UserAgent.BotDetection = sua.bot_validation orelse .init(f.request);
+                    if (@TypeOf(sua.validation) != void) {
+                        const bv: Robots = sua.validation orelse .init(f.request);
                         if (bv.malicious or bv.bot and sua.agent != .bot) is_bot = " verse-bot-malicious";
                     }
                 }
@@ -270,4 +270,5 @@ const std = @import("std");
 const Frame = @import("frame.zig");
 const Server = @import("server.zig");
 const UserAgent = @import("user-agent.zig");
+const Robots = @import("Robots.zig");
 const Timestamp = std.Io.Timestamp;
