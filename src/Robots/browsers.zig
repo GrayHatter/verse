@@ -3,7 +3,9 @@ const VerDate = struct { u16, Date };
 
 const browser_count = @typeInfo(UA.Browser.Name).@"enum".fields.len;
 
-pub const Versions: [browser_count][]const Date = brk: {
+pub const Versions: [browser_count][]const Date = makeVersions();
+
+fn makeVersions() [browser_count][]const Date {
     var v: [browser_count][]const Date = undefined;
     for (@typeInfo(UA.Browser.Name).@"enum".fields) |field| {
         var name: [field.name.len]u8 = field.name[0..].*;
@@ -14,8 +16,8 @@ pub const Versions: [browser_count][]const Date = brk: {
             &.{};
     }
 
-    break :brk v;
-};
+    return v;
+}
 
 pub const Brave = struct {
     pub const Version = enum(u16) {
@@ -32,7 +34,7 @@ pub const Chrome = struct {
     pub const Version = enum(u16) {
         _,
 
-        pub const revision_date: i64 = 1758252287;
+        pub const revision_date: i64 = 1765044568;
         pub const Dates = compileDates(&VerDates);
         // https://chromestatus.com/roadmap
         pub const VerDates = [_]VerDate{
@@ -72,7 +74,9 @@ pub const Chrome = struct {
             .{ 128, 1723618800 }, .{ 129, 1726038000 }, .{ 130, 1728457200 }, .{ 131, 1730880000 },
             .{ 132, 1736323200 }, .{ 133, 1738137600 }, .{ 134, 1740556800 }, .{ 135, 1743465600 },
             .{ 136, 1745884800 }, .{ 137, 1749531600 }, .{ 138, 1753142400 }, .{ 139, 1753833600 },
-            .{ 140, 1756252800 }, .{ 141, 1758672000 }, .{ 142, 1761091200 },
+            .{ 140, 1756252800 }, .{ 141, 1758672000 }, .{ 142, 1761091200 }, .{ 143, 1763510400 },
+            // SOON TODO VERIFY DATES
+            .{ 144, 1767744000 }, .{ 145, 1769558400 },
         };
     };
 };
@@ -92,7 +96,7 @@ pub const Firefox = struct {
     pub const Version = enum(u16) {
         _,
 
-        pub const revision_date: i64 = 1758252287;
+        pub const revision_date: i64 = 1765044568;
         pub const Dates = compileDates(&VerDates);
         // https://www.firefox.com/en-US/releases/
         pub const VerDates = [_]VerDate{
@@ -132,6 +136,7 @@ pub const Firefox = struct {
             .{ 132, 1730185200 }, .{ 133, 1732608000 }, .{ 134, 1736236800 }, .{ 135, 1738656000 },
             .{ 136, 1741075200 }, .{ 137, 1743490800 }, .{ 138, 1745902800 }, .{ 139, 1748322000 },
             .{ 140, 1750723200 }, .{ 141, 1753142400 }, .{ 142, 1755561600 }, .{ 143, 1757980800 },
+            .{ 144, 1760400000 }, .{ 145, 1762819200 },
         };
     };
 };
