@@ -24,9 +24,7 @@ pub const Brave = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{
-            .{ 0, 0 },
-        };
+        pub const VerDates = [_]VerDate{.{ 0, 0 }};
     };
 };
 
@@ -146,9 +144,7 @@ pub const Hastur = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{
-            .{ 0, 0 },
-        };
+        pub const VerDates = [_]VerDate{.{ 0, 0 }};
     };
 };
 
@@ -157,9 +153,7 @@ pub const Ladybird = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{
-            .{ 0, 0 },
-        };
+        pub const VerDates = [_]VerDate{.{ 0, 0 }};
     };
 };
 
@@ -168,9 +162,7 @@ pub const Opera = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{
-            .{ 0, 0 },
-        };
+        pub const VerDates = [_]VerDate{.{ 0, 0 }};
     };
 };
 
@@ -179,9 +171,7 @@ pub const Safari = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{
-            .{ 0, 0 },
-        };
+        pub const VerDates = [_]VerDate{.{ 0, 0 }};
     };
 };
 
