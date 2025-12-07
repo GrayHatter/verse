@@ -30,9 +30,7 @@ pub const Agent = union(enum) {
     script: Script,
     unknown: Other,
 
-    pub const malicious: Agent = .{
-        .bot = .malicious,
-    };
+    pub const malicious: Agent = .{ .bot = .malicious };
 
     pub fn init(str: []const u8) Agent {
         if (startsWith(u8, str, "Mozilla/")) {
@@ -71,10 +69,7 @@ pub const Agent = union(enum) {
     }
 
     fn asBot(str: []const u8) Agent {
-        if (Bot.resolve(str)) |bot| {
-            return .{ .bot = bot };
-        }
-
+        if (Bot.resolve(str)) |bot| return .{ .bot = bot };
         return .{ .bot = .unknown };
     }
 
@@ -147,11 +142,7 @@ test Agent {
     const not_google_bot = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36";
     try std.testing.expectEqualDeep(
-        Agent{ .browser = .{
-            .name = .chrome,
-            .version = 134,
-            .version_string = "134.0.6998.165",
-        } },
+        Agent{ .browser = .{ .name = .chrome, .version = 134, .version_string = "134.0.6998.165" } },
         Agent.init(not_google_bot),
     );
 
@@ -173,67 +164,43 @@ test Agent {
     const fake_edge_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " ++
         "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43";
     try std.testing.expectEqualDeep(
-        Agent{ .browser = .{
-            .name = .edge,
-            .version = 114,
-            .version_string = "114.0.1823.43",
-        } },
+        Agent{ .browser = .{ .name = .edge, .version = 114, .version_string = "114.0.1823.43" } },
         Agent.init(fake_edge_ua),
     );
 
     const lin_ff = "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0";
     try std.testing.expectEqualDeep(
-        Agent{ .browser = .{
-            .name = .firefox,
-            .version = 134,
-            .version_string = "134.0",
-        } },
+        Agent{ .browser = .{ .name = .firefox, .version = 134, .version_string = "134.0" } },
         Agent.init(lin_ff),
     );
 
     const msie = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0; Trident/5.0)";
     try std.testing.expectEqualDeep(
-        Agent{ .browser = .{
-            .name = .msie,
-            .version = 9,
-            .version_string = "9.0;",
-        } },
+        Agent{ .browser = .{ .name = .msie, .version = 9, .version_string = "9.0;" } },
         Agent.init(msie),
     );
 
     const git = "git/2.49.0";
     try std.testing.expectEqualDeep(
-        Agent{ .script = .{
-            .name = .git,
-            .version = 2,
-        } },
+        Agent{ .script = .{ .name = .git, .version = 2 } },
         Agent.init(git),
     );
 
     const gptbot = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)";
     try std.testing.expectEqualDeep(
-        Agent{ .bot = .{
-            .name = .gptbot,
-            .version = 1,
-        } },
+        Agent{ .bot = .{ .name = .gptbot, .version = 1 } },
         Agent.init(gptbot),
     );
 
     const lounge = "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0";
     try std.testing.expectEqualDeep(
-        Agent{ .bot = .{
-            .name = .lounge_irc_client,
-            .version = 0,
-        } },
+        Agent{ .bot = .{ .name = .lounge_irc_client, .version = 0 } },
         Agent.init(lounge),
     );
 
     const apple = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)";
     try std.testing.expectEqualDeep(
-        Agent{ .bot = .{
-            .name = .applebot,
-            .version = 0,
-        } },
+        Agent{ .bot = .{ .name = .applebot, .version = 0 } },
         Agent.init(apple),
     );
 }
