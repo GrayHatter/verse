@@ -39,6 +39,7 @@ pub const Bot = struct {
     version: u32,
 
     pub const Name = enum {
+        applebot,
         bingbot,
         claudebot,
         googlebot,
@@ -53,7 +54,9 @@ pub const Bot = struct {
     };
 
     pub fn resolve(str: []const u8) ?Bot {
-        if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
+        if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
+            return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
+        } else if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
             return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
         } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
             return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
@@ -67,7 +70,7 @@ pub const Bot = struct {
         return null;
     }
 
-    fn parseVersion(str: []const u8, target: []const u8) error{Invalid}!u32 {
+    fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32 {
         if (indexOf(u8, str, target)) |idx| {
             const start = idx + target.len;
             // 3 is the minimum reasonable tail for a version
@@ -88,6 +91,7 @@ pub const Identity = struct {
 
 pub const bots: std.EnumArray(Bot.Name, Identity) = .{
     .values = [Bot.Name.len]Identity{
+        .{ .bot = .applebot, .network = null },
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claudebot, .network = null },
         .{

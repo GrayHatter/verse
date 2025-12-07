@@ -227,6 +227,15 @@ test Agent {
         } },
         Agent.init(lounge),
     );
+
+    const apple = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{
+            .name = .applebot,
+            .version = 0,
+        } },
+        Agent.init(apple),
+    );
 }
 
 pub const Browser = struct {
