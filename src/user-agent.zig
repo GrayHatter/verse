@@ -14,11 +14,11 @@ pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
 
     const bd: Robots = ua.validation orelse .init(r);
     //std.debug.print("ua detection: {s} \n", .{ua.string});
-    log.err("ua detection: {} \n", .{ua.agent});
-    log.err("bot detection: {} \n", .{bd});
+    log.err("ua detection: {}", .{ua.agent});
+    log.err("bot detection: {}", .{bd});
     if (ua.agent == .browser) {
         const age: Duration = ua.agent.browser.age(r.now) catch .fromSeconds(0);
-        log.err("age: days {} seconds {}  \n", .{ @divTrunc(age.toSeconds(), 86400), age });
+        log.err("age: days {} seconds {}", .{ @divTrunc(age.toSeconds(), 86400), age });
     }
 }
 
