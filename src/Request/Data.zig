@@ -1,101 +1,180 @@
 //! Client Request Data
-
-post: ?PostData,
-query: QueryData,
+post: ?Post,
+query: Query,
 
 const Data = @This();
 
 pub fn validate(data: Data, comptime T: type) !T {
-    return RequestData(T).init(data);
+    return Validate(T).init(data);
 }
 
-/// This is the preferred api to use... once it actually exists :D
-pub fn Validator(comptime T: type) type {
+pub fn Validate(comptime T: type) type {
     return struct {
-        data: T,
-
-        const Self = @This();
-
-        pub fn init(data: T) Self {
-            return Self{
-                .data = data,
-            };
-        }
-
-        pub fn count(v: *Self, name: []const u8) usize {
-            var i: usize = 0;
-            for (v.data.items) |item| {
-                if (eql(u8, item.name, name)) i += 1;
-            }
-            return i;
-        }
-
-        pub fn require(v: *Self, name: []const u8) !DataItem {
-            return v.optionalItem(name) orelse error.DataMissing;
-        }
-
-        pub fn requirePos(v: *Self, name: []const u8, skip: usize) !DataItem {
-            var skipped: usize = skip;
-            for (v.data.items) |item| {
-                if (eql(u8, item.name, name)) {
-                    if (skipped > 0) {
-                        skipped -= 1;
-                        continue;
-                    }
-                    return item;
+        pub fn init(data: Data) !T {
+            var request: T = undefined;
+            var query: From(Query) = .init(&data.query);
+            if (data.post) |data_post| {
+                const post: From(Post) = .init(&data_post);
+                inline for (@typeInfo(T).@"struct".fields) |field| {
+                    @field(request, field.name) = post.get(field.type, field.name, field.defaultValue()) catch
+                        try query.get(field.type, field.name, field.defaultValue());
+                }
+            } else {
+                inline for (@typeInfo(T).@"struct".fields) |field| {
+                    @field(request, field.name) = try query.get(field.type, field.name, field.defaultValue());
                 }
             }
-            return error.DataMissing;
+            return request;
         }
 
-        pub fn optionalItem(v: *Self, name: []const u8) ?DataItem {
-            for (v.data.items) |item| {
-                if (eql(u8, item.name, name)) return item;
-            }
-            return null;
-        }
+        pub fn initAlloc(a: Allocator, data: Data) !T {
+            if (data.post) |post|
+                return initPostAlloc(a, post);
 
-        pub fn optional(v: *Self, OT: type, name: []const u8) ?OT {
-            if (v.optionalItem(name)) |item| {
-                switch (OT) {
-                    bool => {
-                        if (eql(u8, item.value, "0") or eql(u8, item.value, "false")) {
-                            return false;
-                        }
-                        return true;
-                    },
-                    else => return item,
-                }
-            } else return null;
-        }
-
-        pub fn files(_: *Self, _: []const u8) !void {
+            // Only post is implemented
             return error.NotImplemented;
+        }
+
+        fn initQuery(query: Query) !T {
+            var req: T = undefined;
+            var q: From(Query) = .init(&query);
+            inline for (@typeInfo(T).@"struct".fields) |field| {
+                // TODO this has no test
+                @field(req, field.name) = try q.get(field.type, field.name, field.defaultValue());
+            }
+            return req;
+        }
+
+        fn initPost(post: Post) !T {
+            var p: From(Post) = .init(&post);
+            var req: T = undefined;
+            inline for (@typeInfo(T).@"struct".fields) |field| {
+                @field(req, field.name) = try p.get(field.type, field.name, field.defaultValue());
+            }
+            return req;
+        }
+
+        fn initPostAlloc(a: Allocator, post: Post) !T {
+            var p: From(Post) = .init(&post);
+            var req: T = undefined;
+            inline for (@typeInfo(T).@"struct".fields) |field| {
+                @field(req, field.name) = switch (@typeInfo(field.type)) {
+                    .optional => if (p.optionalItem(field.name)) |o| o.value else null,
+                    .pointer => |fptr| switch (fptr.child) {
+                        u8 => (try p.require(field.name)).value,
+                        []const u8 => arr: {
+                            const count = p.count(field.name);
+                            var map = try a.alloc([]const u8, count);
+                            for (0..count) |i| {
+                                map[i] = (try p.requirePos(field.name, i)).value;
+                            }
+                            break :arr map;
+                        },
+                        else => comptime unreachable, // Not yet implemented
+                    },
+                    else => comptime unreachable, // Not yet implemented
+                };
+            }
+            return req;
+        }
+
+        pub fn From(Group: type) type {
+            return struct {
+                data: *const Group,
+
+                pub const Valid = @This();
+
+                pub fn init(g: *const Group) Valid {
+                    return .{ .data = g };
+                }
+
+                pub fn get(v: Valid, FT: type, comptime name: []const u8, default: ?FT) !FT {
+                    return switch (@typeInfo(FT)) {
+                        .optional => |opt| v.get(opt.child, name, null) catch |err| switch (err) {
+                            error.DataMissing => if (default) |d| d else return null,
+                            else => return err,
+                        },
+                        .bool => v.optional(bool, name) orelse return error.DataMissing,
+                        .int => try parseInt(FT, (try v.require(name)).value, 10),
+                        .float => try parseFloat(FT, (try v.require(name)).value),
+                        .@"enum" => return stringToEnum(FT, (try v.require(name)).value) orelse error.InvalidEnumMember,
+                        .pointer => (try v.require(name)).value,
+                        else => comptime unreachable, // Not yet implemented
+                    };
+                }
+
+                pub fn count(v: *const Valid, name: []const u8) usize {
+                    var i: usize = 0;
+                    for (v.data.items) |item| {
+                        if (eql(u8, item.name, name)) i += 1;
+                    }
+                    return i;
+                }
+
+                pub fn require(v: *const Valid, name: []const u8) !Item {
+                    return v.optionalItem(name) orelse error.DataMissing;
+                }
+
+                pub fn requirePos(v: *const Valid, name: []const u8, skip: usize) !Item {
+                    var skipped: usize = skip;
+                    for (v.data.items) |item| {
+                        if (eql(u8, item.name, name)) {
+                            if (skipped > 0) {
+                                skipped -= 1;
+                                continue;
+                            }
+                            return item;
+                        }
+                    }
+                    return error.DataMissing;
+                }
+
+                pub fn optionalItem(v: *const Valid, name: []const u8) ?Item {
+                    for (v.data.items) |item| {
+                        if (eql(u8, item.name, name)) return item;
+                    }
+                    return null;
+                }
+
+                pub fn optional(v: *const Valid, OT: type, name: []const u8) ?OT {
+                    if (v.optionalItem(name)) |item| {
+                        switch (OT) {
+                            bool => {
+                                if (eql(u8, item.value, "0") or eql(u8, item.value, "false")) {
+                                    return false;
+                                }
+                                return true;
+                            },
+                            else => return item,
+                        }
+                    } else return null;
+                }
+
+                pub fn files(_: *const Valid, _: []const u8) !void {
+                    return error.NotImplemented;
+                }
+            };
         }
     };
 }
 
-pub fn validator(data: anytype) Validator(@TypeOf(data)) {
-    return Validator(@TypeOf(data)).init(data);
-}
-
-pub const DataKind = enum {
+pub const Kind = enum {
     @"form-data",
     json,
 };
 
-pub const DataItem = struct {
-    kind: DataKind = .@"form-data",
+pub const Item = struct {
+    kind: Kind = .@"form-data",
     segment: []u8,
     name: []const u8,
     value: []const u8,
 };
 
-pub const PostData = struct {
-    rawpost: []u8,
-    items: []DataItem,
+pub const Post = struct {
+    bytes: []u8,
+    items: []Item,
 
-    pub fn init(a: Allocator, size: usize, reader: *Reader, ct: ContentType) !PostData {
+    pub fn init(a: Allocator, size: usize, reader: *Reader, ct: ContentType) !Post {
         //reader.fillMore() catch {}; // TODO fix me
         const read_b = reader.readAlloc(a, size) catch |err| switch (err) {
             error.EndOfStream => {
@@ -111,57 +190,53 @@ pub const PostData = struct {
 
         const items = switch (ct.base) {
             .application => |ap| try parseApplication(a, ap, read_b),
-            .multipart, .message => |mp| try parseMulti(a, mp, read_b),
+            .multipart, .message => |mp| try Multi.parseContentType(a, mp, read_b),
             .text => |tx| try parseText(a, tx, read_b),
             .audio, .font, .image, .video => @panic("content-type not implemented"),
         };
 
         return .{
-            .rawpost = read_b,
+            .bytes = read_b,
             .items = items,
         };
     }
 
-    pub fn validate(pdata: PostData, comptime T: type) !T {
-        return RequestData(T).initPost(pdata);
+    pub fn validate(pdata: Post, comptime T: type) !T {
+        return Validate(T).initPost(pdata);
     }
 
-    pub fn validateAlloc(pdata: PostData, comptime T: type, alloc: Allocator) !T {
-        return RequestData(T).initPostMap(alloc, pdata);
-    }
-
-    pub fn validator(self: PostData) Validator(PostData) {
-        return Validator(PostData).init(self);
+    pub fn validateAlloc(pdata: Post, comptime T: type, alloc: Allocator) !T {
+        return Validate(T).initPostAlloc(alloc, pdata);
     }
 };
 
-pub const QueryData = struct {
-    rawquery: []const u8,
-    items: []DataItem,
+pub const Query = struct {
+    bytes: []const u8,
+    items: []Item,
 
     /// TODO leaks on error
-    pub fn init(a: Allocator, query: []const u8) !QueryData {
+    pub fn init(a: Allocator, query: []const u8) !Query {
         var itr = splitScalar(u8, query, '&');
         const count = std.mem.count(u8, query, "&") + 1;
-        const items = try a.alloc(DataItem, count);
+        const items = try a.alloc(Item, count);
         for (items) |*item| {
             item.* = try parseSegment(a, itr.next().?);
         }
 
-        return QueryData{
-            .rawquery = query,
+        return .{
+            .bytes = query,
             .items = items,
         };
     }
 
-    pub fn validate(qdata: QueryData, comptime T: type) !T {
-        return RequestData(T).initQuery(qdata);
+    pub fn validate(qdata: Query, comptime T: type) !T {
+        return Validate(T).initQuery(qdata);
     }
 
     /// segments name=value&name2=otherval
     /// segment in  name=%22dquote%22
     /// segment out name="dquote"
-    fn parseSegment(a: Allocator, seg: []const u8) !DataItem {
+    fn parseSegment(a: Allocator, seg: []const u8) !Item {
         const segment = try a.dupe(u8, seg);
         if (indexOf(u8, segment, "=")) |i| {
             const value_len = segment.len - i - 1;
@@ -188,103 +263,9 @@ pub const QueryData = struct {
             };
         }
     }
-
-    pub fn validator(self: QueryData) Validator(QueryData) {
-        return Validator(QueryData).init(self);
-    }
 };
 
-pub fn RequestData(comptime T: type) type {
-    return struct {
-        req: T,
-
-        const Self = @This();
-
-        pub fn init(data: Data) !T {
-            var query_valid = data.query.validator();
-            var mpost_valid = if (data.post) |post| post.validator() else null;
-            var req: T = undefined;
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                if (mpost_valid) |*post_valid| {
-                    @field(req, field.name) = get(field.type, field.name, post_valid, field.defaultValue()) catch
-                        try get(field.type, field.name, &query_valid, field.defaultValue());
-                } else {
-                    @field(req, field.name) = try get(field.type, field.name, &query_valid, field.defaultValue());
-                }
-            }
-            return req;
-        }
-
-        pub fn initMap(a: Allocator, data: Data) !T {
-            if (data.post) |post| return initPostMap(a, post);
-
-            // Only post is implemented
-            return error.NotImplemented;
-        }
-
-        fn get(FT: type, comptime name: []const u8, valid: anytype, default: ?FT) !FT {
-            return switch (@typeInfo(FT)) {
-                .optional => |opt| get(opt.child, name, valid, null) catch |err| switch (err) {
-                    error.DataMissing => if (default) |d| d else return null,
-                    else => return err,
-                },
-                .bool => valid.optional(bool, name) orelse return error.DataMissing,
-                .int => try parseInt(FT, (try valid.require(name)).value, 10),
-                .float => try parseFloat(FT, (try valid.require(name)).value),
-                .@"enum" => return stringToEnum(FT, (try valid.require(name)).value) orelse error.InvalidEnumMember,
-                .pointer => (try valid.require(name)).value,
-                else => comptime unreachable, // Not yet implemented
-            };
-        }
-
-        fn initQuery(query: QueryData) !T {
-            var valid = query.validator();
-            var req: T = undefined;
-            inline for (std.meta.fields(T)) |field| {
-                // TODO this has no test
-                @field(req, field.name) = try get(field.type, field.name, &valid, field.defaultValue());
-            }
-            return req;
-        }
-
-        fn initPost(data: PostData) !T {
-            var valid = data.validator();
-
-            var req: T = undefined;
-            inline for (std.meta.fields(T)) |field| {
-                @field(req, field.name) = try get(field.type, field.name, &valid, field.defaultValue());
-            }
-            return req;
-        }
-
-        fn initPostMap(a: Allocator, data: PostData) !T {
-            var valid = data.validator();
-
-            var req: T = undefined;
-            inline for (std.meta.fields(T)) |field| {
-                @field(req, field.name) = switch (@typeInfo(field.type)) {
-                    .optional => if (valid.optionalItem(field.name)) |o| o.value else null,
-                    .pointer => |fptr| switch (fptr.child) {
-                        u8 => (try valid.require(field.name)).value,
-                        []const u8 => arr: {
-                            const count = valid.count(field.name);
-                            var map = try a.alloc([]const u8, count);
-                            for (0..count) |i| {
-                                map[i] = (try valid.requirePos(field.name, i)).value;
-                            }
-                            break :arr map;
-                        },
-                        else => comptime unreachable, // Not yet implemented
-                    },
-                    else => comptime unreachable, // Not yet implemented
-                };
-            }
-            return req;
-        }
-    };
-}
-
-test RequestData {
+test Validate {
     const a = std.testing.allocator;
 
     const Struct = struct {
@@ -306,7 +287,7 @@ test RequestData {
     ;
 
     var reader = std.Io.Reader.fixed(all_valid);
-    const post: PostData = try .init(a, all_valid.len, &reader, try .fromStr(
+    const post: Post = try .init(a, all_valid.len, &reader, try .fromStr(
         "application/x-www-form-urlencoded",
     ));
     const data = try post.validate(Struct);
@@ -325,7 +306,7 @@ test RequestData {
         .opt_str = null,
     }, data);
 
-    a.free(post.rawpost);
+    a.free(post.bytes);
     for (post.items) |item| a.free(item.segment);
     a.free(post.items);
 }
@@ -367,10 +348,10 @@ fn jsonValueToString(a: std.mem.Allocator, value: json.Value) ![]u8 {
     };
 }
 
-fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]DataItem {
+fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]Item {
     var itr = splitScalar(u8, data, '&');
     const count = std.mem.count(u8, data, "&") +| 1;
-    const items = try a.alloc(DataItem, count);
+    const items = try a.alloc(Item, count);
     for (items) |*item| {
         const idata = itr.next().?;
         item.segment = try a.dupe(u8, idata);
@@ -382,12 +363,12 @@ fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]DataItem {
     return items;
 }
 
-fn normJson(a: Allocator, data: []u8) ![]DataItem {
+fn normJson(a: Allocator, data: []u8) ![]Item {
     var parsed = try json.parseFromSlice(json.Value, a, data, .{});
     defer parsed.deinit();
     const root = parsed.value.object;
 
-    var list = try a.alloc(DataItem, root.count());
+    var list = try a.alloc(Item, root.count());
     for (root.keys(), root.values(), 0..) |k, v, i| {
         const val = switch (v) {
             .null,
@@ -411,22 +392,22 @@ fn normJson(a: Allocator, data: []u8) ![]DataItem {
     return list;
 }
 
-fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]DataItem {
+fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]Item {
     return switch (ap) {
         .@"x-www-form-urlencoded" => try normWwwFormUrlEncoded(a, data),
         // Git just uses the raw data instead, no need to preprocess
-        .@"x-git-upload-pack-request" => &[0]DataItem{},
+        .@"x-git-upload-pack-request" => &[0]Item{},
         .@"octet-stream" => @panic("not implemented"),
         .json => try normJson(a, data),
     };
 }
 
-const DataHeader = enum {
+const Header = enum {
     @"Content-Disposition",
     @"Content-Type",
 
-    pub fn fromStr(str: []const u8) ?DataHeader {
-        inline for (std.meta.fields(DataHeader)) |field| {
+    pub fn fromStr(str: []const u8) ?Header {
+        inline for (std.meta.fields(Header)) |field| {
             if (std.mem.startsWith(u8, str, field.name)) {
                 return @enumFromInt(field.value);
             }
@@ -436,12 +417,12 @@ const DataHeader = enum {
     }
 };
 
-const MultiData = struct {
+const Multi = struct {
     str: []const u8,
     name: ?[]const u8 = null,
     filename: ?[]const u8 = null,
 
-    fn update(md: *MultiData, str: []const u8) void {
+    fn update(md: *Multi, str: []const u8) void {
         var trimmed = std.mem.trim(u8, str, " \t\n\r");
         if (indexOf(u8, trimmed, "=")) |i| {
             if (eql(u8, trimmed[0..i], "name")) {
@@ -451,79 +432,79 @@ const MultiData = struct {
             }
         }
     }
+
+    fn parse(data: []const u8) !Multi {
+        if (std.mem.startsWith(u8, data, "Content-Disposition: form-data")) {
+            var mdata: Multi = .{
+                .str = data["Content-Disposition: form-data".len + 1 ..],
+            };
+
+            var extra = splitScalar(u8, data, ';');
+            _ = extra.first();
+            while (extra.next()) |each| {
+                mdata.update(each);
+            }
+
+            return mdata;
+        }
+        return error.ParseError;
+    }
+
+    fn parseFormData(a: Allocator, data: []const u8) !Item {
+        std.debug.assert(std.mem.startsWith(u8, data, "\r\n"));
+        if (indexOf(u8, data, "\r\n\r\n")) |i| {
+            var post_item = Item{
+                .segment = try a.dupe(u8, data),
+                .name = &.{},
+                .value = data[i + 4 ..],
+            };
+
+            if (indexOfPos(u8, data, 2, "\r\n")) |h_idx| {
+                const md = try parse(data[2..h_idx]);
+                if (md.name) |name|
+                    post_item.name = name;
+            }
+            return post_item;
+        }
+        return error.UnableToParseFormData;
+    }
+
+    /// Pretends to follow RFC2046
+    fn parseContentType(a: Allocator, mp: ContentType.MultiPart, data: []const u8) ![]Item {
+        var boundry_buffer: [74]u8 = @splat('-');
+        switch (mp) {
+            .mixed => {
+                return error.NotImplemented;
+            },
+            .@"form-data" => |fd| {
+                @memcpy(boundry_buffer[2..][0..fd.boundary.len], fd.boundary);
+                const boundry = boundry_buffer[0 .. fd.boundary.len + 2];
+                const count = std.mem.count(u8, data, boundry) -| 1;
+                const items = try a.alloc(Item, count);
+                var itr = splitSequence(u8, data, boundry);
+                _ = itr.first(); // the RFC says I'm supposed to ignore the preamble :<
+                for (items) |*itm| {
+                    itm.* = try Multi.parseFormData(a, itr.next().?);
+                }
+                std.debug.assert(eql(u8, itr.rest(), "--\r\n"));
+                return items;
+            },
+        }
+    }
 };
 
-fn parseMultiData(data: []const u8) !MultiData {
-    if (std.mem.startsWith(u8, data, "Content-Disposition: form-data")) {
-        var mdata: MultiData = .{
-            .str = data["Content-Disposition: form-data".len + 1 ..],
-        };
-
-        var extra = splitScalar(u8, data, ';');
-        _ = extra.first();
-        while (extra.next()) |each| {
-            mdata.update(each);
-        }
-
-        return mdata;
-    }
-    return error.ParseError;
-}
-
-fn parseMultiFormData(a: Allocator, data: []const u8) !DataItem {
-    std.debug.assert(std.mem.startsWith(u8, data, "\r\n"));
-    if (indexOf(u8, data, "\r\n\r\n")) |i| {
-        var post_item = DataItem{
-            .segment = try a.dupe(u8, data),
-            .name = &.{},
-            .value = data[i + 4 ..],
-        };
-
-        if (indexOfPos(u8, data, 2, "\r\n")) |h_idx| {
-            const md = try parseMultiData(data[2..h_idx]);
-            if (md.name) |name|
-                post_item.name = name;
-        }
-        return post_item;
-    }
-    return error.UnableToParseFormData;
-}
-
-/// Pretends to follow RFC2046
-fn parseMulti(a: Allocator, mp: ContentType.MultiPart, data: []const u8) ![]DataItem {
-    var boundry_buffer = [_]u8{'-'} ** 74;
-    switch (mp) {
-        .mixed => {
-            return error.NotImplemented;
-        },
-        .@"form-data" => |fd| {
-            @memcpy(boundry_buffer[2..][0..fd.boundary.len], fd.boundary);
-            const boundry = boundry_buffer[0 .. fd.boundary.len + 2];
-            const count = std.mem.count(u8, data, boundry) -| 1;
-            const items = try a.alloc(DataItem, count);
-            var itr = splitSequence(u8, data, boundry);
-            _ = itr.first(); // the RFC says I'm supposed to ignore the preamble :<
-            for (items) |*itm| {
-                itm.* = try parseMultiFormData(a, itr.next().?);
-            }
-            std.debug.assert(eql(u8, itr.rest(), "--\r\n"));
-            return items;
-        },
-    }
-}
-
-fn parseText(a: Allocator, tx: ContentType.Text, data: []const u8) ![]DataItem {
+fn parseText(a: Allocator, tx: ContentType.Text, data: []const u8) ![]Item {
     _ = tx;
     const dupe = try a.dupe(u8, data);
-    return try a.dupe(DataItem, &[1]DataItem{.{
+    return try a.dupe(Item, &[1]Item{.{
         .segment = dupe,
         .name = &.{},
         .value = dupe,
     }});
 }
 
-pub fn readQuery(a: Allocator, query: []const u8) !QueryData {
-    return QueryData.init(a, query);
+pub fn readQuery(a: Allocator, query: []const u8) !Query {
+    return Query.init(a, query);
 }
 
 test {
@@ -544,7 +525,7 @@ test "postdata init" {
         \\title=&desc=&thing=
     ;
     var reader = std.Io.Reader.fixed(vect);
-    const post: PostData = try .init(a, vect.len, &reader, try .fromStr(
+    const post: Post = try .init(a, vect.len, &reader, try .fromStr(
         "application/x-www-form-urlencoded",
     ));
 
@@ -555,7 +536,7 @@ test "postdata init" {
         try std.testing.expectEqualStrings(expect[1], item.value);
     }
 
-    a.free(post.rawpost);
+    a.free(post.bytes);
     for (post.items) |item| a.free(item.segment);
     a.free(post.items);
 
@@ -563,7 +544,7 @@ test "postdata init" {
         \\title=&desc=&thing=%22double quote%22
     ;
     reader = std.Io.Reader.fixed(vectextra);
-    const postextra: PostData = try .init(a, vectextra.len, &reader, try .fromStr(
+    const postextra: Post = try .init(a, vectextra.len, &reader, try .fromStr(
         "application/x-www-form-urlencoded",
     ));
 
@@ -571,12 +552,10 @@ test "postdata init" {
         try std.testing.expectEqualStrings(expect[0], item.name);
         try std.testing.expectEqualStrings(expect[1], item.value);
     }
-    a.free(postextra.rawpost);
+    a.free(postextra.bytes);
     for (postextra.items) |item| a.free(item.segment);
     a.free(postextra.items);
 }
-
-test Validator {}
 
 test json {
     const json_string =

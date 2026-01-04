@@ -250,7 +250,7 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     }
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
-            std.debug.print("\tpost data => '''{s}'''\n", .{post_data.rawpost});
+            std.debug.print("\tpost data => '''{s}'''\n", .{post_data.bytes});
         }
     }
 }

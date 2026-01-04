@@ -169,7 +169,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
     while (itr_headers.next()) |header| {
         log.debug("http header => {s} -> {s}", .{ header.name, header.value });
     }
-    var post_data: ?Request.Data.PostData = null;
+    var post_data: ?Request.Data.Post = null;
 
     if (req.head.content_length) |h_len| {
         if (h_len > std.math.maxInt(usize)) return error.ContentTooLarge;
@@ -181,7 +181,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
             post_data = try .init(a, hlen, reader, try .fromStr(h_type));
             log.debug(
                 "post data \"{s}\" {{{any}}}",
-                .{ post_data.?.rawpost, post_data.?.rawpost },
+                .{ post_data.?.bytes, post_data.?.bytes },
             );
 
             for (post_data.?.items) |itm| {
@@ -190,7 +190,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
         }
     }
 
-    var query_data: Request.Data.QueryData = undefined;
+    var query_data: Request.Data.Query = undefined;
     if (std.mem.indexOf(u8, req.head.target, "/")) |i| {
         query_data = try Request.Data.readQuery(a, req.head.target[i..]);
     }

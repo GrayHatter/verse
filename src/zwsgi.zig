@@ -300,7 +300,7 @@ const uWSGIVar = struct {
 };
 
 fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
-    var post_data: ?Request.Data.PostData = null;
+    var post_data: ?Request.Data.Post = null;
 
     if (zreq.known.get(.CONTENT_LENGTH)) |h_len| {
         const h_type = zreq.known.get(.CONTENT_TYPE) orelse "text/plain";
@@ -310,7 +310,7 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
             post_data = try .init(a, post_size, r, try .fromStr(h_type));
             log.debug(
                 "post data \"{s}\" {{{any}}}",
-                .{ post_data.?.rawpost, post_data.?.rawpost },
+                .{ post_data.?.bytes, post_data.?.bytes },
             );
 
             for (post_data.?.items) |itm| {

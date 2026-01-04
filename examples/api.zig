@@ -40,7 +40,7 @@ fn users(frame: *verse.Frame) !void {
 /// Adds a new user to the list.
 fn addUser(frame: *verse.Frame) !void {
     // validate that the post data is in the expected format
-    const request = verse.Request.Data.RequestData(CreateUserRequest).init(frame.request.data) catch {
+    const request = verse.Request.Data.Validate(CreateUserRequest).init(frame.request.data) catch {
         try frame.sendJSON(.bad_request, .{ .message = "bad request data" });
         return;
     };
