@@ -22,7 +22,7 @@ now: Timestamp,
 
 const Request = @This();
 
-pub const Data = @import("request-data.zig");
+pub const Data = @import("Request/Data.zig");
 pub const UserAgent = @import("user-agent.zig");
 const Headers = @import("headers.zig");
 const Cookies = @import("cookies.zig");

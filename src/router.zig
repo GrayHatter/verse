@@ -440,6 +440,6 @@ const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 
 const Frame = @import("frame.zig");
-const Request = @import("request.zig");
+const Request = @import("Request.zig");
 const StaticFile = @import("static-file.zig");
 const testing = @import("testing.zig");

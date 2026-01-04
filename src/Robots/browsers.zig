@@ -300,7 +300,7 @@ test browsers {
 
 const std = @import("std");
 const UA = @import("../user-agent.zig");
-const Request = @import("../request.zig");
+const Request = @import("../Request.zig");
 
 const eql = std.mem.eql;
 const Timestamp = std.Io.Timestamp;

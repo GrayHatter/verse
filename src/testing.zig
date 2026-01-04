@@ -240,7 +240,7 @@ test {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Headers = @import("headers.zig");
-const Request = @import("request.zig");
+const Request = @import("Request.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Server = @import("server.zig");

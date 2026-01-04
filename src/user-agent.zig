@@ -280,7 +280,7 @@ test UserAgent {
     _ = &Robots;
 }
 
-const Request = @import("request.zig");
+const Request = @import("Request.zig");
 const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
 const UABot = if (UA_VALIDATION) Robots.bots.Bot else void;
 

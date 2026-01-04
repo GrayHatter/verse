@@ -169,7 +169,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
     while (itr_headers.next()) |header| {
         log.debug("http header => {s} -> {s}", .{ header.name, header.value });
     }
-    var post_data: ?RequestData.PostData = null;
+    var post_data: ?Request.Data.PostData = null;
 
     if (req.head.content_length) |h_len| {
         if (h_len > std.math.maxInt(usize)) return error.ContentTooLarge;
@@ -190,12 +190,12 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
         }
     }
 
-    var query_data: RequestData.QueryData = undefined;
+    var query_data: Request.Data.QueryData = undefined;
     if (std.mem.indexOf(u8, req.head.target, "/")) |i| {
-        query_data = try RequestData.readQuery(a, req.head.target[i..]);
+        query_data = try Request.Data.readQuery(a, req.head.target[i..]);
     }
 
-    return RequestData{
+    return Request.Data{
         .post = post_data,
         .query = query_data,
     };
@@ -242,8 +242,7 @@ const Auth = @import("auth.zig");
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
-const Request = @import("request.zig");
-const RequestData = @import("request-data.zig");
+const Request = @import("Request.zig");
 
 const std = @import("std");
 const net = std.Io.net;

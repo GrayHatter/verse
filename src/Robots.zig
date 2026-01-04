@@ -189,7 +189,7 @@ pub const bots = @import("Robots/bots.zig");
 const Router = @import("router.zig");
 const Frame = @import("frame.zig");
 const UA = @import("user-agent.zig");
-const Request = @import("request.zig");
+const Request = @import("Request.zig");
 
 const std = @import("std");
 const startsWith = std.mem.startsWith;

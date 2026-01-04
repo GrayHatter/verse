@@ -117,7 +117,7 @@ test "bot ident order" {
 }
 
 const UA = @import("../user-agent.zig");
-const Request = @import("../request.zig");
+const Request = @import("../Request.zig");
 const std = @import("std");
 const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
