@@ -132,7 +132,6 @@ pub fn commentTag(blob: []const u8) ?usize {
 
 fn validateBlockSplit(
     index: usize,
-    offset: usize,
     end: usize,
     pblob: []const u8,
     drct: Directive,
@@ -141,68 +140,53 @@ fn validateBlockSplit(
     const os = Offset{
         .start = index,
         .end = index + end,
-        .kind = .{
-            .directive = .{
-                .kind = []const u8,
-                .data_offset = data_offset,
-                .d = drct,
-            },
-        },
+        .kind = .{ .directive = .{
+            .kind = []const u8,
+            .data_offset = data_offset,
+            .d = drct,
+        } },
     };
     // TODO Split needs whitespace postfix
-    const ws_start: usize = offset + end;
-    var wsidx = ws_start;
-    while (wsidx < pblob.len and
-        (pblob[wsidx] == ' ' or pblob[wsidx] == '\t' or
-            pblob[wsidx] == '\n' or pblob[wsidx] == '\r'))
-    {
-        wsidx += 1;
-    }
-    if (wsidx > 0) {
+    var ws_end = end;
+    while (ws_end < pblob.len and
+        (pblob[ws_end] == ' ' or pblob[ws_end] == '\t' or
+            pblob[ws_end] == '\n' or pblob[ws_end] == '\r'))
+        ws_end += 1;
+
+    if (ws_end > end) {
         return &[_]Offset{
             .{
                 .start = index + drct.tag_block.len,
-                .end = index + wsidx,
-                .kind = .{
-                    .component = .{
-                        .data_offset = data_offset,
-                        .kind = []const []const u8,
-                        .len = 2,
-                    },
-                },
+                .end = index + ws_end,
+                .kind = .{ .component = .{
+                    .data_offset = data_offset,
+                    .kind = []const []const u8,
+                    .len = 2,
+                } },
             },
             os,
-            .{
+            .{ // Include the whitespace for <Split> blocks
                 .start = 0,
-                .end = wsidx - end,
-                .kind = .{
-                    .slice = pblob[offset + end .. wsidx],
-                },
+                .end = ws_end - end,
+                .kind = .{ .slice = pblob[end..ws_end] },
             },
         };
     } else {
-        return &[_]Offset{
-            .{
-                .start = index + drct.tag_block.len,
-                .end = index + end,
-                .data_offset = null,
-                .kind = .{
-                    .component = .{
-                        .kind = []const []const u8,
-                        .data_offset = data_offset,
-                        .len = 1,
-                    },
-                },
-            },
-            os,
-        };
+        return &[_]Offset{ .{
+            .start = index + drct.tag_block.len,
+            .end = index + end,
+            .kind = .{ .component = .{
+                .kind = []const []const u8,
+                .data_offset = data_offset,
+                .len = 1,
+            } },
+        }, os };
     }
 }
 
 fn validateDirective(
     BlockType: type,
     index: usize,
-    offset: usize,
     drct: Directive,
     pblob: []const u8,
     base_offset: usize,
@@ -217,20 +201,18 @@ fn validateDirective(
             const os = Offset{
                 .start = index,
                 .end = index + end,
-                .kind = .{
-                    .directive = .{
-                        .kind = FieldT,
-                        .data_offset = data_offset,
-                        .d = drct,
-                    },
-                },
+                .kind = .{ .directive = .{
+                    .kind = FieldT,
+                    .data_offset = data_offset,
+                    .d = drct,
+                } },
             };
             return &[_]Offset{os};
         },
         .split => {
             const FieldT = fieldType(BlockType, drct.noun);
             std.debug.assert(FieldT == []const []const u8);
-            return validateBlockSplit(index, offset, end, pblob, drct, data_offset)[0..];
+            return validateBlockSplit(index, end, pblob, drct, data_offset)[0..];
         },
         .foreach, .with => {
             const FieldT = fieldType(BlockType, drct.noun);
@@ -249,9 +231,8 @@ fn validateDirective(
                     },
                 }} ++ loop;
             } else if (drct.tag_block_body) |body| {
-                // The code as written descends into the type.
-                // if the call stack flattens out, it might be
-                // better to calculate the offset from root.
+                // The code as written descends into the type. If the call stack flattens
+                // out, it might be better to calculate the offset from root.
                 const BaseT = baseType(BlockType, drct.noun);
                 const loop = validateBlock(body, BaseT, 0);
                 return &[_]Offset{.{
@@ -332,14 +313,11 @@ pub fn validateBlock(comptime html: []const u8, BlockType: type, base_offset: us
             pblob = pblob[offset..];
             index += offset;
             if (Directive.init(pblob)) |drct| {
-                found_offsets = found_offsets ++
-                    [_]Offset{.{
-                        .start = open_idx,
-                        .end = index,
-                        .kind = .{
-                            .slice = html[open_idx..index],
-                        },
-                    }} ++ validateDirective(BlockType, index, offset, drct, pblob, base_offset);
+                found_offsets = found_offsets ++ [_]Offset{.{
+                    .start = open_idx,
+                    .end = index,
+                    .kind = .{ .slice = html[open_idx..index] },
+                }} ++ validateDirective(BlockType, index, drct, pblob, base_offset);
                 const end = drct.tag_block.len;
                 pblob = pblob[end..];
                 index += end;

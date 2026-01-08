@@ -372,7 +372,7 @@ test Page {
     try std.testing.expect(varr.items.len < PUT.IoVec.countAll(page));
     // The following two numbers weren't validated in anyway.
     try std.testing.expectEqual(49, varr.items.len);
-    try std.testing.expectEqual(56, PUT.IoVec.countAll(page));
+    try std.testing.expectEqual(52, PUT.IoVec.countAll(page));
 }
 
 test {
