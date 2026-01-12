@@ -286,7 +286,7 @@ test UserAgent {
 
 const Request = @import("Request.zig");
 const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
-const Bot = if (UA_VALIDATION) Robots.Bot.Bot else void;
+const Bot = if (UA_VALIDATION) Robots.Bot else void;
 
 const std = @import("std");
 const Duration = std.Io.Duration;

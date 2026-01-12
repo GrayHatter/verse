@@ -1,3 +1,63 @@
+name: Name,
+version: u32,
+/// Anything that announces itself as a bot is assumed to be benign
+malicious: bool = false,
+
+pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
+pub const is_malicious: Bot = .{ .name = .malicious, .version = 0, .malicious = true };
+
+const Bot = @This();
+
+pub const Name = enum {
+    amzn_searchbot,
+    applebot,
+    bingbot,
+    claudebot,
+    googlebot,
+    gptbot,
+    lounge_irc_client,
+
+    malicious,
+    unknown,
+
+    pub const fields = @typeInfo(Name).@"enum".fields;
+    pub const len = fields.len;
+};
+
+pub fn resolve(str: []const u8) ?Bot {
+    if (find(u8, str, "Amzn-SearchBot/0.1") != null) {
+        return .{
+            .name = .amzn_searchbot,
+            .version = parseVersion(str, "Amzn-SearchBot/") catch 0,
+            // caught ignoring robots.txt
+            .malicious = true,
+        };
+    } else if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
+        return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
+    } else if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
+        return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
+    } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
+        return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
+    } else if (find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
+        return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
+    } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
+        return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
+    } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
+        return .{ .name = .lounge_irc_client, .version = 0 };
+    }
+    return null;
+}
+
+fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32 {
+    if (find(u8, str, target)) |idx| {
+        const start = idx + target.len;
+        // 3 is the minimum reasonable tail for a version
+        if (str.len < start + 3) return error.Invalid;
+        const end = findScalarPos(u8, str, start, '.') orelse return error.Invalid;
+        return parseInt(u32, str[start..end], 10) catch return error.Invalid;
+    } else return error.Invalid;
+}
+
 pub const Rules = struct {
     pub fn rfc9110_10_1_2(ua: UA, r: *const Request, score: *f16) !void {
         // https://www.rfc-editor.org/rfc/rfc9110#section-10.1.2
@@ -34,73 +94,13 @@ pub const Network = struct {
     exaustive: bool = true,
 };
 
-pub const Bot = struct {
-    name: Name,
-    version: u32,
-    /// Anything that announces itself as a bot is assumed to be benign
-    malicious: bool = false,
-
-    pub const Name = enum {
-        amzn_searchbot,
-        applebot,
-        bingbot,
-        claudebot,
-        googlebot,
-        gptbot,
-        lounge_irc_client,
-
-        malicious,
-        unknown,
-
-        pub const fields = @typeInfo(Name).@"enum".fields;
-        pub const len = fields.len;
-    };
-
-    pub fn resolve(str: []const u8) ?Bot {
-        if (find(u8, str, "Amzn-SearchBot/0.1") != null) {
-            return .{
-                .name = .amzn_searchbot,
-                .version = parseVersion(str, "Amzn-SearchBot/") catch 0,
-                // caught ignoring robots.txt
-                .malicious = true,
-            };
-        } else if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
-            return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
-        } else if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
-            return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
-        } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
-            return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
-        } else if (find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
-            return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
-        } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
-            return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
-        } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
-            return .{ .name = .lounge_irc_client, .version = 0 };
-        }
-        return null;
-    }
-
-    fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32 {
-        if (find(u8, str, target)) |idx| {
-            const start = idx + target.len;
-            // 3 is the minimum reasonable tail for a version
-            if (str.len < start + 3) return error.Invalid;
-            const end = findScalarPos(u8, str, start, '.') orelse return error.Invalid;
-            return parseInt(u32, str[start..end], 10) catch return error.Invalid;
-        } else return error.Invalid;
-    }
-
-    pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
-    pub const is_malicious: Bot = .{ .name = .malicious, .version = 0, .malicious = true };
-};
-
 pub const Identity = struct {
     bot: Bot.Name,
     network: ?*const Network,
 };
 
-pub const bots: std.EnumArray(Bot.Name, Identity) = .{
-    .values = [Bot.Name.len]Identity{
+pub const bots: std.EnumArray(Name, Identity) = .{
+    .values = [Name.len]Identity{
         .{ .bot = .amzn_searchbot, .network = null },
         .{ .bot = .applebot, .network = null },
         .{ .bot = .bingbot, .network = null },
