@@ -88,11 +88,11 @@ const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
 
 const rules = struct {
     const age = [_]RuleFn{
-        browsers.Rules.age,
+        Browser.Rules.checkAge,
     };
     const browser = [_]RuleFn{
-        browsers.Rules.protocolVer,
-        browsers.Rules.acceptStr,
+        Browser.Rules.protocolVer,
+        Browser.Rules.acceptStr,
     };
     const bot = [_]RuleFn{
         Bot.Rules.knownSubnet,
@@ -101,7 +101,7 @@ const rules = struct {
 
 test Robots {
     _ = std.testing.refAllDecls(@This());
-    _ = &browsers;
+    _ = &Browser;
 }
 
 pub const RobotOptions = struct {
@@ -185,12 +185,12 @@ test robotsTxt {
     _ = robotsTxt(&[_]Bot.TxtRules{.{ .name = "googlebot", .allow = false }}, .default);
 }
 
-pub const browsers = @import("Robots/browsers.zig");
+pub const Browser = @import("Robots/Browser.zig");
 pub const Bot = @import("Robots/Bot.zig");
 
 const Router = @import("router.zig");
 const Frame = @import("frame.zig");
-const UA = @import("user-agent.zig");
+const UA = @import("UserAgent.zig");
 const Request = @import("Request.zig");
 
 const std = @import("std");

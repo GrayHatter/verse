@@ -59,7 +59,7 @@ fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32
 }
 
 pub const Rules = struct {
-    pub fn rfc9110_10_1_2(ua: UA, r: *const Request, score: *f16) !void {
+    pub fn rfc9110_10_1_2(ua: UserAgent, r: *const Request, score: *f16) !void {
         // https://www.rfc-editor.org/rfc/rfc9110#section-10.1.2
 
         _ = ua;
@@ -68,7 +68,7 @@ pub const Rules = struct {
         if (false) {}
     }
 
-    pub fn knownSubnet(ua: UA, r: *const Request, score: *f16) !void {
+    pub fn knownSubnet(ua: UserAgent, r: *const Request, score: *f16) !void {
         if (ua.agent != .bot) return error.NotABot;
 
         if (bots.get(ua.agent.bot.name).network) |nw| {
@@ -127,7 +127,7 @@ test "bot ident order" {
     }
 }
 
-const UA = @import("../user-agent.zig");
+const UserAgent = @import("../UserAgent.zig");
 const Request = @import("../Request.zig");
 const std = @import("std");
 const endsWith = std.mem.endsWith;

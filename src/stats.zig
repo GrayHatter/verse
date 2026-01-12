@@ -269,6 +269,6 @@ pub const Endpoint = struct {
 const std = @import("std");
 const Frame = @import("frame.zig");
 const Server = @import("server.zig");
-const UserAgent = @import("user-agent.zig");
+const UserAgent = @import("UserAgent.zig");
 const Robots = @import("Robots.zig");
 const Timestamp = std.Io.Timestamp;

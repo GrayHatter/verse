@@ -1,13 +1,54 @@
+name: Name,
+// This was a u16, but then I realized, I don't trust browsers.
+version: u32,
+version_string: []const u8 = "",
+
+const Browser = @This();
+
+pub const unknown: Browser = .{
+    .name = .unknown,
+    .version = 0,
+};
+
+pub const Name = enum {
+    brave,
+    chrome,
+    edge,
+    firefox,
+    hastur,
+    ladybird,
+    opera,
+    safari,
+    unknown,
+    // lol, ok bro
+    msie,
+};
+
+pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
+    if (comptime !UA_VALIDATION) @compileError("User Agent Validation is disabled");
+    const versions = Versions[@intFromEnum(b.name)];
+    if (b.version >= versions.len) return error.UnknownVersion;
+    return std.Io.Timestamp.fromNanoseconds(versions[b.version] * std.time.ns_per_s).durationTo(now);
+}
+
+test age {
+    if (!UA_VALIDATION) return error.SkipZigTest;
+    const browser = Browser{ .name = .chrome, .version = 134 };
+    const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
+    try std.testing.expect((try browser.age(now)).toSeconds() < 86400 * 3650); // breaks in 10 years, good luck future me!
+    try std.testing.expect((try browser.age(now)).toSeconds() > 3148551);
+}
+
 const Date = i96;
 const VerDate = struct { u16, Date };
 
-const browser_count = @typeInfo(UA.Browser.Name).@"enum".fields.len;
+const browser_count = @typeInfo(Name).@"enum".fields.len;
 
 pub const Versions: [browser_count][]const Date = makeVersions();
 
 fn makeVersions() [browser_count][]const Date {
     var v: [browser_count][]const Date = undefined;
-    for (@typeInfo(UA.Browser.Name).@"enum".fields) |field| {
+    for (@typeInfo(Name).@"enum".fields) |field| {
         var name: [field.name.len]u8 = field.name[0..].*;
         name[0] ^= 0b100000;
         v[field.value] = if (@hasDecl(@This(), &name))
@@ -201,7 +242,7 @@ pub const Rules = struct {
     const DAY: i64 = 86400;
     pub const AGE_STEP: usize = DAY * 45;
 
-    pub fn age(ua: UA, r: *const Request, score: *f16) !void {
+    pub fn checkAge(ua: UserAgent, r: *const Request, score: *f16) !void {
         if (ua.agent != .browser) return;
         if (ua.agent.browser.name == .unknown) return;
         const delta: Duration = ua.agent.browser.age(r.now) catch return;
@@ -221,16 +262,16 @@ pub const Rules = struct {
         }
     }
 
-    test age {
+    test checkAge {
         var req: Request = undefined;
         req.now = try std.Io.Clock.now(.real, std.testing.io);
         var score: f16 = 0.0;
-        try age(.{ .string = "", .agent = .{
+        try checkAge(.{ .string = "", .agent = .{
             .browser = .{ .name = .chrome, .version = 0 },
         } }, &req, &score);
         try std.testing.expectEqual(score, 0.9);
         score = 0;
-        try age(.{ .string = "", .agent = .{
+        try checkAge(.{ .string = "", .agent = .{
             .browser = .{
                 .name = .chrome,
                 .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
@@ -245,13 +286,13 @@ pub const Rules = struct {
         };
 
         score = 0.0;
-        try age(.{ .string = "", .agent = .{
+        try checkAge(.{ .string = "", .agent = .{
             .browser = .{ .name = .unknown, .version = 0 },
         } }, &req, &score);
         try std.testing.expectEqual(score, 0.0);
     }
 
-    pub fn acceptStr(ua: UA, r: *const Request, score: *f16) !void {
+    pub fn acceptStr(ua: UserAgent, r: *const Request, score: *f16) !void {
         std.debug.assert(ua.agent == .browser);
         switch (ua.agent.browser.name) {
             .chrome => {},
@@ -277,7 +318,7 @@ pub const Rules = struct {
         }
     }
 
-    pub fn protocolVer(_: UA, r: *const Request, score: *f16) !void {
+    pub fn protocolVer(_: UserAgent, r: *const Request, score: *f16) !void {
         if (!r.secure) return;
 
         // TODO To actually be correct, this should do a browser version check as well
@@ -293,15 +334,18 @@ pub const Rules = struct {
     }
 };
 
-const browsers = @This();
-test browsers {
-    _ = std.testing.refAllDecls(browsers);
+test Browser {
+    _ = std.testing.refAllDecls(Browser);
 }
 
 const std = @import("std");
-const UA = @import("../user-agent.zig");
+const UserAgent = @import("../UserAgent.zig");
 const Request = @import("../Request.zig");
 
 const eql = std.mem.eql;
 const Timestamp = std.Io.Timestamp;
 const Duration = std.Io.Duration;
+
+const verse_buildopts = @import("verse_buildopts");
+const builtin = @import("builtin");
+const UA_VALIDATION: bool = verse_buildopts.ua_validation or builtin.is_test;

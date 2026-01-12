@@ -26,7 +26,7 @@ pub const Agent = union(enum) {
     bot: Bot,
     browser: Browser,
     script: Script,
-    unknown: Other,
+    unknown: void,
 
     pub const malicious: Agent = .{ .bot = .malicious };
 
@@ -36,7 +36,7 @@ pub const Agent = union(enum) {
         } else if (asScript(str)) |scrpt| {
             return scrpt;
         }
-        return .{ .unknown = .{} };
+        return .{ .unknown = {} };
     }
 
     fn mozilla(str: []const u8) Agent {
@@ -128,14 +128,14 @@ pub const Agent = union(enum) {
 };
 
 test Agent {
-    try std.testing.expectEqualDeep(Agent{ .unknown = .{} }, Agent.init("unknown"));
+    try std.testing.expectEqualDeep(Agent{ .unknown = {} }, Agent.init("unknown"));
 
     try std.testing.expectEqualDeep(
         Agent{ .browser = .unknown },
         Agent.init("Mozilla/5.0"),
     );
 
-    try std.testing.expectEqualDeep(Agent{ .unknown = .{} }, Agent.init("mozilla/5.0"));
+    try std.testing.expectEqualDeep(Agent{ .unknown = {} }, Agent.init("mozilla/5.0"));
 
     const not_google_bot = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) " ++
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36";
@@ -209,47 +209,6 @@ test Agent {
     );
 }
 
-pub const Browser = struct {
-    name: Name,
-    // This was a u16, but then I realized, I don't trust browsers.
-    version: u32,
-    version_string: []const u8 = "",
-
-    pub const unknown: Browser = .{
-        .name = .unknown,
-        .version = 0,
-    };
-
-    pub const Name = enum {
-        brave,
-        chrome,
-        edge,
-        firefox,
-        hastur,
-        ladybird,
-        opera,
-        safari,
-        unknown,
-        // lol, ok bro
-        msie,
-    };
-
-    pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
-        if (comptime !UA_VALIDATION) @compileError("User Agent Validation is disabled");
-        const versions = Robots.browsers.Versions[@intFromEnum(b.name)];
-        if (b.version >= versions.len) return error.UnknownVersion;
-        return std.Io.Timestamp.fromNanoseconds(versions[b.version] * std.time.ns_per_s).durationTo(now);
-    }
-
-    test age {
-        if (!UA_VALIDATION) return error.SkipZigTest;
-        const browser = Browser{ .name = .chrome, .version = 134 };
-        const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
-        try std.testing.expect((try browser.age(now)).toSeconds() < 86400 * 3650); // breaks in 10 years, good luck future me!
-        try std.testing.expect((try browser.age(now)).toSeconds() > 3148551);
-    }
-};
-
 pub const Script = struct {
     name: Name,
     version: u32,
@@ -259,8 +218,6 @@ pub const Script = struct {
         git,
     };
 };
-
-pub const Other = struct {};
 
 pub fn init(ua_str: []const u8) UserAgent {
     return .{
@@ -285,6 +242,7 @@ test UserAgent {
 }
 
 const Request = @import("Request.zig");
+const Browser = @import("Robots/Browser.zig");
 const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
 const Bot = if (UA_VALIDATION) Robots.Bot else void;
 
