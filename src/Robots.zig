@@ -2,7 +2,7 @@
 //!
 //! It does something, what that something is? who know, but it's big!
 
-bot: bool,
+automated: bool,
 /// True when >= the anomaly score
 malicious: bool,
 score: f16,
@@ -10,13 +10,13 @@ score: f16,
 const Robots = @This();
 
 const default: Robots = .{
-    .bot = false,
+    .automated = false,
     .malicious = false,
     .score = 0.0,
 };
 
 const default_malicious: Robots = .{
-    .bot = true,
+    .automated = true,
     .malicious = true,
     .score = 1.0,
 };
@@ -27,44 +27,46 @@ pub const BOT_DEVIANCE: f16 = 0.2;
 pub fn init(r: *const Request) Robots {
     const ua: UA = r.user_agent orelse return .default_malicious;
 
-    var bot: Robots = .default;
+    var robot: Robots = .default;
 
     inline for (rules.age) |rule| {
-        rule(ua, r, &bot.score) catch @panic("not implemented");
+        rule(ua, r, &robot.score) catch @panic("not implemented");
     }
 
     switch (ua.agent) {
-        .bot => {
-            bot.bot = true;
+        .bot => |bot| {
+            robot.automated = true;
             inline for (rules.bot) |rule| {
-                rule(ua, r, &bot.score) catch @panic("not implemented");
+                rule(ua, r, &robot.score) catch @panic("not implemented");
             }
             // the score of something actively identifying itself as a bot
             // is only related to it's malfeasance
-            bot.malicious = bot.score >= BOT_DEVIANCE;
+            robot.malicious = robot.score >= BOT_DEVIANCE;
+            robot.malicious = robot.malicious or bot.malicious;
         },
         .browser => |browser| {
             inline for (rules.browser) |rule| {
-                rule(ua, r, &bot.score) catch @panic("not implemented");
+                rule(ua, r, &robot.score) catch @panic("not implemented");
             }
             // Any bot that masqurades as a browser is by definition malign
-            if (bot.score >= ANOMALY_MAX) {
-                bot.bot = true;
-                bot.malicious = true;
+            if (robot.score >= ANOMALY_MAX) {
+                robot.automated = true;
+                robot.malicious = true;
             }
             switch (browser.name) {
                 .chrome => {},
                 .msie => {
-                    bot.bot = true;
-                    bot.malicious = true;
+                    robot.automated = true;
+                    robot.malicious = true;
                 },
                 else => {},
             }
         },
-        .script => bot.bot = true,
-        .unknown => bot.malicious = startsWith(u8, ua.string, "Mozilla/"),
+        .script => robot.automated = true,
+        // Not a browser, but pretending to be one.
+        .unknown => robot.malicious = startsWith(u8, ua.string, "Mozilla/"),
     }
-    return bot;
+    return robot;
 }
 
 pub const Label = enum {
@@ -93,7 +95,7 @@ const rules = struct {
         browsers.Rules.acceptStr,
     };
     const bot = [_]RuleFn{
-        bots.Rules.knownSubnet,
+        Bot.Rules.knownSubnet,
     };
 };
 
@@ -117,7 +119,7 @@ pub const RobotOptions = struct {
 };
 
 pub fn robotsTxt(
-    comptime robots: []const bots.TxtRules,
+    comptime robots: []const Bot.TxtRules,
     comptime options: RobotOptions,
 ) Router.Match {
     const EP = struct {
@@ -180,11 +182,11 @@ pub fn robotsTxt(
 
 test robotsTxt {
     // TODO mock a full request frame
-    _ = robotsTxt(&[_]bots.TxtRules{.{ .name = "googlebot", .allow = false }}, .default);
+    _ = robotsTxt(&[_]Bot.TxtRules{.{ .name = "googlebot", .allow = false }}, .default);
 }
 
 pub const browsers = @import("Robots/browsers.zig");
-pub const bots = @import("Robots/bots.zig");
+pub const Bot = @import("Robots/Bot.zig");
 
 const Router = @import("router.zig");
 const Frame = @import("frame.zig");

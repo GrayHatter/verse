@@ -219,7 +219,7 @@ pub const Endpoint = struct {
                     if (sua.agent == .bot) is_bot = " verse-bot";
                     if (@TypeOf(sua.validation) != void) {
                         const bv: Robots = sua.validation orelse .init(f.request);
-                        if (bv.malicious or bv.bot and sua.agent != .bot) is_bot = " verse-bot-malicious";
+                        if (bv.malicious or bv.automated and sua.agent != .bot) is_bot = " verse-bot-malicious";
                     }
                 }
 

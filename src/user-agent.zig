@@ -22,8 +22,6 @@ pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
     }
 }
 
-pub const Bot = UABot;
-
 pub const Agent = union(enum) {
     bot: Bot,
     browser: Browser,
@@ -203,6 +201,12 @@ test Agent {
         Agent{ .bot = .{ .name = .applebot, .version = 0 } },
         Agent.init(apple),
     );
+
+    const amzn = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/119.0.6045.214 Safari/537.36";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .amzn_searchbot, .version = 0, .malicious = true } },
+        Agent.init(amzn),
+    );
 }
 
 pub const Browser = struct {
@@ -282,7 +286,7 @@ test UserAgent {
 
 const Request = @import("Request.zig");
 const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
-const UABot = if (UA_VALIDATION) Robots.bots.Bot else void;
+const Bot = if (UA_VALIDATION) Robots.Bot.Bot else void;
 
 const std = @import("std");
 const Duration = std.Io.Duration;

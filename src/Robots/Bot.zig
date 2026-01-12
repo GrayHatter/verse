@@ -37,8 +37,11 @@ pub const Network = struct {
 pub const Bot = struct {
     name: Name,
     version: u32,
+    /// Anything that announces itself as a bot is assumed to be benign
+    malicious: bool = false,
 
     pub const Name = enum {
+        amzn_searchbot,
         applebot,
         bingbot,
         claudebot,
@@ -54,13 +57,20 @@ pub const Bot = struct {
     };
 
     pub fn resolve(str: []const u8) ?Bot {
-        if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
+        if (find(u8, str, "Amzn-SearchBot/0.1") != null) {
+            return .{
+                .name = .amzn_searchbot,
+                .version = parseVersion(str, "Amzn-SearchBot/") catch 0,
+                // caught ignoring robots.txt
+                .malicious = true,
+            };
+        } else if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
             return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
         } else if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
             return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
         } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
             return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
-        } else if (indexOf(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
+        } else if (find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
             return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
         } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
             return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
@@ -71,17 +81,17 @@ pub const Bot = struct {
     }
 
     fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32 {
-        if (indexOf(u8, str, target)) |idx| {
+        if (find(u8, str, target)) |idx| {
             const start = idx + target.len;
             // 3 is the minimum reasonable tail for a version
             if (str.len < start + 3) return error.Invalid;
-            const end = indexOfScalarPos(u8, str, start, '.') orelse return error.Invalid;
+            const end = findScalarPos(u8, str, start, '.') orelse return error.Invalid;
             return parseInt(u32, str[start..end], 10) catch return error.Invalid;
         } else return error.Invalid;
     }
 
     pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
-    pub const malicious: Bot = .{ .name = .malicious, .version = 0 };
+    pub const is_malicious: Bot = .{ .name = .malicious, .version = 0, .malicious = true };
 };
 
 pub const Identity = struct {
@@ -91,6 +101,7 @@ pub const Identity = struct {
 
 pub const bots: std.EnumArray(Bot.Name, Identity) = .{
     .values = [Bot.Name.len]Identity{
+        .{ .bot = .amzn_searchbot, .network = null },
         .{ .bot = .applebot, .network = null },
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claudebot, .network = null },
@@ -119,9 +130,9 @@ test "bot ident order" {
 const UA = @import("../user-agent.zig");
 const Request = @import("../Request.zig");
 const std = @import("std");
-const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
-const indexOf = std.mem.indexOf;
 const eql = std.mem.eql;
-const indexOfScalarPos = std.mem.indexOfScalarPos;
+const find = std.mem.find;
+const findScalarPos = std.mem.findScalarPos;
+const startsWith = std.mem.startsWith;
 const parseInt = std.fmt.parseInt;
