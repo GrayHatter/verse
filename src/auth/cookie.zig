@@ -27,7 +27,7 @@ pub fn CookieAuth(HMAC: type) type {
         // improvements, but this may not always be the case.
         server_secret_key: []const u8,
         /// Max age in seconds a session cookie is valid for.
-        max_age: i64,
+        max_age: Duration,
         cookie_name: []const u8,
 
         /// this session buffer API is unstable and may be replaced
@@ -47,16 +47,15 @@ pub fn CookieAuth(HMAC: type) type {
             /// Negative version numbers are reserved for users
             pub const Version: i8 = 0;
 
-            pub fn expired(t: Token, now: Timestamp, max_age: Duration) bool {
-                const token_created: i64 = littleToNative(i64, @as(*const i64, @ptrCast(&t.time)).*);
-                var token_time: Timestamp = token_created;
-                if (token_time > now) return true;
-                token_time +|= max_age;
-                return token_time < now;
-                //var token_time: Timestamp = .fromSeconds(token_created);
-                //if (token_time.nanoseconds > now.nanoseconds) return true;
-                //token_time.addDuration(max_age);
-                //return token_time.nanoseconds < now.nanoseconds;
+            pub fn expired(t: Token, last_valid: Timestamp) bool {
+                const clock_valid = last_valid.withClock(.real);
+                const token_created: Clock.Timestamp = .{
+                    .raw = .fromNanoseconds(
+                        littleToNative(i64, @as(*const i64, @ptrCast(&t.time)).*) * std.time.ns_per_s,
+                    ),
+                    .clock = .real,
+                };
+                return clock_valid.compare(.lt, token_created);
             }
         };
 
@@ -64,7 +63,7 @@ pub fn CookieAuth(HMAC: type) type {
             server_secret_key: []const u8,
             alloc: ?Allocator = null,
             base: ?Provider = null,
-            max_age: i64 = 86400 * 365,
+            max_age: Duration = .fromSeconds(86400 * 365),
             cookie_name: []const u8 = "verse_session_secret",
         }) Self {
             return .{
@@ -103,8 +102,9 @@ pub fn CookieAuth(HMAC: type) type {
                 hm.update(t.userid);
                 if (t.extra_data) |ed| hm.update(ed);
                 hm.final(our_hash[0..]);
+                const last_valid = now.addDuration(maxage);
                 if (timing_safe.eql([HMAC.mac_length]u8, t.mac, our_hash)) {
-                    if (t.expired(now, maxage)) return error.TokenExpired;
+                    if (t.expired(last_valid)) return error.TokenExpired;
                     if (user_buffer.len < t.userid.len) return error.NoSpaceLeft;
                     @memcpy(user_buffer[0..t.userid.len], t.userid);
                     return user_buffer[0..t.userid.len];
@@ -166,7 +166,7 @@ pub fn CookieAuth(HMAC: type) type {
             var buffer: [Self.ibuf_size]u8 = [_]u8{0} ** Self.ibuf_size;
             buffer[0] = Token.Version;
             var b: []u8 = buffer[1..];
-            const time = toBytes(nativeToLittle(i64, @intCast(now)));
+            const time = toBytes(nativeToLittle(i64, @intCast(@divTrunc(now.nanoseconds, std.time.ns_per_s))));
             hm.update(time[0..8]);
             @memcpy(b[0..8], time[0..8]);
             b = b[8..];
@@ -250,7 +250,7 @@ pub fn CookieAuth(HMAC: type) type {
 
 test Cookie {
     const a = std.testing.allocator;
-    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
+    const now: Timestamp = Clock.real.now(std.testing.io);
     var ath = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
@@ -279,7 +279,7 @@ test Cookie {
 
 test "Cookie ExtraData" {
     const a = std.testing.allocator;
-    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
+    const now: Timestamp = Clock.real.now(std.testing.io);
 
     var ath = Cookie.init(.{
         .alloc = a,
@@ -312,7 +312,7 @@ test "Cookie ExtraData" {
 
 test "Cookie token" {
     const a = std.testing.allocator;
-    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
+    const now: Timestamp = Clock.real.now(std.testing.io);
     var ath = Cookie.init(.{
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
@@ -331,21 +331,19 @@ test "Cookie token" {
 
     var uid_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(ath.server_secret_key);
-    const valid = try Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, 2);
+    const valid = try Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, .fromSeconds(2));
     try std.testing.expectEqualStrings(user.unique_id.?, valid);
 
     hm = Hmac.sha2.HmacSha256.init(ath.server_secret_key);
-    const expired = Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, -100);
+    const expired = Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, .fromSeconds(-100));
     try std.testing.expectError(error.TokenExpired, expired);
 }
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-// the expectation for these is to use the std.Io types, but that API is still immature
-const Timestamp = i96;
-const Duration = i96;
-//const Timestamp = std.Io.Clock.Timestamp;
-//const Duration = std.Io.Duration;
+const Clock = std.Io.Clock;
+const Timestamp = std.Io.Timestamp;
+const Duration = std.Io.Duration;
 const Hmac = std.crypto.auth.hmac;
 const nativeToLittle = std.mem.nativeToLittle;
 const littleToNative = std.mem.littleToNative;

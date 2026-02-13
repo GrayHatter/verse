@@ -110,26 +110,25 @@ pub var global_tree: StrHashMap(*AbstTree) = .{};
 var enum_list: StrHashMap(*EnumLiteral) = .{};
 var switch_list: StrHashMap(*Switch) = .{};
 
-pub fn main() !void {
-    var args = std.process.args();
+pub fn main(init: std.process.Init) !void {
+    var args = init.minimal.args.iterate();
+    const a = init.arena.allocator();
+    const io = init.io;
 
     var wout_path: ?[]const u8 = null;
     while (args.next()) |arg| {
         wout_path = arg;
     }
 
-    const a = std.heap.page_allocator;
-    var threaded: std.Io.Threaded = .init_single_threaded;
-    const io = threaded.ioBasic();
     const cwd = std.Io.Dir.cwd();
 
     const wout_dname = std.fs.path.dirname(wout_path.?) orelse return error.InvalidPath;
-    const wout_dir = try std.fs.cwd().openDir(wout_dname, .{});
-    var wfile = try wout_dir.createFile(std.fs.path.basename(wout_path.?), .{});
-    defer wfile.close();
+    const wout_dir = try cwd.openDir(io, wout_dname, .{});
+    var wfile = try wout_dir.createFile(io, std.fs.path.basename(wout_path.?), .{});
+    defer wfile.close(io);
     const wfile_b = try a.alloc(u8, 0x80000);
     defer a.free(wfile_b);
-    var fwriter = wfile.writer(wfile_b);
+    var fwriter = wfile.writer(io, wfile_b);
     var wout = &fwriter.interface;
     defer wout.flush() catch unreachable;
     try wout.writeAll(
@@ -348,7 +347,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
             const f_name = try allocFieldName(a, drct.noun);
 
             switch (drct.verb) {
-                .variable => |_| {
+                .variable => {
                     const kind: []u8 = switch (drct.otherwise) {
                         .required => try htmlType(a, drct.html_type, s_name),
                         .exact => unreachable,
@@ -357,7 +356,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                             try htmlType(a, drct.html_type, s_name)
                         else
                             try allocPrint(a, "?[]const u8 = null", .{}),
-                        .template => |_| {
+                        .template => {
                             const rf_name = try allocFieldName(a, drct.noun[1 .. drct.noun.len - 5]);
                             try parent.append(.{
                                 .name = rf_name,

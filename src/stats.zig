@@ -1,5 +1,5 @@
 options: Options,
-mutex: ?std.Thread.Mutex,
+mutex: ?Mutex,
 start_time: Timestamp,
 count: usize,
 mean: Mean,
@@ -108,16 +108,16 @@ pub fn init(opts: Options, now: Timestamp) Stats {
         .options = opts,
         .count = 0,
         .mean = .{},
-        .mutex = if (opts.threaded) .{} else null,
+        .mutex = if (opts.threaded) .init else null,
         .rows = @splat(.empty),
         .start_time = now,
     };
 }
 
-pub fn log(stats: *Stats, data: Data) void {
+pub fn log(stats: *Stats, data: Data, io: Io) void {
     if (stats.options.auth_mode == .stats_disabled) return;
-    if (stats.mutex) |*mx| mx.lock();
-    defer if (stats.mutex) |*mx| mx.unlock();
+    if (stats.mutex) |*mx| mx.lock(io) catch return;
+    defer if (stats.mutex) |*mx| mx.unlock(io);
     const row: *Line = &stats.rows[stats.count % stats.rows.len];
     row.* = .{
         .addr = .init(data.addr),
@@ -193,7 +193,7 @@ pub const Endpoint = struct {
             },
         );
         var count: usize = 0;
-        var uptime: i96 = if (std.Io.Clock.now(.real, f.io)) |clock| clock.toSeconds() else |_| 0;
+        var uptime: i96 = Io.Clock.awake.now(f.io).toSeconds();
         var mean_time: u64 = 0;
 
         if (server.stats) |active| {
@@ -272,3 +272,5 @@ const Server = @import("server.zig");
 const UserAgent = @import("UserAgent.zig");
 const Robots = @import("Robots.zig");
 const Timestamp = std.Io.Timestamp;
+const Io = std.Io;
+const Mutex = std.Io.Mutex;

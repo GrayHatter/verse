@@ -3,8 +3,8 @@
 //! Both Logging and Debug logging will be sent to serr when set
 
 path: ?[]const u8,
-sout: ?std.fs.File,
-serr: ?std.fs.File = std.fs.File.stderr(),
+sout: ?File,
+serr: ?File = .stderr(),
 
 /// Default when running as a daemon
 pub const default: Logging = .{
@@ -15,7 +15,7 @@ pub const default: Logging = .{
 /// Default when running in the foreground
 pub const stdout: Logging = .{
     .path = "/dev/stdout",
-    .sout = std.fs.File.stdout(),
+    .sout = .stdout(),
 };
 
 pub const devnull: Logging = .{
@@ -27,7 +27,7 @@ const Logging = @This();
 
 pub const default_prefix = "/var/log/verse/";
 
-var mutex: std.Thread.Mutex = .{};
+var mutex: Io.Mutex = .{};
 
 //pub const log: *Logging = &global_logger;
 var global_logger: Logging = undefined;
@@ -88,3 +88,5 @@ pub fn debug(l: Logging, comptime str: []const u8, args: anytype) void {
 }
 
 const std = @import("std");
+const File = std.Io.File;
+const Io = std.Io;

@@ -76,7 +76,7 @@ pub fn provider(mtls: *MTLS) Provider {
 
 test MTLS {
     const a = std.testing.allocator;
-    const now: Timestamp = (try std.Io.Clock.now(.real, std.testing.io)).toSeconds();
+    const now: Timestamp = Clock.real.now(std.testing.io);
     var mtls = MTLS{};
     var provider_ = mtls.provider();
 
@@ -125,6 +125,5 @@ const User = @import("user.zig");
 const Error = @import("../auth.zig").Error;
 const Headers = @import("../headers.zig");
 
-// the expectation for these is to use the std.Io types, but that API is still immature
-const Timestamp = i96;
-//const Timestamp = std.Io.Clock.Timestamp;
+const Clock = std.Io.Clock;
+const Timestamp = std.Io.Timestamp;

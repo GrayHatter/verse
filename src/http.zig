@@ -56,7 +56,7 @@ pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
         -1,
         &sigset,
         @bitCast(system.O{ .NONBLOCK = false }),
-    ) catch @panic("fd failed") };
+    ) catch @panic("fd failed"), .flags = .{ .nonblocking = false } };
 
     log.info("HTTP Server listening at http://{f}", .{http.srv_address});
     while (true) {
@@ -110,8 +110,8 @@ const OnceFuture = std.Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
 pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     defer stream.close(io);
-    var timer = try std.time.Timer.start();
-    const now = try std.Io.Clock.now(.real, io);
+    var timer: Io.Timestamp = Io.Clock.awake.now(io);
+    const now: Io.Timestamp = Io.Clock.real.now(io);
 
     log.info("HTTP connection from {f}", .{stream.socket.address});
 
@@ -149,7 +149,7 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
 
     writer.interface.flush() catch unreachable; // TODO
 
-    const lap = timer.lap();
+    const lap = timer.untilNow(io, .awake);
     if (srvr.stats) |*stats| {
         stats.log(.{
             .addr = req.remote_addr,
@@ -159,8 +159,8 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
             .rss = arena.queryCapacity(),
             .ua = req.user_agent,
             .uri = req.uri,
-            .us = lap / 1000,
-        });
+            .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
+        }, io);
     }
 }
 

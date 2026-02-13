@@ -23,7 +23,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         skip -= 1;
                     } else switch (dos.kind) {
                         .slice => cnt += 1,
-                        .directive => |_| {
+                        .directive => {
                             // I originally implemented this assuming that the
                             // correct implementation should give the exact size,
                             // but it's possible the correct implementation should
@@ -158,7 +158,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                 switch (drct.d.otherwise) {
                                     .literal => |lit| {
                                         // TODO figure out how to make this a u16 cmp instead of mem.eql
-                                        if (std.mem.eql(u8, @tagName(child_data.*), lit)) {
+                                        if (eql(u8, @tagName(child_data.*), lit)) {
                                             varr.appendAssumeCapacity(.fromSlice(drct.kind.VALUE));
                                         }
                                     },
@@ -241,7 +241,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         .@"union" => switch (data) {
                             inline else => |case, tag| {
                                 if (data == tag) {
-                                    const tagT = std.meta.TagPayload(T, tag);
+                                    const tagT = @TypeOf(case); // std.meta.TagPayload(T, tag);
                                     const start, const end = comptime brk: {
                                         var start: usize = 0;
                                         for (ofs) |of| {
@@ -278,12 +278,12 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     } else switch (os.kind) {
                         .slice => |slice| {
                             if (idx == 0) {
-                                try out.writeAll(std.mem.trimLeft(u8, slice, " \n\r"));
+                                try out.writeAll(trimStart(u8, slice, " \n\r"));
                             } else if (idx == ofs.len) {
-                                //try out.writeAll(std.mem.trimRight(u8, html[os.start..os.end], " \n\r"));
+                                //try out.writeAll(trimRight(u8, html[os.start..os.end], " \n\r"));
                                 try out.writeAll(slice);
                             } else if (ofs.len == 1) {
-                                try out.writeAll(std.mem.trim(u8, slice, " \n\r"));
+                                try out.writeAll(trim(u8, slice, " \n\r"));
                             } else {
                                 try out.writeAll(slice);
                             }
@@ -299,7 +299,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                 switch (drct.d.otherwise) {
                                     .literal => |lit| {
                                         // TODO figure out how to make this a u16 cmp instead of mem.eql
-                                        if (std.mem.eql(u8, @tagName(child_data.*), lit)) {
+                                        if (eql(u8, @tagName(child_data.*), lit)) {
                                             try out.writeAll(drct.kind.VALUE);
                                         }
                                     },
@@ -398,6 +398,9 @@ const iov = @import("../iovec.zig");
 const IOVec = iov.IOVec;
 const IOVArray = iov.IOVArray;
 
-const indexOfScalar = std.mem.indexOfScalar;
-const indexOfPosLinear = std.mem.indexOfPosLinear;
+const findScalar = std.mem.findScalar;
+const findScalarPos = std.mem.findScalarPos;
 const allocPrint = std.fmt.allocPrint;
+const eql = std.mem.eql;
+const trimStart = std.mem.trimStart;
+const trim = std.mem.trim;

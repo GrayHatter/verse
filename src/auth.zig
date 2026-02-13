@@ -84,6 +84,8 @@ test {
     _ = std.testing.refAllDecls(MTLS);
     _ = std.testing.refAllDecls(cookie);
     _ = std.testing.refAllDecls(Provider);
+    _ = std.testing.refAllDecls(User);
+    _ = &TestingAuth;
 }
 
 const std = @import("std");

@@ -74,7 +74,6 @@ pub fn getCookie(self: *const Provider, user: User) Error!?RequestCookie {
 }
 
 test "Provider" {
-    const std = @import("std");
     const p = Provider{
         .ctx = undefined,
         .vtable = .empty,
@@ -125,8 +124,8 @@ const RequestCookie = @import("../cookies.zig").Cookie;
 const User = @import("user.zig");
 
 // the expectation for these is to use the std.Io types, but that API is still immature
-const Timestamp = i96;
-const Duration = i96;
-//const std = @import("std");
-//const Timestamp = std.Io.Timestamp;
-//const Duration = std.Io.Duration;
+//const Timestamp = i96;
+//const Duration = i96;
+const std = @import("std");
+const Timestamp = std.Io.Timestamp;
+const Duration = std.Io.Duration;

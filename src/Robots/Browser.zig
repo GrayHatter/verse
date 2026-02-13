@@ -264,7 +264,7 @@ pub const Rules = struct {
 
     test checkAge {
         var req: Request = undefined;
-        req.now = try std.Io.Clock.now(.real, std.testing.io);
+        req.now = Clock.real.now(std.testing.io);
         var score: f16 = 0.0;
         try checkAge(.{ .string = "", .agent = .{
             .browser = .{ .name = .chrome, .version = 0 },
@@ -329,7 +329,7 @@ pub const Rules = struct {
                 .@"1.1" => score.* += 1.0,
                 .@"2.0" => {},
             },
-            .malformed => |_| {},
+            .malformed => {},
         }
     }
 };
@@ -345,6 +345,7 @@ const Request = @import("../Request.zig");
 const eql = std.mem.eql;
 const Timestamp = std.Io.Timestamp;
 const Duration = std.Io.Duration;
+const Clock = std.Io.Clock;
 
 const verse_buildopts = @import("verse_buildopts");
 const builtin = @import("builtin");

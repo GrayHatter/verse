@@ -48,7 +48,7 @@ pub fn build(b: *std.Build) !void {
             compiler.addDir(b.path("src/builtin-html/"));
         }
         compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
-        compiler.collect() catch @panic("unreachable");
+        compiler.collect(b.graph.io) catch @panic("unreachable");
     }
     const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
 
@@ -137,89 +137,89 @@ const Compiler = struct {
         return .{ .b = b, .dirs = .{}, .files = .{}, .collected = .{} };
     }
 
-    pub fn raze(self: Compiler) void {
-        for (self.dirs.items) |each| self.b.allocator.free(each);
-        self.dirs.deinit();
-        for (self.files.items) |each| self.b.allocator.free(each);
-        self.files.deinit();
-        for (self.collected.items) |each| self.b.allocator.free(each);
-        self.collected.deinit();
+    pub fn raze(comp: Compiler) void {
+        for (comp.dirs.items) |each| comp.b.allocator.free(each);
+        comp.dirs.deinit();
+        for (comp.files.items) |each| comp.b.allocator.free(each);
+        comp.files.deinit();
+        for (comp.collected.items) |each| comp.b.allocator.free(each);
+        comp.collected.deinit();
     }
 
-    pub fn depPath(self: *Compiler, path: []const u8) LazyPath {
-        return if (self.b.available_deps.len > 0)
-            self.b.dependencyFromBuildZig(ThisBuild, .{}).path(path)
+    pub fn depPath(comp: *Compiler, path: []const u8) LazyPath {
+        return if (comp.b.available_deps.len > 0)
+            comp.b.dependencyFromBuildZig(ThisBuild, .{}).path(path)
         else
-            self.b.path(path);
+            comp.b.path(path);
     }
 
-    pub fn addDir(self: *Compiler, dir: LazyPath) void {
-        self.dirs.append(self.b.allocator, dir) catch @panic("OOM");
-        self.templates = null;
-        self.structs = null;
+    pub fn addDir(comp: *Compiler, dir: LazyPath) void {
+        comp.dirs.append(comp.b.allocator, dir) catch @panic("OOM");
+        comp.templates = null;
+        comp.structs = null;
     }
 
-    pub fn addFile(self: *Compiler, file: LazyPath) void {
-        self.files.append(self.b.allocator, file) catch @panic("OOM");
-        self.templates = null;
-        self.structs = null;
+    pub fn addFile(comp: *Compiler, file: LazyPath) void {
+        comp.files.append(comp.b.allocator, file) catch @panic("OOM");
+        comp.templates = null;
+        comp.structs = null;
     }
 
-    pub fn buildTemplates(self: *Compiler) !*Module {
-        if (self.templates) |t| return t;
-        const compiled = self.b.createModule(.{
-            .root_source_file = self.depPath("src/template/comptime.zig"),
+    pub fn buildTemplates(comp: *Compiler) !*Module {
+        if (comp.templates) |t| return t;
+        const compiled = comp.b.createModule(.{
+            .root_source_file = comp.depPath("src/template/comptime.zig"),
         });
 
-        const found = self.b.addOptions();
-        const names: [][]const u8 = self.b.allocator.alloc([]const u8, self.collected.items.len) catch @panic("OOM");
+        const found = comp.b.addOptions();
+        const names: [][]const u8 = comp.b.allocator.alloc([]const u8, comp.collected.items.len) catch @panic("OOM");
 
-        for (self.collected.items, names) |lpath, *name| {
-            name.* = lpath.getPath3(self.b, null).sub_path;
+        for (comp.collected.items, names) |lpath, *name| {
+            name.* = lpath.getPath3(comp.b, null).sub_path;
             _ = compiled.addAnonymousImport(name.*, .{ .root_source_file = lpath });
         }
 
         found.addOption([]const []const u8, "names", names);
         compiled.addOptions("config", found);
-        self.templates = compiled;
+        comp.templates = compiled;
         return compiled;
     }
 
-    pub fn buildStructs(self: *Compiler, comp: *std.Build.Step.Compile) !*Module {
-        if (self.structs) |s| return s;
+    pub fn buildStructs(comp: *Compiler, step: *std.Build.Step.Compile) !*Module {
+        if (comp.structs) |s| return s;
 
-        if (self.debugging) std.debug.print("building structs for {}\n", .{self.collected.items.len});
-        const tc_build_run = self.b.addRunArtifact(comp);
+        if (comp.debugging) std.debug.print("building structs for {}\n", .{comp.collected.items.len});
+        const tc_build_run = comp.b.addRunArtifact(step);
         const tc_structs = tc_build_run.addOutputFileArg("compiled-structs.zig");
-        const module = self.b.createModule(.{ .root_source_file = tc_structs });
+        const module = comp.b.createModule(.{ .root_source_file = tc_structs });
 
-        self.structs = module;
+        comp.structs = module;
         return module;
     }
 
-    pub fn collect(self: *Compiler) !void {
-        for (self.dirs.items) |srcdir| {
-            try self.collectDir(srcdir);
+    pub fn collect(comp: *Compiler, io: std.Io) !void {
+        for (comp.dirs.items) |srcdir| {
+            try comp.collectDir(srcdir, io);
         }
-        for (self.files.items) |file| {
-            try self.collected.append(self.b.allocator, file);
+        for (comp.files.items) |file| {
+            try comp.collected.append(comp.b.allocator, file);
         }
     }
 
-    fn collectDir(self: *Compiler, path: LazyPath) !void {
-        var idir = path.getPath3(self.b, null).openDir("", .{ .iterate = true }) catch |err| {
+    fn collectDir(comp: *Compiler, path: LazyPath, io: std.Io) !void {
+        var idir = path.getPath3(comp.b, null).openDir(io, "", .{ .iterate = true }) catch |err| {
             std.debug.print("template build error {} for srcdir {}\n", .{ err, path });
             return err;
         };
-        defer idir.close();
+        defer idir.close(comp.b.graph.io);
 
-        var itr = try idir.walk(self.b.allocator);
-        while (try itr.next()) |file| {
+        var itr = try idir.walk(comp.b.allocator);
+        while (try itr.next(comp.b.graph.io)) |file| {
             switch (file.kind) {
                 .file => {
                     if (!std.mem.endsWith(u8, file.basename, ".html")) continue;
-                    //const name = try std.mem.join(self.b.allocator, "/", &[2][]const u8{ file.path, file.basename });
-                    try self.collected.append(self.b.allocator, path.path(self.b, file.path));
+                    //const name = try std.mem.join(comp.b.allocator, "/", &[2][]const u8{ file.path, file.basename });
+                    try comp.collected.append(comp.b.allocator, path.path(comp.b, file.path));
                 },
                 .directory => {},
                 else => {},
@@ -244,7 +244,7 @@ fn version(b: *std.Build) []const u8 {
             "--always",
         },
         &code,
-        .Ignore,
+        .ignore,
     ) catch zon.version;
 
     var git = std.mem.trim(u8, git_wide, " \r\n");

@@ -138,7 +138,7 @@ pub fn init(
         .uri = try Uri.split(req.uri),
         .auth_provider = auth,
         .headers = .empty,
-        .user = auth.authenticate(&req.headers, req.now.toSeconds()) catch null,
+        .user = auth.authenticate(&req.headers, req.now) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),
         .response_data = .{},

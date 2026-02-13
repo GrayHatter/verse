@@ -52,7 +52,7 @@ pub fn main() !void {
 
     server.serve(alloc) catch |err| {
         std.debug.print("error: {any}", .{err});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
 }
 

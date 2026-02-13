@@ -88,15 +88,15 @@ pub fn Validate(comptime T: type) type {
                     return .{ .data = g };
                 }
 
-                pub fn get(v: Valid, FT: type, comptime name: []const u8, default: ?FT) !FT {
+                pub fn get(v: Valid, FT: type, comptime name: []const u8, default: ?FT) error{ InvalidInt, InvalidFloat, InvalidEnumMember, DataMissing }!FT {
                     return switch (@typeInfo(FT)) {
                         .optional => |opt| v.get(opt.child, name, null) catch |err| switch (err) {
                             error.DataMissing => if (default) |d| d else return null,
                             else => return err,
                         },
                         .bool => v.optional(bool, name) orelse return error.DataMissing,
-                        .int => try parseInt(FT, (try v.require(name)).value, 10),
-                        .float => try parseFloat(FT, (try v.require(name)).value),
+                        .int => parseInt(FT, (try v.require(name)).value, 10) catch return error.InvalidInt,
+                        .float => parseFloat(FT, (try v.require(name)).value) catch return error.InvalidFloat,
                         .@"enum" => return stringToEnum(FT, (try v.require(name)).value) orelse error.InvalidEnumMember,
                         .pointer => (try v.require(name)).value,
                         else => comptime unreachable, // Not yet implemented

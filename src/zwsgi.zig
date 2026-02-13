@@ -44,7 +44,7 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
         },
     }
 
-    defer std.fs.Dir.adaptFromNewApi(cwd).deleteFile(z.unix_file_name) catch |err| switch (err) {
+    defer cwd.deleteFile(io, z.unix_file_name) catch |err| switch (err) {
         error.FileNotFound => {}, // Not optimal, but not fatal.
         else => {
             log.err(
@@ -66,17 +66,20 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
     if (z.options.chmod) |cmod| {
         var b: [2048:0]u8 = undefined;
-        const path: []u8 = try std.fs.Dir.adaptFromNewApi(cwd).realpath(z.unix_file_name, b[0..]);
+        const path: []u8 = b[0 .. (try cwd.realPathFile(io, z.unix_file_name, b[0..])) + 1];
         b[path.len] = 0;
         _ = std.os.linux.chmod(b[0..path.len :0], cmod);
     }
 
     const sigset = system.defaultSigSet();
-    const sigfd: Io.File = .{ .handle = system.signalfd(
-        -1,
-        &sigset,
-        @bitCast(system.O{ .NONBLOCK = false }),
-    ) catch @panic("fd failed") };
+    const sigfd: Io.File = .{
+        .handle = system.signalfd(
+            -1,
+            &sigset,
+            @bitCast(system.O{ .NONBLOCK = false }),
+        ) catch @panic("fd failed"),
+        .flags = .{ .nonblocking = false },
+    };
 
     while (true) {
         pollfds = .{
@@ -132,8 +135,8 @@ const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
 pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     defer stream.close(io);
-    var timer = try std.time.Timer.start();
-    const now = try std.Io.Clock.now(.real, io);
+    var timer: Io.Timestamp = Io.Clock.awake.now(io);
+    const now = Io.Clock.real.now(io);
 
     var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
@@ -159,11 +162,11 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     }, z.auth);
 
     defer {
-        const lap = timer.lap() / 1000;
+        const lap: Io.Duration = timer.untilNow(io, .awake);
         log.err(
             "zWSGI: [{d:.3}] {s} - {s}:{} {s} -- \"{s}\"",
             .{
-                @as(f64, @floatFromInt(lap)) / 1000.0,
+                @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000.0,
                 request.remote_addr,
                 @tagName(request.method),
                 @intFromEnum(frame.status orelse .ok),
@@ -180,8 +183,8 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
                 .rss = arena.queryCapacity(),
                 .ua = request.user_agent,
                 .uri = request.uri,
-                .us = lap,
-            });
+                .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
+            }, io);
         }
     }
 

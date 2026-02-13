@@ -63,7 +63,7 @@ pub fn main() !void {
 
     server.serve(std.heap.page_allocator) catch |err| {
         std.debug.print("error: {any}", .{err});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
 }
 
@@ -109,8 +109,7 @@ fn create(frame: *Frame) Router.Error!void {
         .unique_id = "example_user",
         .username = "example_user",
     };
-
-    frame.auth_provider.createSession(&user, frame.request.now.toSeconds()) catch return error.Unknown;
+    frame.auth_provider.createSession(&user, frame.request.now) catch return error.Unknown;
     if (frame.auth_provider.getCookie(user) catch null) |cookie| {
         try frame.cookie_jar.add(cookie);
     }

@@ -58,12 +58,12 @@ pub fn init(router: *const Router, opts: Options) !Server {
 pub fn serve(srv: *Server, gpa: Allocator) !void {
     system.installSignals();
 
-    var threaded: std.Io.Threaded = .init(gpa);
+    var threaded: std.Io.Threaded = .init(gpa, .{ .environ = undefined });
     defer threaded.deinit();
     threaded.async_limit = Io.Limit.limited(@max(2, srv.options.threads));
     const io: Io = srv.options.io orelse threaded.io();
 
-    const now = try std.Io.Clock.now(.real, io);
+    const now = Io.Clock.real.now(io);
     if (srv.options.stats) |opt| {
         srv.stats = .init(opt, now);
     }
