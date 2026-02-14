@@ -167,7 +167,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
         log.err(
             "zWSGI: [{d:.3}] {s} - {s}:{} {s} -- \"{s}\"",
             .{
-                @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000.0,
+                @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
                 request.remote_addr,
                 @tagName(request.method),
                 @intFromEnum(frame.status orelse .ok),
@@ -259,18 +259,14 @@ pub const zWSGIRequest = struct {
 
                 if (expected) |k| {
                     if (zr.known.get(k)) |old| {
-                        log.err(
-                            "Duplicate key found (dropping) {s} :: original {s} | new {s}",
-                            .{ @tagName(k), old, val_str },
-                        );
+                        log.err("Duplicate key found (dropping) {s} :: original {s} | new {s}", .{
+                            @tagName(k), old, val_str,
+                        });
                         continue;
                     }
                     zr.known.set(k, val_str);
                 } else {
-                    try zr.vars.append(a, uWSGIVar{
-                        .key = key_str,
-                        .val = val_str,
-                    });
+                    try zr.vars.append(a, uWSGIVar{ .key = key_str, .val = val_str });
                 }
             }
         }

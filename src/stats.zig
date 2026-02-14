@@ -193,12 +193,12 @@ pub const Endpoint = struct {
             },
         );
         var count: usize = 0;
-        var uptime: i96 = Io.Clock.awake.now(f.io).toSeconds();
+        var uptime: u64 = 0;
         var mean_time: u64 = 0;
 
         if (server.stats) |active| {
             count = active.count;
-            uptime -|= active.start_time.toSeconds();
+            uptime = @intCast(active.start_time.untilNow(f.io, .real).toSeconds());
             mean_time = active.mean.mean(@truncate(count));
             for (0..data.len) |i| {
                 if (i >= count) break;
