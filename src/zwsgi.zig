@@ -10,7 +10,7 @@ const zWSGI = @This();
 
 pub const Options = struct {
     file: []const u8,
-    chmod: ?std.posix.mode_t,
+    chmod: ?system.mode_t,
     stats: bool,
 
     pub const default: Options = .{
@@ -66,9 +66,10 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
     if (z.options.chmod) |cmod| {
         var b: [2048:0]u8 = undefined;
-        const path: []u8 = b[0 .. (try cwd.realPathFile(io, z.unix_file_name, b[0..])) + 1];
-        b[path.len] = 0;
-        _ = std.os.linux.chmod(b[0..path.len :0], cmod);
+        const len = try cwd.realPathFile(io, z.unix_file_name, &b);
+        b[len] = 0;
+        const path: [*:0]const u8 = b[0..len :0];
+        try system.chmodPath(path, cmod);
     }
 
     const sigset = system.defaultSigSet();
@@ -340,11 +341,7 @@ const Io = std.Io;
 const Reader = std.Io.Reader;
 const log = std.log.scoped(.Verse);
 const net = std.Io.net;
-const siginfo_t = std.posix.siginfo_t;
-const SIG = std.posix.SIG;
-const SA = std.posix.SA;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
-const zbuiltin = @import("builtin");
 const ns_per_ms = std.time.ns_per_ms;
 const system = @import("system.zig");
 const pollfd = system.pollfd;
