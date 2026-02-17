@@ -175,18 +175,16 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
         );
-        if (srvr.stats) |*stats| {
-            stats.log(.{
-                .addr = request.remote_addr,
-                .code = frame.status orelse .internal_server_error,
-                .page_size = 0,
-                .time = request.now.toSeconds(),
-                .rss = arena.queryCapacity(),
-                .ua = request.user_agent,
-                .uri = request.uri,
-                .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
-            }, io);
-        }
+        srvr.stats.log(.{
+            .addr = request.remote_addr,
+            .code = frame.status orelse .internal_server_error,
+            .page_size = 0,
+            .time = request.now.toSeconds(),
+            .rss = arena.queryCapacity(),
+            .ua = request.user_agent,
+            .uri = request.uri,
+            .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
+        }, io);
     }
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);

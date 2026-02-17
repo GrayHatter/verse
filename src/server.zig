@@ -1,6 +1,6 @@
 options: Options,
 interface: Interface,
-stats: ?Stats,
+stats: Stats,
 
 const Server = @This();
 
@@ -28,8 +28,8 @@ pub const Interface = union(RunModes) {
 pub const Options = struct {
     io: ?Io = null,
     mode: RunMode,
-    auth: Auth.Provider,
-    stats: ?Stats.Options = null,
+    auth: Auth.Provider = .disabled,
+    stats: Stats.Options = .disabled,
     threads: u16 = 1,
     logging: Logging = .stdout,
 
@@ -51,7 +51,7 @@ pub fn init(router: *const Router, opts: Options) !Server {
             .http => |h| .{ .http = try Http.init(router, h, opts) },
             .other => .{ .other = {} },
         },
-        .stats = null,
+        .stats = .disabled,
     };
 }
 
@@ -63,9 +63,12 @@ pub fn serve(srv: *Server, gpa: Allocator) !void {
     threaded.async_limit = Io.Limit.limited(@max(2, srv.options.threads));
     const io: Io = srv.options.io orelse threaded.io();
 
-    const now = Io.Clock.real.now(io);
-    if (srv.options.stats) |opt| {
-        srv.stats = .init(opt, now);
+    var lines: []Stats.Line = &.{};
+    defer gpa.free(lines);
+    if (srv.options.stats.auth_mode != .stats_disabled) {
+        const now = Io.Clock.real.now(io);
+        lines = try gpa.alloc(Stats.Line, 256);
+        srv.stats = .init(lines, now, srv.options.stats);
     }
 
     switch (srv.interface) {

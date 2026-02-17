@@ -150,18 +150,16 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     writer.interface.flush() catch unreachable; // TODO
 
     const lap = timer.untilNow(io, .awake);
-    if (srvr.stats) |*stats| {
-        stats.log(.{
-            .addr = req.remote_addr,
-            .code = frame.status orelse .internal_server_error,
-            .page_size = 0,
-            .time = req.now.toSeconds(),
-            .rss = arena.queryCapacity(),
-            .ua = req.user_agent,
-            .uri = req.uri,
-            .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
-        }, io);
-    }
+    srvr.stats.log(.{
+        .addr = req.remote_addr,
+        .code = frame.status orelse .internal_server_error,
+        .page_size = 0,
+        .time = req.now.toSeconds(),
+        .rss = arena.queryCapacity(),
+        .ua = req.user_agent,
+        .uri = req.uri,
+        .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
+    }, io);
 }
 
 fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
@@ -219,7 +217,7 @@ test HTTP {
         .interface = .{
             .http = try init(&Router.TestingRouter, .localPort(9345), .default),
         },
-        .stats = null,
+        .stats = .disabled,
         .options = .default,
     };
 

@@ -1,9 +1,9 @@
 options: Options,
-mutex: ?Mutex,
+mutex: Mutex,
 start_time: Timestamp,
 count: usize,
 mean: Mean,
-rows: [256]Line,
+rows: []Line,
 
 const Stats = @This();
 
@@ -18,36 +18,29 @@ pub const Options = struct {
         stats_disabled,
     };
 
-    pub const default: Options = .{
-        .auth_mode = .sensitive,
-    };
+    pub const default: Options = .{ .auth_mode = .sensitive };
+    pub const disabled: Options = .{ .auth_mode = .stats_disabled };
+};
 
-    pub const disabled: Options = .{
-        .auth_mode = .stats_disabled,
-    };
+pub const disabled: Stats = .{
+    .options = .disabled,
+    .mutex = .init,
+    .start_time = undefined,
+    .count = 0,
+    .mean = .{},
+    .rows = &.{},
 };
 
 const Mean = struct {
-    time: [256]u64 = undefined,
-    idx: u8 = 0,
+    sum: u64 = 0,
 
-    ///
-    fn mean(m: Mean, count: u8) u64 {
+    fn add(m: *Mean, ts: u64) void {
+        m.sum +%= ts;
+    }
+
+    fn mean(m: Mean, count: u64) u64 {
         if (count == 0) return 0;
-        // TODO vectorize
-        //if (count < m.idx) {
-        //    const sum = @reduce(.Add, m.time[m.idx - count .. m.idx]);
-        //    return sum / count;
-        //} else {
-        //    var sum = @reduce(.Add, m.time[0..m.idx]);
-        //    sum += @reduce(.Add, m.time[m.time.len - count - m.idx .. m.time.len]);
-        //    return sum / count;
-        //}
-        var sum: u128 = 0;
-        for (0..count) |i| {
-            sum += m.time[m.idx -| 1 -| i];
-        }
-        return @truncate(sum / count);
+        return @truncate(m.sum / count);
     }
 };
 
@@ -103,21 +96,21 @@ pub const Data = struct {
     us: u64,
 };
 
-pub fn init(opts: Options, now: Timestamp) Stats {
+pub fn init(rows: []Line, start: Timestamp, opts: Options) Stats {
     return .{
         .options = opts,
         .count = 0,
         .mean = .{},
-        .mutex = if (opts.threaded) .init else null,
-        .rows = @splat(.empty),
-        .start_time = now,
+        .mutex = .init,
+        .rows = rows,
+        .start_time = start,
     };
 }
 
 pub fn log(stats: *Stats, data: Data, io: Io) void {
     if (stats.options.auth_mode == .stats_disabled) return;
-    if (stats.mutex) |*mx| mx.lock(io) catch return;
-    defer if (stats.mutex) |*mx| mx.unlock(io);
+    stats.mutex.lock(io) catch return;
+    defer stats.mutex.unlock(io);
     const row: *Line = &stats.rows[stats.count % stats.rows.len];
     row.* = .{
         .addr = .init(data.addr),
@@ -131,14 +124,12 @@ pub fn log(stats: *Stats, data: Data, io: Io) void {
         .us = data.us,
     };
     stats.count += 1;
-    stats.mean.time[stats.mean.idx] = data.us;
-    stats.mean.idx +%= 1;
+    stats.mean.add(data.us);
 
     return;
 }
 
 pub const Endpoint = struct {
-    //const EP = @import("endpoint.zig");
     const Router = @import("router.zig");
     const PageData = @import("template.zig").PageData;
     const S = @import("template.zig").Structs;
@@ -159,106 +150,78 @@ pub const Endpoint = struct {
     }
 
     pub fn index(f: *Frame) Router.Error!void {
-        var include_ip: bool = false;
         const server: *Server = @ptrCast(@alignCast(@constCast(f.server)));
-        switch (server.stats.?.options.auth_mode) {
-            .stats_disabled => {
-                return f.sendDefaultErrorPage(.gone);
-            },
-            .auth_required => {
-                if (f.auth_provider.vtable.valid == null)
-                    return f.sendDefaultErrorPage(.not_implemented);
-            },
-            .sensitive => {
-                if (f.user) |user| if (f.auth_provider.valid(&user)) {
-                    include_ip = true;
-                };
-            },
-            .open => include_ip = true,
-        }
+        const include_ip: bool = switch (server.stats.options.auth_mode) {
+            .stats_disabled => return f.sendDefaultErrorPage(.gone),
+            .auth_required => if (f.user) |user|
+                if (f.auth_provider.valid(&user)) true else return error.Unauthorized
+            else
+                return f.sendDefaultErrorPage(.not_implemented),
+            .sensitive => if (f.user) |user| f.auth_provider.valid(&user) else false,
+            .open => true,
+        };
 
-        var data: [60]S.VerseStatsHtml.VerseStatsList = @splat(
-            .{
-                .code = 500,
-                .ip_address = "",
-                .number = 0,
-                .page_size = 0,
-                .rss = 0,
-                .time = 0,
-                .uri = "null",
-                .us = 0,
-                .user_agent_name = "",
-                .user_agent_version = null,
-                .status_class = "",
-            },
-        );
-        var count: usize = 0;
-        var uptime: u64 = 0;
-        var mean_time: u64 = 0;
+        var data: [60]S.VerseStatsHtml.VerseStatsList = undefined;
+        const uptime: u64 = @intCast(server.stats.start_time.untilNow(f.io, .real).toSeconds());
+        const mean_time: u64 = server.stats.mean.mean(@truncate(server.stats.count));
+        const rows = data[0..@min(server.stats.count, data.len)];
 
-        if (server.stats) |active| {
-            count = active.count;
-            uptime = @intCast(active.start_time.untilNow(f.io, .real).toSeconds());
-            mean_time = active.mean.mean(@truncate(count));
-            for (0..data.len) |i| {
-                if (i >= count) break;
-                const idx = count - i - 1;
-                const src = &active.rows[idx % active.rows.len];
-                const ua_str: []const u8, const ua_ver: ?usize = if (src.ua) |sua|
-                    switch (sua.agent) {
-                        .bot => |b| .{ @tagName(b.name), 0 },
-                        .browser => |b| .{ @tagName(b.name), b.version },
-                        .script => |s| .{ @tagName(s.name), s.version },
-                        .unknown => .{ "[unknown]", null },
-                    }
-                else
-                    .{ "[No User Agent Provided]", 0 };
-
-                var is_bot: ?[]const u8 = null;
-                if (src.ua) |sua| {
-                    if (sua.agent == .bot) is_bot = " verse-bot";
-                    if (@TypeOf(sua.validation) != void) {
-                        const bv: Robots = sua.validation orelse .init(f.request);
-                        if (bv.malicious or bv.automated and sua.agent != .bot) is_bot = " verse-bot-malicious";
-                    }
+        for (rows, 0..) |*row, i| {
+            const src = &server.stats.rows[i % server.stats.rows.len];
+            const ua_str: []const u8, const ua_ver: ?usize = if (src.ua) |sua|
+                switch (sua.agent) {
+                    .bot => |b| .{ @tagName(b.name), 0 },
+                    .browser => |b| .{ @tagName(b.name), b.version },
+                    .script => |s| .{ @tagName(s.name), s.version },
+                    .unknown => .{ "[unknown]", null },
                 }
+            else
+                .{ "[No User Agent Provided]", 0 };
 
-                const status_class = switch (src.code) {
-                    .ok => " verse-stats-200",
-                    .moved_permanently => " verse-stats-301",
-                    .found => " verse-stats-302",
-                    .see_other => " verse-stats-303",
-                    .bad_request => " verse-stats-400",
-                    .unauthorized => " verse-stats-401",
-                    .forbidden => " verse-stats-403",
-                    .not_found => " verse-stats-404",
-                    .internal_server_error => " verse-stats-500",
-                    else => "",
-                };
-
-                data[i] = .{
-                    .number = src.number,
-                    .time = src.time,
-                    .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
-                    .code = @intFromEnum(src.code),
-                    .code_string = codeString(src.code),
-                    .status_class = status_class,
-                    .rss = src.rss,
-                    .page_size = src.page_size,
-                    .uri = src.uri.slice(),
-                    .user_agent_name = ua_str,
-                    .user_agent_version = ua_ver,
-                    .is_bot = is_bot,
-                    .us = src.us,
-                };
+            var is_bot: ?[]const u8 = null;
+            if (src.ua) |sua| {
+                if (sua.agent == .bot) is_bot = " verse-bot";
+                if (@TypeOf(sua.validation) != void) {
+                    const bv: Robots = sua.validation orelse .init(f.request);
+                    if (bv.malicious or bv.automated and sua.agent != .bot) is_bot = " verse-bot-malicious";
+                }
             }
+
+            const status_class = switch (src.code) {
+                .ok => " verse-stats-200",
+                .moved_permanently => " verse-stats-301",
+                .found => " verse-stats-302",
+                .see_other => " verse-stats-303",
+                .bad_request => " verse-stats-400",
+                .unauthorized => " verse-stats-401",
+                .forbidden => " verse-stats-403",
+                .not_found => " verse-stats-404",
+                .internal_server_error => " verse-stats-500",
+                else => "",
+            };
+
+            row.* = .{
+                .number = src.number,
+                .time = src.time,
+                .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
+                .code = @intFromEnum(src.code),
+                .code_string = codeString(src.code),
+                .status_class = status_class,
+                .rss = src.rss,
+                .page_size = src.page_size,
+                .uri = src.uri.slice(),
+                .user_agent_name = ua_str,
+                .user_agent_version = ua_ver,
+                .is_bot = is_bot,
+                .us = src.us,
+            };
         }
 
         const page = StatsPage.init(.{
             .uptime = @intCast(uptime),
-            .count = count,
+            .count = server.stats.count,
             .mean_resp_time = mean_time,
-            .verse_stats_list = data[0..@min(count, data.len)],
+            .verse_stats_list = rows,
         });
         return f.sendPage(&page);
     }

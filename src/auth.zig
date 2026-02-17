@@ -38,7 +38,7 @@ pub const TestingAuth = struct {
         // Using std.mem.eql in this way is not a safe implementation for any
         // reasonable authentication system. The specific constant time
         // comparison you should use depends strongly on the auth source.
-        if (std.mem.eql(u8, "12345", user_id)) {
+        if (unsafe.eql(u8, "12345", user_id)) {
             return .{
                 .unique_id = null,
             };
