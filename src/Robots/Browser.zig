@@ -295,8 +295,16 @@ pub const Rules = struct {
     pub fn acceptStr(ua: UserAgent, r: *const Request, score: *f16) !void {
         std.debug.assert(ua.agent == .browser);
         switch (ua.agent.browser.name) {
-            .chrome => {},
-            else => {
+            .chrome, .edge => {},
+            .brave,
+            .firefox,
+            .hastur,
+            .ladybird,
+            .msie,
+            .opera,
+            .safari,
+            .unknown,
+            => {
                 const normal = "text/html,application/xhtml+xml,";
                 // My apologies for the obfuscation here, this signal is way to strong
                 // to release to the unmotivated opfor.
