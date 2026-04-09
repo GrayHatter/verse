@@ -320,7 +320,7 @@ fn createSwitch(a: Allocator, name: []const u8, text: []const u8) !void {
     try switch_list.put(a, sw.name, sw);
 }
 
-fn htmlType(a: Allocator, html_type: ?Directive.HtmlType, struct_name: []const u8) ![]u8 {
+fn templateType(a: Allocator, html_type: ?Directive.TemplateType, struct_name: []const u8) ![]u8 {
     if (html_type) |htype| {
         return switch (htype) {
             .@"enum" => try a.dupe(u8, struct_name),
@@ -329,6 +329,8 @@ fn htmlType(a: Allocator, html_type: ?Directive.HtmlType, struct_name: []const u
             .@"?usize",
             => try a.dupe(u8, @tagName(htype)),
             .humanize => try a.dupe(u8, "i64"),
+            .abx, .antibiotic => unreachable,
+            .markdown => unreachable,
         };
     } else {
         return try a.dupe(u8, "[]const u8");
@@ -349,11 +351,11 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
             switch (drct.verb) {
                 .variable => {
                     const kind: []u8 = switch (drct.otherwise) {
-                        .required => try htmlType(a, drct.html_type, s_name),
+                        .required => try templateType(a, drct.html_type, s_name),
                         .exact => unreachable,
                         .default => |default| try allocPrint(a, "[]const u8 = \"{s}\"", .{default}),
                         .delete => if (drct.html_type) |_|
-                            try htmlType(a, drct.html_type, s_name)
+                            try templateType(a, drct.html_type, s_name)
                         else
                             try allocPrint(a, "?[]const u8 = null", .{}),
                         .template => {
@@ -366,7 +368,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                         },
                         .literal => |lit| kind: {
                             try appendEnumLiteral(a, s_name, lit);
-                            break :kind try htmlType(a, drct.html_type, s_name);
+                            break :kind try templateType(a, drct.html_type, s_name);
                         },
                     };
 

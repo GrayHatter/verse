@@ -4,7 +4,7 @@ otherwise: Otherwise,
 tag_block: []const u8,
 tag_block_body: ?[]const u8 = null,
 tag_block_skip: ?usize = null,
-html_type: ?HtmlType = null,
+html_type: ?TemplateType = null,
 scope: Scope = .local,
 
 const Directive = @This();
@@ -30,15 +30,23 @@ pub const Verb = enum {
     case,
 };
 
-pub const HtmlType = enum {
+pub const TemplateType = enum {
     usize,
     isize,
     @"?usize",
     @"enum",
+    // Custom verse types
+    /// input is i64 as unix epoch output: human readable relative time string.
     humanize,
+    /// alias for antibiotic
+    abx,
+    /// input is unsanitized text output: text with replaced html entities
+    antibiotic,
+    /// raw markdown translated to html
+    markdown,
 
-    pub fn fromStr(s: []const u8) !HtmlType {
-        inline for (std.meta.fields(HtmlType)) |ht| {
+    pub fn fromStr(s: []const u8) !TemplateType {
+        inline for (std.meta.fields(TemplateType)) |ht| {
             if (eql(u8, ht.name, s)) {
                 return @enumFromInt(ht.value);
             }
@@ -46,7 +54,7 @@ pub const HtmlType = enum {
         return error.InvalidHtmlType;
     }
 
-    pub fn nullable(kt: HtmlType) bool {
+    pub fn nullable(kt: TemplateType) bool {
         return @tagName(kt)[0] == '?';
     }
 };
@@ -78,11 +86,11 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
     const tag_map = findAttrs(tag[noun.len + 1 .. tag.len - 1]) catch return null;
     //const directive: ?[]const u8 = if (tag_map.get(.text)) |ht| try .fromStr(ht) else null;
     const default_str: ?[]const u8 = tag_map.get(.default);
-    const h_type: ?HtmlType, const tag_name: ?[]const u8 = if (tag_map.get(.@"enum")) |ht|
+    const h_type: ?TemplateType, const tag_name: ?[]const u8 = if (tag_map.get(.@"enum")) |ht|
         .{ .@"enum", ht }
     else if (tag_map.get(.type)) |ht|
         .{
-            HtmlType.fromStr(ht) catch null, null,
+            TemplateType.fromStr(ht) catch null, null,
         }
     else
         .{ null, null };
