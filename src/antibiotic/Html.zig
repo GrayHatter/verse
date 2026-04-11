@@ -2,6 +2,10 @@ text: []const u8,
 
 const Html = @This();
 
+pub fn abx(str: []const u8) Html {
+    return .{ .text = str };
+}
+
 pub fn format(self: Html, out: *Writer) error{WriteFailed}!void {
     for (self.text) |c| {
         try clean(c, out);

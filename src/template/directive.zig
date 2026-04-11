@@ -394,71 +394,74 @@ fn isStringish(t: type) bool {
     };
 }
 
-pub fn doTyped(self: Directive, T: type, ctx: anytype, out: anytype) !void {
+pub fn doTyped(self: Directive, T: type, ctx: T, out: *std.Io.Writer) !void {
     //@compileLog(T);
     var local: [0xff]u8 = undefined;
     const realname = local[0..makeFieldName(self.noun, &local)];
-    switch (@typeInfo(T)) {
-        .@"struct" => {
-            inline for (std.meta.fields(T)) |field| {
-                if (comptime isStringish(field.type)) continue;
-                switch (@typeInfo(field.type)) {
-                    .pointer => {
-                        if (eql(u8, field.name, realname)) {
-                            const child = @field(ctx, field.name);
-                            for (child) |each| {
-                                switch (field.type) {
-                                    []const []const u8 => {
-                                        std.debug.assert(self.verb == .split);
-                                        try out.writeAll(each);
-                                        try out.writeAll("\n");
-                                        //try out.writeAll( self.otherwise.blob.whitespace);
-                                    },
-                                    else => {
-                                        std.debug.assert(self.verb == .foreach);
-                                        try self.forEachTyped(@TypeOf(each), each, out);
-                                    },
+    switch (T) {
+        Abx.Html => try ctx.format(out),
+        else => switch (@typeInfo(T)) {
+            .@"struct" => {
+                inline for (std.meta.fields(T)) |field| {
+                    if (comptime isStringish(field.type)) continue;
+                    switch (@typeInfo(field.type)) {
+                        .pointer => {
+                            if (eql(u8, field.name, realname)) {
+                                const child = @field(ctx, field.name);
+                                for (child) |each| {
+                                    switch (field.type) {
+                                        []const []const u8 => {
+                                            std.debug.assert(self.verb == .split);
+                                            try out.writeAll(each);
+                                            try out.writeAll("\n");
+                                            //try out.writeAll( self.otherwise.blob.whitespace);
+                                        },
+                                        else => {
+                                            std.debug.assert(self.verb == .foreach);
+                                            try self.forEachTyped(@TypeOf(each), each, out);
+                                        },
+                                    }
                                 }
                             }
-                        }
-                    },
-                    .optional => {
-                        if (eql(u8, field.name, realname)) {
-                            //@compileLog("optional for {s}\n", field.name, field.type, T);
-                            const child = @field(ctx, field.name);
-                            if (child) |exists| {
-                                if (self.verb == .with)
-                                    try self.withTyped(@TypeOf(exists), exists, out)
-                                else
-                                    try self.doTyped(@TypeOf(exists), exists, out);
+                        },
+                        .optional => {
+                            if (eql(u8, field.name, realname)) {
+                                //@compileLog("optional for {s}\n", field.name, field.type, T);
+                                const child = @field(ctx, field.name);
+                                if (child) |exists| {
+                                    if (self.verb == .with)
+                                        try self.withTyped(@TypeOf(exists), exists, out)
+                                    else
+                                        try self.doTyped(@TypeOf(exists), exists, out);
+                                }
                             }
-                        }
-                    },
-                    .@"struct" => {
-                        if (eql(u8, field.name, realname)) {
-                            const child = @field(ctx, field.name);
-                            std.debug.assert(self.verb == .build);
-                            try self.withTyped(@TypeOf(child), child, out);
-                        }
-                    },
-                    .int => |int| {
-                        if (eql(u8, field.name, realname)) {
-                            std.debug.assert(int.bits == 64);
-                            try std.fmt.formatInt(@field(ctx, field.name), 10, .lower, .{}, out);
-                        }
-                    },
-                    else => unreachable,
+                        },
+                        .@"struct" => {
+                            if (eql(u8, field.name, realname)) {
+                                const child = @field(ctx, field.name);
+                                std.debug.assert(self.verb == .build);
+                                try self.withTyped(@TypeOf(child), child, out);
+                            }
+                        },
+                        .int => |int| {
+                            if (eql(u8, field.name, realname)) {
+                                std.debug.assert(int.bits == 64);
+                                try std.fmt.formatInt(@field(ctx, field.name), 10, .lower, .{}, out);
+                            }
+                        },
+                        else => unreachable,
+                    }
                 }
-            }
-        },
-        .int => {
-            //std.debug.assert(int.bits == 64);
-            try out.print("{d}", .{ctx});
-        },
-        else => |ERR| {
-            //@compileLog(ERR);
-            _ = ERR;
-            unreachable;
+            },
+            .int => {
+                //std.debug.assert(int.bits == 64);
+                try out.print("{d}", .{ctx});
+            },
+            else => |ERR| {
+                //@compileLog(ERR);
+                _ = ERR;
+                unreachable;
+            },
         },
     }
 }
@@ -569,6 +572,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
 const Pages = @import("page.zig");
 const PageRuntime = Pages.PageRuntime;
 const Template = @import("Template.zig");
+const Abx = @import("../antibiotic.zig");
 
 const std = @import("std");
 const eql = std.mem.eql;
