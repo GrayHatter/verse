@@ -110,6 +110,8 @@ pub var global_tree: StrHashMap(*AbstTree) = .{};
 var enum_list: StrHashMap(*EnumLiteral) = .{};
 var switch_list: StrHashMap(*Switch) = .{};
 
+var default_str_type: []const u8 = if (verse_buildopts.@"require-abx") "Abx" else "[]const u8";
+
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     const a = init.arena.allocator();
@@ -336,7 +338,7 @@ fn templateType(a: Allocator, html_type: ?Directive.TemplateType, struct_name: [
             .markdown => try a.dupe(u8, "Markdown"),
         };
     } else {
-        return try a.dupe(u8, "[]const u8");
+        return try a.dupe(u8, default_str_type);
     }
 }
 
@@ -562,3 +564,4 @@ const indexOfPos = std.mem.indexOfPos;
 const compiled = @import("comptime_templates");
 const Directive = @import("template/directive.zig");
 const constructor = @import("template/constructor.zig");
+const verse_buildopts = @import("verse_buildopts");

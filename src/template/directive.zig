@@ -394,78 +394,6 @@ fn isStringish(t: type) bool {
     };
 }
 
-pub fn doTyped(self: Directive, T: type, ctx: T, out: *std.Io.Writer) !void {
-    //@compileLog(T);
-    var local: [0xff]u8 = undefined;
-    const realname = local[0..makeFieldName(self.noun, &local)];
-    switch (T) {
-        Abx.Html => try ctx.format(out),
-        else => switch (@typeInfo(T)) {
-            .@"struct" => {
-                inline for (std.meta.fields(T)) |field| {
-                    if (comptime isStringish(field.type)) continue;
-                    switch (@typeInfo(field.type)) {
-                        .pointer => {
-                            if (eql(u8, field.name, realname)) {
-                                const child = @field(ctx, field.name);
-                                for (child) |each| {
-                                    switch (field.type) {
-                                        []const []const u8 => {
-                                            std.debug.assert(self.verb == .split);
-                                            try out.writeAll(each);
-                                            try out.writeAll("\n");
-                                            //try out.writeAll( self.otherwise.blob.whitespace);
-                                        },
-                                        else => {
-                                            std.debug.assert(self.verb == .foreach);
-                                            try self.forEachTyped(@TypeOf(each), each, out);
-                                        },
-                                    }
-                                }
-                            }
-                        },
-                        .optional => {
-                            if (eql(u8, field.name, realname)) {
-                                //@compileLog("optional for {s}\n", field.name, field.type, T);
-                                const child = @field(ctx, field.name);
-                                if (child) |exists| {
-                                    if (self.verb == .with)
-                                        try self.withTyped(@TypeOf(exists), exists, out)
-                                    else
-                                        try self.doTyped(@TypeOf(exists), exists, out);
-                                }
-                            }
-                        },
-                        .@"struct" => {
-                            if (eql(u8, field.name, realname)) {
-                                const child = @field(ctx, field.name);
-                                std.debug.assert(self.verb == .build);
-                                try self.withTyped(@TypeOf(child), child, out);
-                            }
-                        },
-                        .int => |int| {
-                            if (eql(u8, field.name, realname)) {
-                                std.debug.assert(int.bits == 64);
-                                try std.fmt.formatInt(@field(ctx, field.name), 10, .lower, .{}, out);
-                            }
-                        },
-                        else => unreachable,
-                    }
-                }
-            },
-            .int => {
-                //std.debug.assert(int.bits == 64);
-                try out.print("{d}", .{ctx});
-            },
-            else => |ERR| {
-                //@compileLog(ERR);
-                _ = ERR;
-                unreachable;
-            },
-        },
-    }
-}
-
 pub fn forEachTyped(self: Directive, T: type, data: T, out: anytype) !void {
     var p = PageRuntime(T){
         .data = data,
@@ -508,64 +436,127 @@ fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
 }
 
 pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !void {
-    switch (d.verb) {
-        .variable => {
-            if (d.html_type) |_| return d.doTyped(T, ctx, w);
-            const noun = d.noun;
-            const var_name = typeField(T, noun, ctx);
-            if (var_name) |data_blob| {
-                try w.writeAll(data_blob);
-            } else {
-                //if (DEBUG) std.debug.print("[missing var {s}]\n", .{noun.vari});
-                switch (d.otherwise) {
-                    .default => |str| try w.writeAll(str),
-                    // Not really an error, just instruct caller to print original text
-                    .required => {},
-                    .delete => {},
-                    .literal => unreachable,
-                    .template => |template| {
-                        if (T == usize) unreachable;
-                        if (@typeInfo(T) != .@"struct") unreachable;
-                        inline for (std.meta.fields(T)) |field| {
+    switch (T) {
+        Abx.Html => try ctx.format(w),
+        else => switch (d.verb) {
+            .variable => {
+                if (d.html_type) |_| {
+                    var local: [0xff]u8 = undefined;
+                    const realname = local[0..makeFieldName(d.noun, &local)];
+                    switch (@typeInfo(T)) {
+                        .@"struct" => inline for (std.meta.fields(T)) |field| {
+                            if (comptime isStringish(field.type)) continue;
                             switch (@typeInfo(field.type)) {
-                                .optional => |otype| {
-                                    if (otype.child == []const u8) continue;
+                                .pointer => if (eql(u8, field.name, realname)) {
+                                    const child = @field(ctx, field.name);
+                                    for (child) |each| {
+                                        switch (field.type) {
+                                            []const []const u8 => {
+                                                std.debug.assert(d.verb == .split);
+                                                try w.writeAll(each);
+                                                try w.writeAll("\n");
+                                            },
+                                            else => try d.forEachTyped(@TypeOf(each), each, w),
+                                        }
+                                    }
+                                },
+                                else => unreachable,
+                            }
+                        },
+                        .int => try w.print("{d}", .{ctx}),
+                        else => unreachable,
+                    }
+                    return;
+                }
+                const noun = d.noun;
+                const var_name = typeField(T, noun, ctx);
+                if (var_name) |data_blob| {
+                    try w.writeAll(data_blob);
+                } else {
+                    switch (d.otherwise) {
+                        .default => |str| try w.writeAll(str),
+                        // Not really an error, just instruct caller to print original text
+                        .required => {},
+                        .delete => {},
+                        .literal => unreachable,
+                        .template => |template| {
+                            if (T == usize) unreachable;
+                            if (@typeInfo(T) != .@"struct") unreachable;
+                            inline for (std.meta.fields(T)) |field| {
+                                switch (@typeInfo(field.type)) {
+                                    .optional => |otype| {
+                                        if (otype.child == []const u8) continue;
 
-                                    var local: [0xff]u8 = undefined;
-                                    const realname = local[0..makeFieldName(noun[1 .. noun.len - 5], &local)];
-                                    if (std.mem.eql(u8, field.name, realname)) {
-                                        if (@field(ctx, field.name)) |subdata| {
-                                            var subpage = template.pageOf(otype.child, subdata);
+                                        var local: [0xff]u8 = undefined;
+                                        const realname = local[0..makeFieldName(noun[1 .. noun.len - 5], &local)];
+                                        if (std.mem.eql(u8, field.name, realname)) {
+                                            if (@field(ctx, field.name)) |subdata| {
+                                                var subpage = template.pageOf(otype.child, subdata);
+                                                try subpage.format("{}", .{}, w);
+                                            } else std.debug.print(
+                                                "sub template data was null for {s}\n",
+                                                .{field.name},
+                                            );
+                                        }
+                                    },
+                                    .@"struct" => {
+                                        if (std.mem.eql(u8, field.name, noun)) {
+                                            const subdata = @field(ctx, field.name);
+                                            var subpage = template.pageOf(@TypeOf(subdata), subdata);
                                             try subpage.format("{}", .{}, w);
-                                        } else std.debug.print(
-                                            "sub template data was null for {s}\n",
-                                            .{field.name},
-                                        );
+                                        }
+                                    },
+                                    else => {}, //@compileLog(field.type),
+                                }
+                            }
+                        },
+                        .exact => unreachable,
+                        //inline for (std.meta.fields(T)) |field| {
+                        //    if (eql(u8, field.name, noun)) {
+                        //        const subdata = @field(ctx, field.name);
+                        //        var page = template.pageOf(@TypeOf(subdata), subdata);
+                        //        try page.format("{}", .{}, out);
+                        //    }
+                        //}
+                    }
+                }
+            },
+            else => {
+                var local: [0xff]u8 = undefined;
+                const realname = local[0..makeFieldName(d.noun, &local)];
+                switch (@typeInfo(T)) {
+                    .int => try w.print("{d}", .{ctx}),
+                    .@"struct" => {
+                        inline for (std.meta.fields(T)) |field| {
+                            if (comptime isStringish(field.type)) continue;
+                            switch (@typeInfo(field.type)) {
+                                .pointer => {
+                                    if (eql(u8, field.name, realname)) {
+                                        const child = @field(ctx, field.name);
+                                        for (child) |each| {
+                                            switch (field.type) {
+                                                []const []const u8 => {
+                                                    std.debug.assert(d.verb == .split);
+                                                    try w.writeAll(each);
+                                                    try w.writeAll("\n");
+                                                    //try out.writeAll( self.otherwise.blob.whitespace);
+                                                },
+                                                else => {
+                                                    std.debug.assert(d.verb == .foreach);
+                                                    try d.forEachTyped(@TypeOf(each), each, w);
+                                                },
+                                            }
+                                        }
                                     }
                                 },
-                                .@"struct" => {
-                                    if (std.mem.eql(u8, field.name, noun)) {
-                                        const subdata = @field(ctx, field.name);
-                                        var subpage = template.pageOf(@TypeOf(subdata), subdata);
-                                        try subpage.format("{}", .{}, w);
-                                    }
-                                },
-                                else => {}, //@compileLog(field.type),
+                                else => unreachable,
                             }
                         }
                     },
-                    .exact => unreachable,
-                    //inline for (std.meta.fields(T)) |field| {
-                    //    if (eql(u8, field.name, noun)) {
-                    //        const subdata = @field(ctx, field.name);
-                    //        var page = template.pageOf(@TypeOf(subdata), subdata);
-                    //        try page.format("{}", .{}, out);
-                    //    }
-                    //}
+                    else => unreachable,
                 }
-            }
+            },
         },
-        else => d.doTyped(T, ctx, w) catch unreachable,
     }
 }
 

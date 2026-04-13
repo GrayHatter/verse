@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) !void {
     // root build options
     const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
     const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
+    const require_abx: bool = b.option(bool, "require-abx", "templates will default to Abx.Html instead of []const u8") orelse false;
     const ua_validation = b.option(bool, "ua_validation", "[not-implemented] disable user agent validation") orelse
         true;
 
@@ -30,6 +31,7 @@ pub fn build(b: *std.Build) !void {
     const ver = version(b);
     options.addOption([]const u8, "version", ver);
     options.addOption(bool, "ua_validation", ua_validation);
+    options.addOption(bool, "require-abx", require_abx);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),
@@ -61,6 +63,7 @@ pub fn build(b: *std.Build) !void {
         }),
     });
     structc.root_module.addImport("comptime_templates", comptime_templates);
+    structc.root_module.addOptions("verse_buildopts", options);
     default_step.dependOn(&structc.step);
 
     const comptime_structs = compiler.buildStructs(structc) catch @panic("unreachable");
