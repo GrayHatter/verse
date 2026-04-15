@@ -8,7 +8,7 @@ const DOM = @This();
 
 pub fn create(a: Allocator) *DOM {
     const self = a.create(DOM) catch unreachable;
-    self.* = DOM{ .alloc = a, .elems = .{} };
+    self.* = DOM{ .alloc = a, .elems = .empty };
     return self;
 }
 

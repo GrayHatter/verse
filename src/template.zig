@@ -657,7 +657,8 @@ test "directive for with for for" {
 
     page_data = .{
         .loop = &[2]FTF.Loop{
-            .{ .maybe = null, .maybe_names = null }, .{
+            .{ .maybe = null, .maybe_names = null },
+            .{
                 .maybe = null,
                 .maybe_names = .{
                     .first = &[3]FTF.First{

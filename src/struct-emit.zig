@@ -222,7 +222,7 @@ pub fn main(init: std.process.Init) !void {
 pub const EnumLiteral = struct {
     name: []const u8,
     text: []const u8,
-    members: ArrayList([]const u8) = .{},
+    members: ArrayList([]const u8) = .empty,
 
     pub fn init(a: Allocator, name: []const u8, text: []const u8) !*EnumLiteral {
         const self = try a.create(EnumLiteral);
@@ -291,7 +291,7 @@ pub const Switch = struct {
         self.* = .{
             .name = name,
             .text = try a.dupe(u8, text),
-            .members = .{},
+            .members = .empty,
             .tree = tree,
         };
         const kv = tree.fetchRemove(first.name) orelse @panic("unreachable");

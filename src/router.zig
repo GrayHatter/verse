@@ -371,9 +371,10 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
                 // However it's a vaild error in somecases. A non-default buildfn
                 // could provide a replacement default. But this does not.
                 log.err("Unrouteable", .{});
-                if (@errorReturnTrace()) |trace| {
-                    std.debug.dumpStackTrace(trace);
-                }
+                // FIXME
+                //if (@errorReturnTrace()) |trace| {
+                //    std.debug.dumpStackTrace(trace);
+                //}
                 @panic("Unroutable");
             },
             // This is an implementation error by the page. So we crash. If

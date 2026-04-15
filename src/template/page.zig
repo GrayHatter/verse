@@ -15,7 +15,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         }
 
         pub const IoVec = struct {
-            pub fn count(ofs: []const Offset, data: [*]const u8) usize {
+            pub fn count(comptime ofs: []const Offset, data: [*]const u8) usize {
                 var cnt: usize = 0;
                 var skip: usize = 0;
                 inline for (ofs, 1..) |dos, idx| {
@@ -138,7 +138,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                 }
             }
 
-            pub fn core(T: type, data: T, ofs: []const Offset, varr: *IOVArray, a: Allocator) !void {
+            pub fn core(T: type, data: T, comptime ofs: []const Offset, varr: *IOVArray, a: Allocator) !void {
                 var skip: usize = 0;
                 inline for (ofs, 1..) |os, os_idx| {
                     if (skip > 0) {

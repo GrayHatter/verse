@@ -137,7 +137,7 @@ const Compiler = struct {
     debugging: bool = false,
 
     pub fn init(b: *std.Build) Compiler {
-        return .{ .b = b, .dirs = .{}, .files = .{}, .collected = .{} };
+        return .{ .b = b, .dirs = .empty, .files = .empty, .collected = .empty };
     }
 
     pub fn raze(comp: Compiler) void {

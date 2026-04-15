@@ -29,7 +29,7 @@ const CreateUserRequest = struct {
     active: bool,
 };
 
-var user_list: ArrayListUnmanaged(User) = undefined;
+var user_list: ArrayList(User) = undefined;
 var alloc: std.mem.Allocator = undefined;
 
 /// Returns the list of users.
@@ -96,13 +96,10 @@ fn deleteUser(frame: *verse.Frame) !void {
     try frame.sendJSON(.ok, .{ .message = "success" });
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+pub fn main(init: std.process.Init) !void {
+    alloc = init.arena.allocator();
 
-    alloc = gpa.allocator();
-
-    user_list = ArrayListUnmanaged(User){};
+    user_list = ArrayList(User).empty;
 
     try user_list.append(alloc, .{ .id = 0, .name = "John Doe", .age = 23, .role = .user, .active = true });
     try user_list.append(alloc, .{ .id = 1, .name = "Billy Joe", .age = 25, .role = .user, .active = false });
@@ -118,6 +115,6 @@ pub fn main() !void {
 }
 
 const std = @import("std");
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const ArrayList = std.ArrayList;
 const verse = @import("verse");
 const Router = verse.Router;

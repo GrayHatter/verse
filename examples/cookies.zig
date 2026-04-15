@@ -27,10 +27,8 @@ const routes = Router.Routes(&[_]Router.Match{
     Router.GET("", index),
 });
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const alloc = init.arena.allocator();
 
     var server = try verse.Server.init(&routes, .{
         .mode = .{ .http = .localPort(8081) },

@@ -7,7 +7,7 @@ pub fn abx(str: []const u8) Html {
     return .{ .text = str };
 }
 
-pub fn cleaned(str: []const u8) Html {
+pub fn safe(str: []const u8) Html {
     return .{ .text_cleaned = str, .text = &.{} };
 }
 

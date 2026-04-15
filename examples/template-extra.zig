@@ -50,10 +50,8 @@ fn three(frame: *verse.Frame) Router.Error!void {
     try frame.sendPage(&page);
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const alloc = init.arena.allocator();
 
     var server = try verse.Server.init(&routes, .default);
 

@@ -232,7 +232,7 @@ pub const zWSGIParam = enum {
 pub const zWSGIRequest = struct {
     header: uProtoHeader = uProtoHeader{},
     known: std.EnumArray(zWSGIParam, ?[]const u8) = .initFill(null),
-    vars: std.ArrayListUnmanaged(uWSGIVar) = .{},
+    vars: ArrayList(uWSGIVar) = .empty,
 
     pub fn init(a: Allocator, r: *Reader) !zWSGIRequest {
         const uwsgi_header: uProtoHeader = try .init(r);

@@ -85,14 +85,11 @@ test Cookie {
 
 pub const Jar = struct {
     alloc: Allocator,
-    cookies: ArrayListUnmanaged(Cookie),
+    cookies: ArrayList(Cookie),
 
     /// Creates a new jar.
     pub fn init(a: Allocator) Jar {
-        return .{
-            .alloc = a,
-            .cookies = .{},
-        };
+        return .{ .alloc = a, .cookies = .empty };
     }
 
     pub fn initFromHeader(a: Allocator, header: []const u8) !Jar {
@@ -191,5 +188,5 @@ const fmt = std.fmt;
 const indexOf = std.mem.indexOf;
 const indexOfScalar = std.mem.indexOfScalar;
 const splitSequence = std.mem.splitSequence;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const ArrayList = std.ArrayList;
 const Writer = std.Io.Writer;

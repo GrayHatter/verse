@@ -13,10 +13,8 @@ const routes = Router.Routes(&[_]Router.Match{
 
 /// Step 2: Write main, and start a verse server.
 /// That's it! Verse listens on http://localhost:8080 by default.
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const alloc = init.arena.allocator();
 
     var server = try verse.Server.init(&routes, .default);
 
