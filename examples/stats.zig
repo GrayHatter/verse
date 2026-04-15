@@ -19,3 +19,6 @@ pub fn main() !void {
 
 const std = @import("std");
 const verse = @import("verse");
+// This is required because stats uses Antibiotic on URI.
+// Templates use the abx specified by "root"
+pub const Abx = verse.abx;

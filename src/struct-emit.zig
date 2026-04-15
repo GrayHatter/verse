@@ -335,6 +335,7 @@ fn templateType(a: Allocator, html_type: ?Directive.TemplateType, struct_name: [
             => try a.dupe(u8, @tagName(htype)),
             .humanize => try a.dupe(u8, "i64"),
             .abx, .antibiotic => try a.dupe(u8, "Abx"),
+            .safe => try a.dupe(u8, "[]const u8"),
             .markdown => try a.dupe(u8, "Markdown"),
         };
     } else {

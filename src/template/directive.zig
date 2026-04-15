@@ -42,6 +42,8 @@ pub const TemplateType = enum {
     abx,
     /// input is unsanitized text output: text with replaced html entities
     antibiotic,
+    /// the inverse of antibiotic, caller guarantees the provided slice is safe
+    safe,
     /// raw markdown translated to html
     markdown,
 
