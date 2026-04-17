@@ -40,6 +40,13 @@ pub fn build(b: *std.Build) !void {
     });
     verse_lib.addOptions("verse_buildopts", options);
 
+    const abx = b.addModule("abx", .{
+        .root_source_file = b.path("src/antibiotic.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    verse_lib.addImport("abx", abx);
+
     // Set up template compiler
     var compiler = Compiler.init(b);
     if (templates_enabled) {
@@ -67,6 +74,7 @@ pub fn build(b: *std.Build) !void {
     default_step.dependOn(&structc.step);
 
     const comptime_structs = compiler.buildStructs(structc) catch @panic("unreachable");
+    comptime_structs.addImport("abx", abx);
 
     verse_lib.addImport("comptime_structs", comptime_structs);
     verse_lib.addImport("comptime_templates", comptime_templates);

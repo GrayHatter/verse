@@ -1,7 +1,7 @@
 //! Verse: The framework.
 //!
 pub const auth = @import("auth.zig");
-pub const abx = @import("antibiotic.zig");
+pub const abx = @import("abx");
 pub const template = @import("template.zig");
 pub const stats = @import("stats.zig");
 

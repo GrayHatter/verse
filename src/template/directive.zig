@@ -565,7 +565,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
 const Pages = @import("page.zig");
 const PageRuntime = Pages.PageRuntime;
 const Template = @import("Template.zig");
-const Abx = @import("../antibiotic.zig");
+const Abx = @import("abx");
 
 const std = @import("std");
 const eql = std.mem.eql;

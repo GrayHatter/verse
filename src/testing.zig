@@ -87,7 +87,10 @@ pub fn fuzzTest(trgt: Router.Target) !void {
     const Context = struct {
         target: *const Router.Target,
 
-        fn testOne(context: @This(), input: []const u8) !void {
+        fn testOne(context: @This(), smth: *std.testing.Smith) !void {
+            var buffer: [8164]u8 = undefined;
+            const len = smth.slice(&buffer);
+            const input = buffer[0..len];
             var fc = try FrameCtx.initRequest(
                 std.testing.allocator,
                 .{ .query_data = input },
