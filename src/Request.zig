@@ -7,6 +7,7 @@ user_agent: ?UserAgent,
 referer: ?Referer,
 accept: ?Accept,
 accept_encoding: Encoding = .default,
+accept_language: Language = .default,
 authorization: ?Authorization,
 protocol: Protocol,
 secure: bool,
@@ -40,10 +41,10 @@ pub const Encoding = packed struct {
     zstd: bool,
 
     pub fn fromStr(str: []const u8) Encoding {
-        var e = Encoding.default;
+        var e: Encoding = .default;
         inline for (@typeInfo(Encoding).@"struct".fields) |f| {
             if (indexOf(u8, str, f.name)) |_| {
-                @field(e, f.name) = if (f.type == bool) true else 0;
+                @field(e, f.name) = true;
             }
         }
         return e;
@@ -54,6 +55,63 @@ pub const Encoding = packed struct {
         .deflate = false,
         .gzip = false,
         .zstd = false,
+    };
+};
+
+pub const Language = struct {
+    en: f16,
+    zh: f16,
+
+    bytes: []const u8,
+
+    pub fn fromStr(str: []const u8) Language {
+        var l: Language = .{
+            .en = 0.0,
+            .zh = 0.0,
+            .bytes = str,
+        };
+        inline for (@typeInfo(Language).@"struct".fields) |f| {
+            if (comptime eql(u8, f.name, "bytes")) continue;
+            if (indexOf(u8, str, f.name)) |idx| {
+                if (str.len == idx + f.name.len or
+                    str[idx + f.name.len] == '-' or
+                    str[idx + f.name.len] == ';' or
+                    str[idx + f.name.len] == ',')
+                {
+                    // TODO parse q value
+                    @field(l, f.name) = 1.0;
+                }
+            }
+        }
+        return l;
+    }
+
+    test fromStr {
+        var lang: Language = undefined;
+
+        lang = .fromStr("en-US,en;q=0.9");
+        try std.testing.expectEqualDeep(
+            Language{ .en = 1.0, .zh = 0.0, .bytes = "en-US,en;q=0.9" },
+            lang,
+        );
+
+        lang = .fromStr("zh-CN,zh;q=0.9,en;q=0.8");
+        try std.testing.expectEqualDeep(
+            Language{ .en = 1.0, .zh = 1.0, .bytes = "zh-CN,zh;q=0.9,en;q=0.8" },
+            lang,
+        );
+
+        lang = .fromStr("zh-CN,zh;q=0.9");
+        try std.testing.expectEqualDeep(
+            Language{ .en = 0.0, .zh = 1.0, .bytes = "zh-CN,zh;q=0.9" },
+            lang,
+        );
+    }
+
+    pub const default: Language = .{
+        .en = 0.0,
+        .zh = 0.0,
+        .bytes = &.{},
     };
 };
 
@@ -134,6 +192,7 @@ fn initCommon(
     referer: ?Referer,
     accept: ?Accept,
     accept_encoding: Encoding,
+    accept_language: Language,
     authorization: ?Authorization,
     headers: Headers,
     cookies: ?[]const u8,
@@ -151,6 +210,7 @@ fn initCommon(
     return .{
         .accept = accept,
         .accept_encoding = accept_encoding,
+        .accept_language = accept_language,
         .authorization = authorization,
         .cookie_jar = if (cookies) |ch| try .initFromHeader(a, ch) else .init(a),
         .data = data,
@@ -180,6 +240,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
     const ua_slice: ?[]const u8 = zk.get(.HTTP_USER_AGENT);
     const referer: ?Referer = zk.get(.HTTP_REFERER);
     const encoding: Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else .default;
+    const language: Language = if (zk.get(.HTTP_ACCEPT_LANGUAGE)) |al| .fromStr(al) else .default;
     const authorization: ?Authorization = zk.get(.HTTP_AUTHORIZATION);
     const cookie_header: ?[]const u8 = zk.get(.HTTP_COOKIE);
     const proto: []const u8 = zk.get(.SERVER_PROTOCOL) orelse "ERROR";
@@ -204,6 +265,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
         referer,
         accept,
         encoding,
+        language,
         authorization,
         headers,
         cookie_header,
@@ -227,7 +289,8 @@ pub fn initHttp(
     var host: ?Host = null;
     var ua_string: ?[]const u8 = null;
     var referer: ?Referer = null;
-    var encoding: Encoding = Encoding.default;
+    var encoding: Encoding = .default;
+    var language: Language = .default;
     var authorization: ?Authorization = null;
     var cookie_header: ?[]const u8 = null;
     const proto: []const u8 = @tagName(http.head.version);
@@ -244,7 +307,9 @@ pub fn initHttp(
         } else if (eqlIgnoreCase("referer", head.name)) {
             referer = head.value;
         } else if (eqlIgnoreCase("accept-encoding", head.name)) {
-            encoding = Encoding.fromStr(head.value);
+            encoding = .fromStr(head.value);
+        } else if (eqlIgnoreCase("accept-language", head.name)) {
+            language = .fromStr(head.value);
         } else if (eqlIgnoreCase("authorization", head.name)) {
             authorization = head.value;
         } else if (eqlIgnoreCase("cookie", head.name)) {
@@ -270,6 +335,7 @@ pub fn initHttp(
         referer,
         accept,
         encoding,
+        language,
         authorization,
         headers,
         cookie_header,
