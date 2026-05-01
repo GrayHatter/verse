@@ -234,7 +234,7 @@ pub fn validate(source: UserAgent, r: *const Request) UserAgent {
     return ua;
 }
 
-const UA_VALIDATION: bool = verse_buildopts.ua_validation or builtin.is_test;
+const UA_VALIDATION: bool = verse_buildopts.@"ua-validation" or builtin.is_test;
 
 test UserAgent {
     std.testing.refAllDecls(@This());

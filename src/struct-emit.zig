@@ -110,7 +110,7 @@ pub var global_tree: StrHashMap(*AbstTree) = .{};
 var enum_list: StrHashMap(*EnumLiteral) = .{};
 var switch_list: StrHashMap(*Switch) = .{};
 
-var default_str_type: []const u8 = if (verse_buildopts.@"require-abx") "Abx" else "[]const u8";
+var default_str_type: []const u8 = if (verse_buildopts.@"abx-required") "Abx" else "[]const u8";
 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();

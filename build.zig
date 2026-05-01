@@ -20,18 +20,20 @@ pub fn build(b: *std.Build) !void {
     //std.debug.print("default: {s}\n", .{b.default_step.name});
 
     // root build options
-    const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
+    const abx_required: bool = b.option(bool, "abx-required", "templates will default to Abx.Html instead of []const u8") orelse false;
     const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
-    const require_abx: bool = b.option(bool, "require-abx", "templates will default to Abx.Html instead of []const u8") orelse false;
-    const ua_validation = b.option(bool, "ua_validation", "[not-implemented] disable user agent validation") orelse
+    const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
+    const ua_validation = b.option(bool, "ua-validation", "[not-implemented] disable user agent validation") orelse
         true;
+    const accept_lang_heat = b.option([]const u8, "accept-lang-heat", "[not-implemented] add bot detection heat to given language") orelse "";
 
     const options = b.addOptions();
 
     const ver = version(b);
     options.addOption([]const u8, "version", ver);
-    options.addOption(bool, "ua_validation", ua_validation);
-    options.addOption(bool, "require-abx", require_abx);
+    options.addOption(bool, "abx-required", abx_required);
+    options.addOption(bool, "ua-validation", ua_validation);
+    options.addOption([]const u8, "accept-lang-heat", accept_lang_heat);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),

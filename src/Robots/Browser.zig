@@ -382,4 +382,4 @@ const Clock = std.Io.Clock;
 
 const verse_buildopts = @import("verse_buildopts");
 const builtin = @import("builtin");
-const UA_VALIDATION: bool = verse_buildopts.ua_validation or builtin.is_test;
+const UA_VALIDATION: bool = verse_buildopts.@"ua-validation" or builtin.is_test;
