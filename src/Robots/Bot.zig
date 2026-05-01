@@ -79,6 +79,43 @@ pub const Rules = struct {
             }
         }
     }
+
+    pub fn expectedLanguages(ua: UserAgent, r: *const Request, score: *f16) !void {
+        _ = ua;
+        _ = r;
+        _ = score;
+    }
+
+    pub fn expectedParamDepth(ua: UserAgent, r: *const Request, score: *f16) !void {
+        try acceptEncodingDepth(ua, r, score);
+    }
+
+    fn acceptEncodingDepth(_: UserAgent, r: *const Request, score: *f16) !void {
+        var add: f16 = 0.3;
+
+        if (r.accept_encoding.br) add -= 0.1;
+        if (r.accept_encoding.deflate) add -= 0.1;
+        if (r.accept_encoding.zstd) add -= 0.1;
+        if (r.accept_encoding.gzip) add -= 0.1;
+
+        score.* = score.* + add;
+    }
+
+    fn secClientHints(ua: UserAgent, r: *const Request, score: *f16) !void {
+        try secClientHintsUA(ua, r, score);
+    }
+
+    fn secClientHintsUA(_: UserAgent, r: *const Request, score: *f16) !void {
+        if (r.headers.getCustom("HTTP_SEC_CH_UA")) |list| {
+            if (list.list.items.len > 1) {
+                score.* +|= 0.5;
+                return;
+            }
+            if (std.mem.startsWith(u8, list.list.items[0], "\"Not_A Brand\";v=\"")) {
+                score.* +|= 0.5;
+            }
+        }
+    }
 };
 
 pub const TxtRules = struct {

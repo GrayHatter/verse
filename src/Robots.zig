@@ -93,9 +93,12 @@ const rules = struct {
     const browser = [_]RuleFn{
         Browser.Rules.protocolVer,
         Browser.Rules.acceptStr,
+        Browser.Rules.acceptLang,
     };
     const bot = [_]RuleFn{
         Bot.Rules.knownSubnet,
+        Bot.Rules.expectedLanguages,
+        Bot.Rules.expectedParamDepth,
     };
 };
 

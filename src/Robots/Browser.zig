@@ -327,6 +327,30 @@ pub const Rules = struct {
         }
     }
 
+    pub fn acceptLang(_: UserAgent, r: *const Request, score: *f16) !void {
+        if (std.mem.eql(u8, r.accept_language.bytes, "en")) score.* = @max(score.*, 1.0);
+    }
+
+    test acceptLang {
+        var req: Request = undefined;
+        var score: f16 = 0.0;
+
+        score = 0.0;
+        req.accept_language = .fromStr("en");
+        try acceptLang(undefined, &req, &score);
+        try std.testing.expectEqual(1.0, score);
+
+        score = 0.0;
+        req.accept_language = .fromStr("en-US,en;q=0.9");
+        try acceptLang(undefined, &req, &score);
+        try std.testing.expectEqual(0.0, score);
+
+        score = 0.0;
+        req.accept_language = .fromStr("zh-CN,zh;q=0.9,en;q=0.8");
+        try acceptLang(undefined, &req, &score);
+        try std.testing.expectEqual(0.0, score);
+    }
+
     pub fn protocolVer(_: UserAgent, r: *const Request, score: *f16) !void {
         if (!r.secure) return;
 
