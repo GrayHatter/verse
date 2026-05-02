@@ -51,7 +51,7 @@ pub const Match = struct {
 
     /// Separate from the http interface as this is 'internal' to the routing
     /// subsystem, where a single endpoint may respond to multiple http methods.
-    pub const Methods = packed struct(u9) {
+    pub const Methods = packed struct(u10) {
         CONNECT: bool = false,
         DELETE: bool = false,
         GET: bool = false,
@@ -61,6 +61,7 @@ pub const Match = struct {
         PUT: bool = false,
         TRACE: bool = false,
         WEBSOCKET: bool = false,
+        PROPFIND: bool = false,
 
         pub fn supports(m: Methods, req: Request.Methods) bool {
             return switch (req) {
@@ -73,6 +74,7 @@ pub const Match = struct {
                 .PUT => m.PUT,
                 .TRACE => m.TRACE,
                 .WEBSOCKET => m.WEBSOCKET,
+                .PROPFIND => m.PROPFIND,
             };
         }
 
@@ -86,6 +88,7 @@ pub const Match = struct {
             .PUT = true,
             .TRACE = true,
             .WEBSOCKET = true,
+            .PROPFIND = true,
         };
 
         pub const none: Methods = .{};

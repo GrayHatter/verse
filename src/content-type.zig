@@ -65,11 +65,14 @@ pub const Base = enum {
     }
 };
 
-pub const Application = enum {
+pub const Application = enum(usize) {
     @"x-www-form-urlencoded",
     @"x-git-upload-pack-request",
+    @"x-git-receive-pack-request",
     @"octet-stream",
     json,
+
+    _,
 
     pub fn string(comptime app: Application) [:0]const u8 {
         return switch (app) {
@@ -123,6 +126,7 @@ pub const Text = enum {
     css,
     html,
     javascript,
+    xml,
 
     pub fn string(comptime app: Text) [:0]const u8 {
         return switch (app) {
@@ -248,6 +252,7 @@ pub fn fromStr(str: []const u8) !ContentType {
             return wrapBase(field.type, str[field.name.len + 1 ..]);
         }
     }
+    log.warn("unable to process content type {s}", .{str});
     return error.UnknownContentType;
 }
 
@@ -257,6 +262,7 @@ fn wrapField(comptime Kind: type, str: []const u8) !Kind {
             return @enumFromInt(field.value);
         }
     }
+    log.warn("unable to process content type {s} {s}", .{ @typeName(Kind), str });
     return error.UnknownContentType;
 }
 
@@ -308,3 +314,4 @@ const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
 const indexOf = std.mem.indexOf;
 const eql = std.mem.eql;
+const log = std.log.scoped(.verse_content_type);

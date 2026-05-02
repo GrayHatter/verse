@@ -397,8 +397,14 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]It
         .@"x-www-form-urlencoded" => try normWwwFormUrlEncoded(a, data),
         // Git just uses the raw data instead, no need to preprocess
         .@"x-git-upload-pack-request" => &[0]Item{},
+        // Git just uses the raw data instead, no need to preprocess
+        .@"x-git-receive-pack-request" => &[0]Item{},
         .@"octet-stream" => @panic("not implemented"),
         .json => try normJson(a, data),
+        else => {
+            log.warn("Unsupported Content Type {s}", .{data});
+            return &[0]Item{};
+        },
     };
 }
 

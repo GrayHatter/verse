@@ -115,7 +115,7 @@ pub const Language = struct {
     };
 };
 
-pub const Methods = enum(u9) {
+pub const Methods = enum(u10) {
     GET = 1,
     HEAD = 2,
     POST = 4,
@@ -125,6 +125,7 @@ pub const Methods = enum(u9) {
     OPTIONS = 64,
     TRACE = 128,
     WEBSOCKET = 256,
+    PROPFIND = 512,
 
     pub fn fromStr(s: []const u8) !Methods {
         inline for (std.meta.fields(Methods)) |field| {
@@ -151,7 +152,7 @@ pub const Methods = enum(u9) {
 
     pub fn readOnly(m: Methods) bool {
         return switch (m) {
-            .GET, .HEAD, .OPTIONS => true,
+            .GET, .HEAD, .OPTIONS, .PROPFIND => true,
             .POST, .PUT, .DELETE, .CONNECT, .TRACE, .WEBSOCKET => false,
         };
     }
