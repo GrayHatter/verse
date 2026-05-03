@@ -173,6 +173,7 @@ pub const Item = struct {
 pub const Post = struct {
     bytes: []u8,
     items: []Item,
+    content_type: ContentType,
 
     pub fn init(a: Allocator, size: usize, reader: *Reader, ct: ContentType) !Post {
         //reader.fillMore() catch {}; // TODO fix me
@@ -198,6 +199,7 @@ pub const Post = struct {
         return .{
             .bytes = read_b,
             .items = items,
+            .content_type = ct,
         };
     }
 
