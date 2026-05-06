@@ -13,6 +13,7 @@ pub const Name = enum {
     applebot,
     bingbot,
     claudebot,
+    claude_searchbot,
     googlebot,
     gptbot,
     lounge_irc_client,
@@ -22,6 +23,22 @@ pub const Name = enum {
 
     pub const fields = @typeInfo(Name).@"enum".fields;
     pub const len = fields.len;
+
+    pub fn robotsTxtName(n: Name) *const [:0]const u8 {
+        return switch (n) {
+            .amzn_searchbot => "Amzn-SearchBot",
+            .applebot => "Applebot",
+            .bingbot => "Bingbot",
+            .claudebot => "ClaudeBot",
+            .claude_searchbot => "Claude-SearchBot",
+            .googlebot => "GoogleBot",
+            .gptbot => "GPTBot",
+            // robots.txt doesn't apply
+            .lounge_irc_client => "",
+            .malicious => "",
+            .unknown => "",
+        };
+    }
 };
 
 pub fn resolve(str: []const u8) ?Bot {
@@ -38,6 +55,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
     } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
         return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
+    } else if (endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)")) {
+        return .{ .name = .claude_searchbot, .version = parseVersion(str, "Claude-SearchBot/") catch 0 };
     } else if (find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
     } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
@@ -142,6 +161,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .applebot, .network = null },
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claudebot, .network = null },
+        .{ .bot = .claude_searchbot, .network = null },
         .{
             .bot = .googlebot,
             .network = &.{
