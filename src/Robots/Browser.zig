@@ -22,7 +22,26 @@ pub const Name = enum {
     unknown,
     // lol, ok bro
     msie,
+
+    pub fn rules(comptime name: Name) []const Robots.RuleFn {
+        return switch (name) {
+            .brave => Brave.rules,
+            .chrome => Chrome.rules,
+            .edge => Edge.rules,
+            .firefox => Firefox.rules,
+            .hastur => Hastur.rules,
+            .ladybird => Ladybird.rules,
+            .opera => Opera.rules,
+            .safari => Safari.rules,
+            .msie => Msie.rules,
+            .unknown => &.{},
+        };
+    }
 };
+
+pub fn agentRules(_: Browser) !void {
+    return;
+}
 
 pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
     if (comptime !UA_VALIDATION) @compileError("User Agent Validation is disabled");
@@ -61,6 +80,8 @@ fn makeVersions() [browser_count][]const Date {
 }
 
 pub const Brave = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -70,6 +91,10 @@ pub const Brave = struct {
 };
 
 pub const Chrome = struct {
+    pub const rules: []const Robots.RuleFn = &.{
+        Chrome.Rules.obviousBot,
+    };
+
     pub const Version = enum(u16) {
         _,
 
@@ -118,9 +143,19 @@ pub const Chrome = struct {
             .{ 148, 1776816000 }, .{ 149, 1779235200 },
         };
     };
+
+    pub const Rules = struct {
+        pub fn obviousBot(_: UserAgent, r: *const Request, score: *f16) !void {
+            if (eql(u8, r.accept_encoding.bytes, "zstd,gzip,deflate,br")) {
+                score.* += 100.0;
+            }
+        }
+    };
 };
 
 pub const Edge = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -132,6 +167,8 @@ pub const Edge = struct {
 };
 
 pub const Firefox = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -182,6 +219,8 @@ pub const Firefox = struct {
 };
 
 pub const Hastur = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -191,6 +230,8 @@ pub const Hastur = struct {
 };
 
 pub const Ladybird = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -200,6 +241,8 @@ pub const Ladybird = struct {
 };
 
 pub const Opera = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -209,6 +252,8 @@ pub const Opera = struct {
 };
 
 pub const Safari = struct {
+    pub const rules: []const Robots.RuleFn = &.{};
+
     pub const Version = enum(u16) {
         _,
 
@@ -218,6 +263,10 @@ pub const Safari = struct {
 };
 
 pub const Msie = struct {
+    pub const rules: []const Robots.RuleFn = &.{
+        Rules.assertMalicious,
+    };
+
     pub const Version = enum(u16) {
         _,
         pub const Dates = compileDates(&VerDates);
@@ -365,6 +414,10 @@ pub const Rules = struct {
             .malformed => {},
         }
     }
+
+    pub fn assertMalicious(_: UserAgent, _: *const Request, score: *f16) !void {
+        score.* += 100.0;
+    }
 };
 
 test Browser {
@@ -374,6 +427,7 @@ test Browser {
 const std = @import("std");
 const UserAgent = @import("../UserAgent.zig");
 const Request = @import("../Request.zig");
+const Robots = @import("../Robots.zig");
 
 const eql = std.mem.eql;
 const Timestamp = std.Io.Timestamp;

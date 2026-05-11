@@ -54,12 +54,11 @@ pub fn init(r: *const Request) Robots {
                 robot.malicious = true;
             }
             switch (browser.name) {
-                .chrome => {},
-                .msie => {
-                    robot.automated = true;
-                    robot.malicious = true;
+                inline else => |bwsr| {
+                    const B = @TypeOf(bwsr);
+                    inline for (comptime B.rules(bwsr)) |rule|
+                        rule(ua, r, &robot.score) catch @panic("not implemented");
                 },
-                else => {},
             }
         },
         .script => robot.automated = true,
@@ -84,7 +83,7 @@ const RuleError = error{
     NotABot,
 };
 
-const RuleFn = fn (UA, *const Request, *f16) RuleError!void;
+pub const RuleFn = *const fn (UA, *const Request, *f16) RuleError!void;
 
 const rules = struct {
     const age = [_]RuleFn{

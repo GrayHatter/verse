@@ -6,7 +6,7 @@ host: ?Host,
 user_agent: ?UserAgent,
 referer: ?Referer,
 accept: ?Accept,
-accept_encoding: Encoding = .default,
+accept_encoding: Encoding = .none,
 accept_language: Language = .default,
 authorization: ?Authorization,
 protocol: Protocol,
@@ -34,27 +34,32 @@ pub const Accept = []const u8;
 pub const Authorization = []const u8;
 pub const Referer = []const u8;
 
-pub const Encoding = packed struct {
+pub const Encoding = struct {
     br: bool,
     deflate: bool,
     gzip: bool,
     zstd: bool,
 
+    bytes: []const u8,
+
     pub fn fromStr(str: []const u8) Encoding {
-        var e: Encoding = .default;
+        var e: Encoding = .none;
         inline for (@typeInfo(Encoding).@"struct".fields) |f| {
+            if (comptime eql(u8, f.name, "bytes")) continue;
             if (indexOf(u8, str, f.name)) |_| {
                 @field(e, f.name) = true;
             }
         }
+        e.bytes = str;
         return e;
     }
 
-    pub const default: Encoding = .{
+    pub const none: Encoding = .{
         .br = false,
         .deflate = false,
         .gzip = false,
         .zstd = false,
+        .bytes = &.{},
     };
 };
 
@@ -240,7 +245,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
     const host: ?Host = zk.get(.HTTP_HOST);
     const ua_slice: ?[]const u8 = zk.get(.HTTP_USER_AGENT);
     const referer: ?Referer = zk.get(.HTTP_REFERER);
-    const encoding: Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else .default;
+    const encoding: Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else .none;
     const language: Language = if (zk.get(.HTTP_ACCEPT_LANGUAGE)) |al| .fromStr(al) else .default;
     const authorization: ?Authorization = zk.get(.HTTP_AUTHORIZATION);
     const cookie_header: ?[]const u8 = zk.get(.HTTP_COOKIE);
@@ -290,7 +295,7 @@ pub fn initHttp(
     var host: ?Host = null;
     var ua_string: ?[]const u8 = null;
     var referer: ?Referer = null;
-    var encoding: Encoding = .default;
+    var encoding: Encoding = .none;
     var language: Language = .default;
     var authorization: ?Authorization = null;
     var cookie_header: ?[]const u8 = null;

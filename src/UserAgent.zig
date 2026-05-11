@@ -18,7 +18,7 @@ pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
     log.err("bot detection: {}", .{bd});
     if (ua.agent == .browser) {
         const age: Duration = ua.agent.browser.age(r.now) catch .fromSeconds(0);
-        log.err("age: days {} seconds {}", .{ @divTrunc(age.toSeconds(), 86400), age });
+        log.err("age: days {} seconds {}", .{ @divTrunc(age.toSeconds(), 86400), age.toSeconds() });
     }
 }
 
