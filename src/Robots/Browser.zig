@@ -93,6 +93,7 @@ pub const Brave = struct {
 pub const Chrome = struct {
     pub const rules: []const Robots.RuleFn = &.{
         Chrome.Rules.obviousBot,
+        Browser.Rules.acceptEncodingFormatting,
     };
 
     pub const Version = enum(u16) {
@@ -292,6 +293,14 @@ pub const Rules = struct {
     const DAY: i64 = 86400;
     pub const AGE_STEP: usize = DAY * 45;
 
+    pub fn acceptEncodingFormatting(_: UserAgent, r: *const Request, score: *f16) !void {
+        if (find(u8, r.accept_encoding.bytes, ",")) |i| {
+            if (i == r.accept_encoding.bytes.len - 1 or r.accept_encoding.bytes[i + 1] != ' ') {
+                score.* += 0.5;
+            }
+        }
+    }
+
     pub fn checkAge(ua: UserAgent, r: *const Request, score: *f16) !void {
         if (ua.agent != .browser) return;
         if (ua.agent.browser.name == .unknown) return;
@@ -430,6 +439,7 @@ const Request = @import("../Request.zig");
 const Robots = @import("../Robots.zig");
 
 const eql = std.mem.eql;
+const find = std.mem.find;
 const Timestamp = std.Io.Timestamp;
 const Duration = std.Io.Duration;
 const Clock = std.Io.Clock;
