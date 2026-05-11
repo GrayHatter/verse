@@ -11,6 +11,7 @@ accept_language: Language = .default,
 authorization: ?Authorization,
 protocol: Protocol,
 secure: bool,
+client_hints: ClientHints = .{},
 
 headers: Headers,
 /// Default API, still unstable, but unlike to drastically change
@@ -24,6 +25,7 @@ now: Timestamp,
 const Request = @This();
 
 pub const Data = @import("Request/Data.zig");
+pub const ClientHints = @import("Request/ClientHints.zig");
 pub const UserAgent = @import("UserAgent.zig");
 const Headers = @import("headers.zig");
 const Cookies = @import("cookies.zig");
