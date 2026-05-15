@@ -30,7 +30,40 @@ pub const UserAgent = @import("UserAgent.zig");
 const Headers = @import("headers.zig");
 const Cookies = @import("cookies.zig");
 
-pub const Host = []const u8;
+/// This API is unstable and may be removed or updated in the future.
+pub const Host = struct {
+    bytes: []const u8,
+
+    pub fn init(bytes: []const u8) Host {
+        return .{ .bytes = bytes };
+    }
+
+    /// Return error.DataInvalid if host.bytes contains any char outside the set
+    /// alphanumeric, '.', and '-'.
+    pub fn valid(h: Host) error{DataInvalid}![]const u8 {
+        if (!h.isValid()) return error.DataInvalid;
+        return h.bytes;
+    }
+
+    pub fn isValid(h: Host) bool {
+        for (h.bytes) |c| switch (c) {
+            '0'...'9', 'a'...'z', 'A'...'Z', '.', '-' => {},
+            else => return false,
+        };
+        return true;
+    }
+
+    test isValid {
+        try std.testing.expectError(error.DataInvalid, Host.init("invalid host name").valid());
+        try std.testing.expectError(error.DataInvalid, Host.init("other-invalid-name*").valid());
+        try std.testing.expectError(error.DataInvalid, Host.init("in_valid_name").valid());
+        try std.testing.expectEqualStrings("valid", try Host.init("valid").valid());
+        try std.testing.expectEqualStrings("valid.name", try Host.init("valid.name").valid());
+        try std.testing.expectEqualStrings("valid.name.fqdn.", try Host.init("valid.name.fqdn.").valid());
+        try std.testing.expectEqualStrings("valid-name.fqdn.", try Host.init("valid-name.fqdn.").valid());
+    }
+};
+
 pub const RemoteAddr = []const u8;
 pub const Accept = []const u8;
 pub const Authorization = []const u8;
@@ -195,7 +228,7 @@ fn initCommon(
     remote_addr: RemoteAddr,
     _method: Methods,
     uri: []const u8,
-    host: ?Host,
+    host: ?[]const u8,
     ua: ?[]const u8,
     referer: ?Referer,
     accept: ?Accept,
@@ -223,7 +256,7 @@ fn initCommon(
         .cookie_jar = if (cookies) |ch| try .initFromHeader(a, ch) else .init(a),
         .data = data,
         .headers = headers,
-        .host = host,
+        .host = if (host) |h| Host.init(h) else null,
         .method = method,
         .referer = referer,
         .remote_addr = remote_addr,
@@ -244,7 +277,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
     };
     const remote_addr: ?RemoteAddr = zk.get(.REMOTE_ADDR);
     const accept: ?Accept = zk.get(.HTTP_ACCEPT);
-    const host: ?Host = zk.get(.HTTP_HOST);
+    const host: ?[]const u8 = zk.get(.HTTP_HOST);
     const ua_slice: ?[]const u8 = zk.get(.HTTP_USER_AGENT);
     const referer: ?Referer = zk.get(.HTTP_REFERER);
     const encoding: Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else .none;
@@ -294,7 +327,7 @@ pub fn initHttp(
     var headers: Headers = .empty;
 
     var accept: ?Accept = null;
-    var host: ?Host = null;
+    var host: ?[]const u8 = null;
     var ua_string: ?[]const u8 = null;
     var referer: ?Referer = null;
     var encoding: Encoding = .none;
@@ -356,6 +389,7 @@ pub fn initHttp(
 
 test Request {
     std.testing.refAllDecls(Request);
+    _ = &Host;
 }
 
 const std = @import("std");
