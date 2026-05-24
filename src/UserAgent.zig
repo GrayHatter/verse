@@ -9,6 +9,11 @@ validation: ?Robots = if (UA_VALIDATION) null else {},
 
 const UserAgent = @This();
 
+const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
+const Bot = if (UA_VALIDATION) Robots.Bot else void;
+const Browser = @import("Robots/Browser.zig");
+const Script = @import("Robots/Script.zig");
+
 pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
     if (comptime !UA_VALIDATION) @compileError("Bot Detection is currently disabled");
 
@@ -62,6 +67,11 @@ pub const Agent = union(enum) {
             return .{ .script = .{
                 .name = .git,
                 .version = parseVersion(str, "git/") catch return null,
+            } };
+        } else if (startsWith(u8, str, "zig/")) {
+            return .{ .script = .{
+                .name = .zig,
+                .version = parseVersion(str, "zig/") catch return null,
             } };
         } else return null;
     }
@@ -209,16 +219,6 @@ test Agent {
     );
 }
 
-pub const Script = struct {
-    name: Name,
-    version: u32,
-
-    pub const Name = enum {
-        curl,
-        git,
-    };
-};
-
 pub fn init(ua_str: []const u8) UserAgent {
     return .{
         .string = ua_str,
@@ -242,9 +242,6 @@ test UserAgent {
 }
 
 const Request = @import("Request.zig");
-const Browser = @import("Robots/Browser.zig");
-const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
-const Bot = if (UA_VALIDATION) Robots.Bot else void;
 
 const std = @import("std");
 const Duration = std.Io.Duration;
