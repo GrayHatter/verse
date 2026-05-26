@@ -66,10 +66,13 @@ pub const Base = enum {
 };
 
 pub const Application = enum(usize) {
-    @"x-www-form-urlencoded",
-    @"x-git-upload-pack-request",
-    @"x-git-receive-pack-request",
     @"octet-stream",
+    @"x-git-receive-pack-request",
+    @"x-git-receive-pack-result",
+    @"x-git-upload-pack-advertisement",
+    @"x-git-upload-pack-request",
+    @"x-git-upload-pack-result",
+    @"x-www-form-urlencoded",
     json,
 
     _,
