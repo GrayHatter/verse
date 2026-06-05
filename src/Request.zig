@@ -47,7 +47,13 @@ pub const Host = struct {
 
     pub fn isValid(h: Host) bool {
         for (h.bytes) |c| switch (c) {
-            '0'...'9', 'a'...'z', 'A'...'Z', '.', '-' => {},
+            '0'...'9',
+            'a'...'z',
+            'A'...'Z',
+            '.',
+            '-',
+            ':', // The Port may be included in the host name.
+            => {},
             else => return false,
         };
         return true;
@@ -61,6 +67,7 @@ pub const Host = struct {
         try std.testing.expectEqualStrings("valid.name", try Host.init("valid.name").valid());
         try std.testing.expectEqualStrings("valid.name.fqdn.", try Host.init("valid.name.fqdn.").valid());
         try std.testing.expectEqualStrings("valid-name.fqdn.", try Host.init("valid-name.fqdn.").valid());
+        try std.testing.expectEqualStrings("valid.name:443", try Host.init("valid.name:443").valid());
     }
 };
 
