@@ -1,7 +1,9 @@
-pub const Path = @This();
-
 text: []const u8,
 path_allowed: bool = false,
+
+pub const Path = @This();
+
+pub const empty: Path = .safe(&.{});
 
 pub const Allowed = enum {
     path,
@@ -13,6 +15,14 @@ pub fn init(comptime path: Allowed, txt: []const u8) Path {
         .text = txt,
         .path_allowed = path == .path,
     };
+}
+
+pub fn abx(str: []const u8) Path {
+    return .{ .text = str };
+}
+
+pub fn safe(str: []const u8) Path {
+    return .abx(str);
 }
 
 pub fn format(self: Path, out: *Writer) error{WriteFailed}!void {

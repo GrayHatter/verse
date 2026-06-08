@@ -3,6 +3,8 @@ text_cleaned: []const u8 = &.{},
 
 const Html = @This();
 
+pub const empty: Html = .safe(&.{});
+
 pub fn abx(str: []const u8) Html {
     return .{ .text = str };
 }
