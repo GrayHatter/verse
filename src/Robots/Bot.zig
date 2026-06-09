@@ -12,11 +12,12 @@ pub const Name = enum {
     amzn_searchbot,
     applebot,
     bingbot,
-    claudebot,
     claude_searchbot,
+    claudebot,
     googlebot,
     gptbot,
     lounge_irc_client,
+    metaexternalagent,
 
     malicious,
     unknown,
@@ -29,10 +30,12 @@ pub const Name = enum {
             .amzn_searchbot => "Amzn-SearchBot",
             .applebot => "Applebot",
             .bingbot => "Bingbot",
-            .claudebot => "ClaudeBot",
             .claude_searchbot => "Claude-SearchBot",
+            .claudebot => "ClaudeBot",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
+            .metaexternalagent => "meta-externalagent",
+
             // robots.txt doesn't apply
             .lounge_irc_client => "",
             .malicious => "",
@@ -61,6 +64,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
     } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
+    } else if (eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)")) {
+        return .{ .name = .metaexternalagent, .version = 1 };
     } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
         return .{ .name = .lounge_irc_client, .version = 0 };
     }
@@ -160,18 +165,13 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .amzn_searchbot, .network = null },
         .{ .bot = .applebot, .network = null },
         .{ .bot = .bingbot, .network = null },
-        .{ .bot = .claudebot, .network = null },
         .{ .bot = .claude_searchbot, .network = null },
-        .{
-            .bot = .googlebot,
-            .network = &.{
-                // Yes, I know strings are the stupid way of doing this, this is
-                // "temporary"
-                .nets = &[_][]const u8{"66.249"},
-            },
-        },
+        .{ .bot = .claudebot, .network = null },
+        // Yes, I know strings are the stupid way of doing this, this is "temporary"
+        .{ .bot = .googlebot, .network = &.{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
+        .{ .bot = .metaexternalagent, .network = null },
         .{ .bot = .malicious, .network = null },
         .{ .bot = .unknown, .network = null },
     },
