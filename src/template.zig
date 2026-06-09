@@ -161,7 +161,7 @@ test findPageType {
             .simple_variable = "",
             .nullable = null,
         },
-        .empty_vars = .{},
+        .empty_vars = true,
     };
     // Ensure it builds, then trust the compiler
     try std.testing.expect(@sizeOf(@TypeOf(expected)) > 0);

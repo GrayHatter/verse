@@ -73,26 +73,20 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             fn directive(T: type, data: T, drct: Directive, varr: *IOVArray, a: Allocator) !void {
                 std.debug.assert(drct.verb == .variable);
                 switch (T) {
-                    []const u8 => {
-                        varr.appendAssumeCapacity(.fromSlice(data));
-                    },
-                    ?[]const u8 => {
-                        if (data) |d| {
-                            if (d.len > 0) varr.appendAssumeCapacity(.fromSlice(d));
-                        } else if (drct.otherwise == .default) {
-                            if (drct.otherwise.default.len > 0)
-                                varr.appendAssumeCapacity(.fromSlice(drct.otherwise.default));
-                        }
+                    []const u8 => varr.appendAssumeCapacity(.fromSlice(data)),
+                    ?[]const u8 => if (data) |d| {
+                        if (d.len > 0) varr.appendAssumeCapacity(.fromSlice(d));
+                    } else if (drct.otherwise == .default) {
+                        if (drct.otherwise.default.len > 0)
+                            varr.appendAssumeCapacity(.fromSlice(drct.otherwise.default));
                     },
                     usize, isize => {
                         const int = try allocPrint(a, "{}", .{data});
                         varr.appendAssumeCapacity(.fromSlice(int));
                     },
-                    ?usize => {
-                        if (data) |us| {
-                            const int = try allocPrint(a, "{}", .{us});
-                            varr.appendAssumeCapacity(.fromSlice(int));
-                        }
+                    ?usize => if (data) |us| {
+                        const int = try allocPrint(a, "{}", .{us});
+                        varr.appendAssumeCapacity(.fromSlice(int));
                     },
                     else => comptime unreachable,
                 }
@@ -101,14 +95,12 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
             fn array(T: type, data: T, comptime ofs: []const Offset, varr: *IOVArray, a: Allocator) !void {
                 switch (T) {
                     []const u8, u8 => comptime unreachable,
-                    []const []const u8 => {
-                        for (data) |each| {
-                            varr.appendAssumeCapacity(.fromSlice(each));
-                            // I should find a better way to write this hack
-                            if (ofs.len == 2) {
-                                if (ofs[1].kind == .slice and ofs[1].kind.slice.len > 0) {
-                                    varr.appendAssumeCapacity(.fromSlice(ofs[1].kind.slice));
-                                }
+                    []const []const u8 => for (data) |each| {
+                        varr.appendAssumeCapacity(.fromSlice(each));
+                        // I should find a better way to write this hack
+                        if (ofs.len == 2) {
+                            if (ofs[1].kind == .slice and ofs[1].kind.slice.len > 0) {
+                                varr.appendAssumeCapacity(.fromSlice(ofs[1].kind.slice));
                             }
                         }
                     },
@@ -121,19 +113,17 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             if (opt.child == []const u8) unreachable;
                             switch (@typeInfo(opt.child)) {
                                 .int => std.debug.print("skipped int\n", .{}),
-                                .@"struct" => {
-                                    if (data) |d| return try core(opt.child, d, ofs, varr, a);
-                                },
-                                else => unreachable,
+                                .@"struct" => if (data) |d|
+                                    return try core(opt.child, d, ofs, varr, a),
+                                .bool => if (data != null and data.?)
+                                    return try core(opt.child, true, ofs, varr, a),
+                                else => comptime unreachable,
                             }
                         },
-                        .array => |arr| {
-                            for (data) |each| try core(arr.child, each, ofs, varr, a);
-                        },
-                        else => {
-                            std.debug.print("unexpected type {s}\n", .{@typeName(T)});
-                            comptime unreachable;
-                        },
+                        .array => |arr| for (data) |each|
+                            try core(arr.child, each, ofs, varr, a),
+                        else => comptime unreachable,
+                        //std.debug.print("unexpected type {s}\n", .{@typeName(T)});
                     },
                 }
             }
@@ -144,9 +134,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     if (skip > 0) {
                         skip -|= 1;
                     } else switch (os.kind) {
-                        .slice => |slice| {
-                            varr.appendAssumeCapacity(.fromSlice(slice));
-                        },
+                        .slice => |slice| varr.appendAssumeCapacity(.fromSlice(slice)),
                         .component => |comp| {
                             const child_data = os.getData(comp.kind, @ptrCast(&data));
                             try array(comp.kind, child_data.*, ofs[os_idx..][0..comp.len], varr, a);
@@ -162,14 +150,10 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                             varr.appendAssumeCapacity(.fromSlice(drct.kind.VALUE));
                                         }
                                     },
-                                    else => {
-                                        try directive(drct.kind, child_data.*, drct.d, varr, a);
-                                    },
+                                    else => try directive(drct.kind, child_data.*, drct.d, varr, a),
                                 }
                             },
-                            else => {
-                                std.debug.print("directive skipped {} {}\n", .{ drct.d.verb, ofs.len });
-                            },
+                            else => std.debug.print("directive skipped {} {}\n", .{ drct.d.verb, ofs.len }),
                         },
                         .template => |tmpl| {
                             const child_data = os.getData(tmpl.kind, @ptrCast(&data));
@@ -191,22 +175,19 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     } else if (drct.otherwise == .default) {
                         try w.writeAll(drct.otherwise.default);
                     },
-                    ?usize => {
-                        if (data) |us| {
-                            return try drct.formatTyped(usize, us, w);
-                        }
-                    },
-                    else => {
-                        return try drct.formatTyped(T, data, w);
-                    },
+                    ?usize => if (data) |us| return try drct.formatTyped(usize, us, w),
+                    else => return try drct.formatTyped(T, data, w),
                 }
             }
 
             fn optional(T: type, item: ?T, comptime ofs: []const Offset, out: *Writer) error{WriteFailed}!void {
                 if (comptime T == ?[]const u8) return directive(T, item.?, ofs[0], out);
                 switch (@typeInfo(T)) {
-                    .int => std.debug.print("skipped int\n", .{}),
-                    .@"struct" => if (item) |itm| try print(T, itm, ofs, out),
+                    .int => comptime unreachable,
+                    .@"struct" => if (item) |itm|
+                        try print(T, itm, ofs, out),
+                    .bool => if (item != null and item.?)
+                        try print(T, true, ofs, out),
                     else => comptime unreachable,
                 }
             }
@@ -228,16 +209,15 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     },
                     else => switch (@typeInfo(T)) {
                         .pointer => |ptr| {
-                            comptime std.debug.assert(ptr.size == .slice);
+                            if (comptime ptr.size != .slice) comptime unreachable;
                             for (data) |each| try print(ptr.child, each, ofs, out);
                         },
                         .optional => |opt| {
-                            if (opt.child == []const u8) unreachable;
+                            if (comptime opt.child == []const u8) comptime unreachable;
                             try optional(opt.child, data, ofs, out);
                         },
-                        .array => |arr| {
-                            for (data) |each| try print(arr.child, each, ofs, out);
-                        },
+                        .array => |arr| for (data) |each|
+                            try print(arr.child, each, ofs, out),
                         .@"union" => switch (data) {
                             inline else => |case, tag| {
                                 if (data == tag) {
@@ -261,6 +241,9 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             },
                         },
                         .@"struct" => try print(T, data, ofs, out),
+                        // I don't actually know if this is unreachable, but I don't understand
+                        // when you'd want to use a for like this. Should be an int (typed usize?)?
+                        .bool => unreachable,
                         else => {
                             const err = std.fmt.comptimePrint("unexpected type {s}\n", .{@typeName(T)});
                             @compileLog(@typeInfo(T));
@@ -364,7 +347,7 @@ test Page {
         },
         .slices = &.{ "1", "2", "3", "4" },
         .include_vars = .{ .template_name = " ", .simple_variable = " " },
-        .empty_vars = .{},
+        .empty_vars = true,
     });
 
     try page.ioVec(&varr, a);
@@ -373,6 +356,9 @@ test Page {
     // The following two numbers weren't validated in anyway.
     try std.testing.expectEqual(49, varr.items.len);
     try std.testing.expectEqual(52, PUT.IoVec.countAll(page));
+
+    const PageType = Page(.{ .blob = "" }, Templates.findPageType("templates/example.html"));
+    _ = &PageType;
 }
 
 test {

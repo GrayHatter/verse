@@ -56,23 +56,28 @@ pub const AbstTree = struct {
     pub fn format(at: AbstTree, w: *Writer) !void {
         try w.writeAll("pub const ");
         try w.writeAll(at.name);
-        try w.writeAll(" = struct {\n");
-        for (at.children.items) |child| {
-            try w.print("{f}", .{child});
-        }
-        try w.writeAll(
-            \\
-            \\    pub const translate = AutoTranslate(@This()).translate;
-            \\    pub const translateAlloc = AutoTranslate(@This()).translateAlloc;
-            \\
-        );
-        var itr = at.trees.iterator();
-        while (itr.next()) |each| {
-            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
-            try w.print("{f}\n", .{each.value_ptr.*});
-        }
+        try w.writeAll(" = ");
 
-        try w.writeAll("};\n");
+        if (at.children.items.len > 0) {
+            try w.writeAll("struct {\n");
+            for (at.children.items) |child| {
+                try w.print("{f}", .{child});
+            }
+            try w.writeAll(
+                \\
+                \\    pub const translate = AutoTranslate(@This()).translate;
+                \\    pub const translateAlloc = AutoTranslate(@This()).translateAlloc;
+                \\
+            );
+            var itr = at.trees.iterator();
+            while (itr.next()) |each| {
+                try w.print("{f}\n", .{each.value_ptr.*});
+            }
+
+            try w.writeAll("};\n");
+        } else {
+            try w.writeAll("bool;\n");
+        }
     }
 };
 

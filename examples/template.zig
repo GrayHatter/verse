@@ -55,7 +55,7 @@ fn index(frame: *verse.Frame) Router.Error!void {
             .simple_variable = "This is the simple variable for the included html",
         },
         // Even if the included html has no variables, the field is still required here
-        .empty_vars = .{},
+        .empty_vars = true,
     });
 
     try frame.sendPage(&page);

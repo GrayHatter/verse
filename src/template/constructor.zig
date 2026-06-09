@@ -107,6 +107,7 @@ fn baseType(T: type, name: []const u8) type {
             .pointer => |ptr| return ptr.child,
             .optional => |opt| return opt.child,
             .array => |array| return array.child,
+            .bool => return field_type,
             .@"struct" => return field_type,
             .int => return field_type,
             .@"union" => return field_type,
