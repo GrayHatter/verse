@@ -9,6 +9,7 @@ pub const is_malicious: Bot = .{ .name = .malicious, .version = 0, .malicious = 
 const Bot = @This();
 
 pub const Name = enum {
+    /// Ignores robots.txt
     amzn_searchbot,
     applebot,
     bingbot,
@@ -18,6 +19,8 @@ pub const Name = enum {
     gptbot,
     lounge_irc_client,
     metaexternalagent,
+    /// Ignores robots.txt
+    youbot,
 
     malicious,
     unknown,
@@ -46,12 +49,7 @@ pub const Name = enum {
 
 pub fn resolve(str: []const u8) ?Bot {
     if (find(u8, str, "Amzn-SearchBot/0.1") != null) {
-        return .{
-            .name = .amzn_searchbot,
-            .version = parseVersion(str, "Amzn-SearchBot/") catch 0,
-            // caught ignoring robots.txt
-            .malicious = true,
-        };
+        return .{ .name = .amzn_searchbot, .version = parseVersion(str, "Amzn-SearchBot/") catch 0, .malicious = true };
     } else if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
         return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
     } else if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
@@ -68,6 +66,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .metaexternalagent, .version = 1 };
     } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
         return .{ .name = .lounge_irc_client, .version = 0 };
+    } else if (startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0")) {
+        return .{ .name = .youbot, .version = parseVersion(str, "YouBot/") catch 0, .malicious = true };
     }
     return null;
 }
@@ -167,11 +167,11 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claude_searchbot, .network = null },
         .{ .bot = .claudebot, .network = null },
-        // Yes, I know strings are the stupid way of doing this, this is "temporary"
         .{ .bot = .googlebot, .network = &.{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
+        .{ .bot = .youbot, .network = &.{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
         .{ .bot = .malicious, .network = null },
         .{ .bot = .unknown, .network = null },
     },
