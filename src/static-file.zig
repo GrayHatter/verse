@@ -1,37 +1,40 @@
-const std = @import("std");
-const Frame = @import("frame.zig");
-const Route = @import("router.zig");
-const ContentType = @import("content-type.zig");
+pub fn fileOnDisk(f: *Frame) Route.Error!void {
+    _ = f.uri.next(); // clear /static
+    const fname = f.uri.next() orelse return error.NotFound;
+    if (fname.len == 0) return error.NotFound;
 
-pub fn fileOnDisk(frame: *Frame) Route.Error!void {
-    _ = frame.uri.next(); // clear /static
-    const fname = frame.uri.next() orelse return error.Unrouteable;
-    if (fname.len == 0) return error.Unrouteable;
     for (fname) |c| switch (c) {
         'A'...'Z', 'a'...'z', '-', '_', '.' => continue,
         else => return error.Abuse,
     };
-    if (std.mem.indexOf(u8, fname, "/../")) |_| return error.Abuse;
+    if (find(u8, fname, "/../")) |_| return error.Abuse;
 
-    var content_type: ContentType = .@"text/plain";
-    const period_index = std.mem.indexOf(u8, fname, ".");
-    if (period_index) |index| {
-        content_type = ContentType.fromFileExtension(fname[index..]) catch .@"text/plain";
-    }
+    const period_index = find(u8, fname, ".");
+    const content_type: ContentType =
+        if (period_index) |index|
+            ContentType.fromFileExtension(fname[index..]) catch .@"text/plain"
+        else
+            .@"text/plain";
 
-    frame.status = .ok;
-    frame.content_type = content_type;
-
-    const static = std.Io.Dir.cwd().openDir(frame.io, "static", .{}) catch return error.Unrouteable;
-    defer static.close(frame.io);
-    const file = static.openFile(frame.io, fname, .{}) catch return error.Unknown;
+    const static = std.Io.Dir.cwd().openDir(f.io, "static", .{}) catch return error.NotFound;
+    defer static.close(f.io);
+    const file = static.openFile(f.io, fname, .{}) catch return error.NotFound;
+    defer file.close(f.io);
     var r_b: [0x4000]u8 = undefined;
-    var reader = file.reader(frame.io, &r_b);
+    var reader = file.reader(f.io, &r_b);
 
-    try frame.sendHeaders(.close);
-    _ = reader.interface.stream(frame.downstream.writer, .limited(0xFFFFFF)) catch |err| switch (err) {
+    f.status = .ok;
+    f.content_type = content_type;
+    try f.sendHeaders(.close);
+    _ = reader.interface.stream(f.downstream.writer, .limited(0xFFFFFF)) catch |err| switch (err) {
         error.EndOfStream => {},
         error.ReadFailed => return error.ServerFault,
         error.WriteFailed => return error.WriteFailed,
     };
 }
+
+const std = @import("std");
+const find = std.mem.find;
+const Frame = @import("frame.zig");
+const Route = @import("router.zig");
+const ContentType = @import("content-type.zig");

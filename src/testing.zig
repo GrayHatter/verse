@@ -8,11 +8,11 @@ pub const SmokeTestOptions = struct {
         .soft_errors = &[_]Router.Error{
             // By default, the soft errors are DataMissing, DataInvalid [because
             // smokeTest is unable to generate the default or expected data],
-            // and Unrouteable [for the same reason, smokeTest is unlikely to be
+            // and NotFound [for the same reason, smokeTest is unlikely to be
             // able to generate the required routing information]
             error.DataInvalid,
             error.DataMissing,
-            error.Unrouteable,
+            error.NotFound,
         },
         .retry_with_fake_user = false,
     };

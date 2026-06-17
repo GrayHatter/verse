@@ -12,12 +12,17 @@ pub const ServerError = error{
 /// from returning a valid response.
 pub const ClientError = error{
     Abuse,
+    /// Returns 422
     DataInvalid,
+    /// Returns 400
     DataMissing,
     InvalidURI,
+    /// Returns 401
     Unauthenticated,
+    /// Returns 403
     Unauthorized,
-    Unrouteable,
+    /// Returns 404
+    NotFound,
 };
 
 /// Networking or other IO errors.
@@ -26,6 +31,12 @@ pub const NetworkError = error{
     /// full response is delivered.
     WriteFailed,
     NoSpaceLeft,
+};
+
+pub const RoutingError = error{
+    Unrouteable,
+    MethodNotAllowed,
+    NotFound,
 };
 
 pub const Error = ServerError || ClientError || NetworkError;

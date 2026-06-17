@@ -32,6 +32,7 @@ pub const FallbackRouter = *const fn (*Frame, RouteFn) BuildFn;
 
 pub const Errors = @import("errors.zig");
 pub const Error = Errors.ServerError || Errors.ClientError || Errors.NetworkError;
+pub const RoutingError = Errors.RoutingError;
 
 /// The Verse router will scan through an array of Match structs looking for a
 /// given name. Verse doesn't assert that the given name will match a director
@@ -51,17 +52,19 @@ pub const Match = struct {
 
     /// Separate from the http interface as this is 'internal' to the routing
     /// subsystem, where a single endpoint may respond to multiple http methods.
-    pub const Methods = packed struct(u10) {
+    pub const Methods = packed struct(u11) {
         CONNECT: bool = false,
         DELETE: bool = false,
         GET: bool = false,
         HEAD: bool = false,
         OPTIONS: bool = false,
         POST: bool = false,
+        PROPFIND: bool = false,
         PUT: bool = false,
+        // https://datatracker.ietf.org/doc/html/rfc10008
+        QUERY: bool = false,
         TRACE: bool = false,
         WEBSOCKET: bool = false,
-        PROPFIND: bool = false,
 
         pub fn supports(m: Methods, req: Request.Methods) bool {
             return switch (req) {
@@ -71,10 +74,11 @@ pub const Match = struct {
                 .HEAD => m.HEAD,
                 .OPTIONS => m.OPTIONS,
                 .POST => m.POST,
+                .PROPFIND => m.PROPFIND,
                 .PUT => m.PUT,
+                //.QUERY => m.QUERY,
                 .TRACE => m.TRACE,
                 .WEBSOCKET => m.WEBSOCKET,
-                .PROPFIND => m.PROPFIND,
             };
         }
 
@@ -87,6 +91,7 @@ pub const Match = struct {
             .POST = true,
             .PUT = true,
             .TRACE = true,
+            .QUERY = true,
             .WEBSOCKET = true,
             .PROPFIND = true,
         };
@@ -95,6 +100,7 @@ pub const Match = struct {
         pub const delete: Methods = .{ .DELETE = true };
         pub const get: Methods = .{ .GET = true };
         pub const post: Methods = .{ .POST = true };
+        pub const query: Methods = .{ .QUERY = true };
         pub const websocket: Methods = .{ .WEBSOCKET = true };
     };
 };
@@ -116,15 +122,12 @@ pub const Target = union(enum) {
 
 /// Builds a default router given an array of matches.
 pub fn Routes(comptime routes: []const Match) Router {
-    const routefn = struct {
+    return .{ .route = struct {
         const local: [routes.len]Match = routes;
         pub fn r(f: *Frame) RoutingError!BuildFn {
             return defaultRouter(f, routes);
         }
-    };
-    return .{
-        .route = routefn.r,
-    };
+    }.r };
 }
 
 /// Default route building helper.
@@ -169,9 +172,10 @@ pub fn ANY(comptime name: []const u8, comptime match: BuildFn) Match {
         .target = buildTarget(match),
         .methods = .{
             .GET = true,
-            .POST = true,
             .HEAD = true,
             .OPTIONS = true,
+            .POST = true,
+            .QUERY = true,
         },
     };
 }
@@ -279,12 +283,6 @@ fn default(frame: *Frame) Error!void {
     return frame.sendHTML(.ok, @embedFile("builtin-html/index.html"));
 }
 
-pub const RoutingError = error{
-    Unrouteable,
-    MethodNotAllowed,
-    NotFound,
-};
-
 pub fn targetRouter(frame: *Frame, comptime dest: []const u8, comptime routes: []const Match) RoutingError!BuildFn {
     var r_err: RoutingError = error.Unrouteable;
     inline for (routes) |ep| {
@@ -368,21 +366,10 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
             error.OutOfMemory,
             => @panic("Verse default builder: Page hit unhandled OOM error."),
             error.WriteFailed => log.err("generic write error", .{}),
-            error.Unrouteable => {
-                // Reaching an Unrouteable error here should be impossible as
-                // the router has decided the target endpoint is correct.
-                // However it's a vaild error in somecases. A non-default buildfn
-                // could provide a replacement default. But this does not.
-                log.err("Unrouteable", .{});
-                // FIXME
-                //if (@errorReturnTrace()) |trace| {
-                //    std.debug.dumpStackTrace(trace);
-                //}
-                @panic("Unroutable");
-            },
             // This is an implementation error by the page. So we crash. If
             // you've reached this, something is wrong with your site.
             error.NotImplemented => @panic("Verse Default Router Error: NotImplemented (unreachable)"),
+            error.NotFound => @panic("Verse Default Router Error: NotFound (unreachable)"),
             error.Unknown => @panic("Verse Default Router Error: Unknown (unreachable)"),
             error.ServerFault => @panic("Verse Default Router Error: ServerFault (unreachable)"),
             error.InvalidURI => log.err("Unexpected error '{}'\n", .{err}),
@@ -391,17 +378,7 @@ pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
             error.Unauthorized,
             error.DataInvalid,
             error.DataMissing,
-            => {
-                // DataInvalid and DataMissing are unlikely to be abuse, but
-                // dumping the information is likely to help with debugging the
-                // error.
-                log.err("Abuse {} because {}\n", .{ vrs.request, err });
-                // TODO fix me
-                //var itr = vrs.request.raw.http.iterateHeaders();
-                //while (itr.next()) |vars| {
-                //    log.err("Abusive var '{s}' => '''{s}'''\n", .{ vars.name, vars.value });
-                //}
-            },
+            => @panic("Verse Default Router Error: ServerFault (unreachable)"),
         }
     };
 }
