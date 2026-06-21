@@ -90,8 +90,17 @@ pub fn build(b: *std.Build) !void {
     lib_tests.root_module.addImport("comptime_templates", comptime_templates);
     lib_tests.root_module.addImport("comptime_structs", comptime_structs);
     const run_lib_tests = b.addRunArtifact(lib_tests);
+
+    const abx_tests = b.addTest(.{
+        .root_module = abx,
+        .use_llvm = use_llvm,
+        .use_lld = use_llvm,
+    });
+    const abx_tests_run = b.addRunArtifact(abx_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_tests.step);
+    test_step.dependOn(&abx_tests_run.step);
     const quick_test_step = b.step("quicktest", "Run unit tests only [exclude examples]");
     quick_test_step.dependOn(&run_lib_tests.step);
 

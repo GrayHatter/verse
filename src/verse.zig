@@ -43,6 +43,7 @@ test {
     _ = &testing;
     _ = &Frame;
     _ = &Uri;
+    _ = &abx;
 }
 
 const std = @import("std");
