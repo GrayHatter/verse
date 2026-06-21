@@ -7,8 +7,8 @@ const Antibiotic = @This();
 /// Abx is the suggested alias.
 const Abx = Antibiotic;
 
-pub const Html = @import("antibiotic/Html.zig");
-pub const Path = @import("antibiotic/Path.zig");
+pub const Html = @import("Antibiotic/Html.zig");
+pub const Path = @import("Antibiotic/Path.zig");
 
 pub const Error = error{
     ReadFailed,

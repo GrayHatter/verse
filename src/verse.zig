@@ -1,10 +1,10 @@
 //! Verse: The framework.
 //!
 pub const auth = @import("auth.zig");
-pub const abx = @import("abx");
-pub const template = @import("template.zig");
 pub const stats = @import("stats.zig");
+pub const template = @import("template.zig");
 
+pub const Antibiotic = @import("Antibiotic");
 pub const ContentType = @import("content-type.zig");
 pub const Frame = @import("frame.zig");
 pub const Headers = @import("headers.zig");
@@ -43,7 +43,6 @@ test {
     _ = &testing;
     _ = &Frame;
     _ = &Uri;
-    _ = &abx;
 }
 
 const std = @import("std");

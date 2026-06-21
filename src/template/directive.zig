@@ -396,17 +396,6 @@ fn isStringish(t: type) bool {
     };
 }
 
-pub fn forEachTyped(self: Directive, T: type, data: T, out: anytype) !void {
-    var p = PageRuntime(T){
-        .data = data,
-        .template = .{
-            .name = self.noun,
-            .blob = trimLeft(u8, self.tag_block_body.?, whitespace),
-        },
-    };
-    try p.format("", .{}, out);
-}
-
 fn getBuiltin(name: []const u8) ?Template {
     if (@inComptime()) {
         return template_data.findTemplate(name);
@@ -563,9 +552,8 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
 }
 
 const Pages = @import("page.zig");
-const PageRuntime = Pages.PageRuntime;
 const Template = @import("Template.zig");
-const Abx = @import("abx");
+const Abx = @import("Antibiotic");
 
 const std = @import("std");
 const eql = std.mem.eql;
@@ -583,6 +571,5 @@ const trimLeft = std.mem.trimLeft;
 const whitespace = std.ascii.whitespace[0..];
 
 const template_data = @import("builtins.zig");
-const dynamic = &template_data.dynamic;
 const builtin = template_data.builtin;
 const makeFieldName = template_data.makeFieldName;

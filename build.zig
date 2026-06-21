@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
     //std.debug.print("default: {s}\n", .{b.default_step.name});
 
     // root build options
-    const abx_required: bool = b.option(bool, "abx-required", "templates will default to Abx.Html instead of []const u8") orelse false;
+    const abx_required: bool = b.option(bool, "abx-required", "templates will default to Abx instead of []const u8") orelse false;
     const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
     const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
     const ua_validation = b.option(bool, "ua-validation", "[not-implemented] disable user agent validation") orelse
@@ -42,12 +42,12 @@ pub fn build(b: *std.Build) !void {
     });
     verse_lib.addOptions("verse_buildopts", options);
 
-    const abx = b.addModule("abx", .{
-        .root_source_file = b.path("src/antibiotic.zig"),
+    const abx = b.addModule("Antibiotic", .{
+        .root_source_file = b.path("src/Antibiotic.zig"),
         .target = target,
         .optimize = optimize,
     });
-    verse_lib.addImport("abx", abx);
+    verse_lib.addImport("Antibiotic", abx);
 
     // Set up template compiler
     var compiler = Compiler.init(b);
@@ -76,7 +76,7 @@ pub fn build(b: *std.Build) !void {
     default_step.dependOn(&structc.step);
 
     const comptime_structs = compiler.buildStructs(structc) catch @panic("unreachable");
-    comptime_structs.addImport("abx", abx);
+    comptime_structs.addImport("Antibiotic", abx);
 
     verse_lib.addImport("comptime_structs", comptime_structs);
     verse_lib.addImport("comptime_templates", comptime_templates);
