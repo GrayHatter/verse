@@ -70,7 +70,7 @@ pub fn init(str: []const u8) ?Directive {
     if (str.len < 2) return null;
     if (!isUpper(str[1]) and str[1] != '_') return null;
     const tag = findTag(str) catch return null;
-    const verb = tag[1 .. indexOfAnyPos(u8, tag, 1, " /") orelse tag.len - 1];
+    const verb = tag[1 .. findAnyPos(u8, tag, 1, " /") orelse tag.len - 1];
 
     if (verb.len == tag.len - 2) {
         if (initNoun(verb, tag)) |noun| {
@@ -102,7 +102,7 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
         .noun = noun,
         .otherwise = if (default_str) |str|
             .{ .default = str }
-        else if (indexOf(u8, tag, " ornull")) |_|
+        else if (findPos(u8, tag, 0, " ornull")) |_|
             .delete
         else if (h_type) |htype|
             if (htype.nullable())
@@ -145,9 +145,9 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
     switch (word) {
         .variable => unreachable,
         .build => {
-            const b_noun = noun[1..(indexOfScalarPos(u8, noun, 1, ' ') orelse return null)];
+            const b_noun = noun[1..(findScalarPos(u8, noun, 1, ' ') orelse return null)];
             const tail = noun[b_noun.len + 1 ..];
-            const b_html = tail[1..(indexOfScalarPos(u8, tail, 2, ' ') orelse return null)];
+            const b_html = tail[1..(findScalarPos(u8, tail, 2, ' ') orelse return null)];
             if (@inComptime()) {
                 if (getBuiltin(b_html)) |bi| return Directive{
                     .verb = .build,
@@ -197,7 +197,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 else => unreachable,
             };
 
-            var name_end = (indexOfAnyPos(u8, noun, 1, " >") orelse noun.len);
+            var name_end = (findAnyPos(u8, noun, 1, " >") orelse noun.len);
             if (noun[name_end - 1] == '/') name_end -= 1;
             const name = noun[1..name_end];
 
@@ -206,7 +206,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             const use: ?[]const u8 = tag_map.get(.use);
             const scope: []const u8 = tag_map.get(.scope) orelse "local";
 
-            const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
+            const body_start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
             const body_end: usize = end - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
             const tag_block_body = blob[body_start..body_end];
             return .{
@@ -233,11 +233,11 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 else => unreachable,
             };
 
-            const name_end = (indexOfAnyPos(u8, noun, 1, " >") orelse noun.len);
+            const name_end = (findAnyPos(u8, noun, 1, " >") orelse noun.len);
             if (noun[name_end - 1] == '/') unreachable;
             const name = noun[1..name_end];
 
-            const body_start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
+            const body_start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
             const body_end: usize = end - @as(usize, if (word == .@"switch")
                 9
             else if (word == .case)
@@ -258,7 +258,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
 }
 
 fn findTag(blob: []const u8) ![]const u8 {
-    return blob[0 .. 1 + (indexOf(u8, blob, ">") orelse return error.TagInvalid)];
+    return blob[0 .. 1 + (findPos(u8, blob, 0, ">") orelse return error.TagInvalid)];
 }
 
 pub const TagAttribute = enum {
@@ -285,7 +285,7 @@ pub const TagAttrMap = std.EnumMap(TagAttribute, []const u8);
 fn findAttrs(src_tag: []const u8) !TagAttrMap {
     var map: TagAttrMap = .init(.{});
     var tag = src_tag;
-    while (indexOfScalar(u8, tag, '=')) |eq_idx| {
+    while (findScalarPos(u8, tag, 0, '=')) |eq_idx| {
         const name = trim(u8, tag[0..eq_idx], whitespace);
         var value = trim(u8, tag[eq_idx + 1 ..], whitespace);
 
@@ -364,15 +364,15 @@ fn calcBody(comptime keyword: []const u8, noun: []const u8, blob: []const u8) ?u
         else => return null,
     }
 
-    var start = 1 + (indexOfPosLinear(u8, blob, 0, ">") orelse return null);
-    var close_pos: usize = indexOfPosLinear(u8, blob, 0, close_tag) orelse return null;
-    // count is not comptime compliant while it uses indexOfPos increasing
+    var start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
+    var close_pos: usize = findPosLinear(u8, blob, 0, close_tag) orelse return null;
+    // count is not comptime compliant while it uses findPos increasing
     // backward branches. I've raised the quota, but complicated templates might
     // require a naive implementation
     var skip: usize = 0;
     var blocks = count(u8, blob[start..close_pos], open_tag);
     while (skip < blocks) : (skip += 1) {
-        close_pos = indexOfPosLinear(u8, blob, close_pos + 1, close_tag) orelse close_pos;
+        close_pos = findPosLinear(u8, blob, close_pos + 1, close_tag) orelse close_pos;
         blocks = count(u8, blob[start..close_pos], open_tag);
     }
 
@@ -397,9 +397,8 @@ fn isStringish(t: type) bool {
 }
 
 fn getBuiltin(name: []const u8) ?Template {
-    if (@inComptime()) {
-        return template_data.findTemplate(name);
-    }
+    if (@inComptime()) return template_data.findTemplate(name);
+
     for (0..builtin.len) |i| {
         if (eql(u8, builtin[i].name, name)) {
             return builtin[i];
@@ -429,6 +428,7 @@ fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
 pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !void {
     switch (T) {
         Abx.Html => try ctx.format(w),
+        Abx => try ctx.format(w),
         else => switch (d.verb) {
             .variable => {
                 if (d.html_type) |_| {
@@ -440,22 +440,20 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
                             switch (@typeInfo(field.type)) {
                                 .pointer => if (eql(u8, field.name, realname)) {
                                     const child = @field(ctx, field.name);
-                                    for (child) |each| {
-                                        switch (field.type) {
-                                            []const []const u8 => {
-                                                std.debug.assert(d.verb == .split);
-                                                try w.writeAll(each);
-                                                try w.writeAll("\n");
-                                            },
-                                            else => try d.forEachTyped(@TypeOf(each), each, w),
-                                        }
-                                    }
+                                    for (child) |each| switch (field.type) {
+                                        []const []const u8 => {
+                                            std.debug.assert(d.verb == .split);
+                                            try w.writeAll(each);
+                                            try w.writeAll("\n");
+                                        },
+                                        else => comptime unreachable,
+                                    };
                                 },
-                                else => unreachable,
+                                else => comptime unreachable,
                             }
                         },
                         .int => try w.print("{d}", .{ctx}),
-                        else => unreachable,
+                        else => comptime unreachable,
                     }
                     return;
                 }
@@ -463,53 +461,40 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
                 const var_name = typeField(T, noun, ctx);
                 if (var_name) |data_blob| {
                     try w.writeAll(data_blob);
-                } else {
-                    switch (d.otherwise) {
-                        .default => |str| try w.writeAll(str),
-                        // Not really an error, just instruct caller to print original text
-                        .required => {},
-                        .delete => {},
-                        .literal => unreachable,
-                        .template => |template| {
-                            if (T == usize) unreachable;
-                            if (@typeInfo(T) != .@"struct") unreachable;
-                            inline for (std.meta.fields(T)) |field| {
-                                switch (@typeInfo(field.type)) {
-                                    .optional => |otype| {
-                                        if (otype.child == []const u8) continue;
+                } else switch (d.otherwise) {
+                    .default => |str| try w.writeAll(str),
+                    // Not really an error, just instruct caller to print original text
+                    .required => {},
+                    .delete => {},
+                    .literal => unreachable,
+                    .template => |template| {
+                        if (T == usize) unreachable;
+                        if (@typeInfo(T) != .@"struct") unreachable;
+                        inline for (std.meta.fields(T)) |field| switch (@typeInfo(field.type)) {
+                            .optional => |otype| {
+                                if (otype.child == []const u8) continue;
 
-                                        var local: [0xff]u8 = undefined;
-                                        const realname = local[0..makeFieldName(noun[1 .. noun.len - 5], &local)];
-                                        if (std.mem.eql(u8, field.name, realname)) {
-                                            if (@field(ctx, field.name)) |subdata| {
-                                                var subpage = template.pageOf(otype.child, subdata);
-                                                try subpage.format("{}", .{}, w);
-                                            } else std.debug.print(
-                                                "sub template data was null for {s}\n",
-                                                .{field.name},
-                                            );
-                                        }
-                                    },
-                                    .@"struct" => {
-                                        if (std.mem.eql(u8, field.name, noun)) {
-                                            const subdata = @field(ctx, field.name);
-                                            var subpage = template.pageOf(@TypeOf(subdata), subdata);
-                                            try subpage.format("{}", .{}, w);
-                                        }
-                                    },
-                                    else => {}, //@compileLog(field.type),
+                                var local: [0xff]u8 = undefined;
+                                const realname = local[0..makeFieldName(noun[1 .. noun.len - 5], &local)];
+                                if (std.mem.eql(u8, field.name, realname)) {
+                                    if (@field(ctx, field.name)) |subdata| {
+                                        var subpage = template.pageOf(otype.child, subdata);
+                                        try subpage.format("{}", .{}, w);
+                                    } else std.debug.print(
+                                        "sub template data was null for {s}\n",
+                                        .{field.name},
+                                    );
                                 }
-                            }
-                        },
-                        .exact => unreachable,
-                        //inline for (std.meta.fields(T)) |field| {
-                        //    if (eql(u8, field.name, noun)) {
-                        //        const subdata = @field(ctx, field.name);
-                        //        var page = template.pageOf(@TypeOf(subdata), subdata);
-                        //        try page.format("{}", .{}, out);
-                        //    }
-                        //}
-                    }
+                            },
+                            .@"struct" => if (std.mem.eql(u8, field.name, noun)) {
+                                const subdata = @field(ctx, field.name);
+                                var subpage = template.pageOf(@TypeOf(subdata), subdata);
+                                try subpage.format("{}", .{}, w);
+                            },
+                            else => {}, //@compileLog(field.type),
+                        };
+                    },
+                    .exact => unreachable,
                 }
             },
             else => {
@@ -517,34 +502,25 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
                 const realname = local[0..makeFieldName(d.noun, &local)];
                 switch (@typeInfo(T)) {
                     .int => try w.print("{d}", .{ctx}),
-                    .@"struct" => {
-                        inline for (std.meta.fields(T)) |field| {
-                            if (comptime isStringish(field.type)) continue;
-                            switch (@typeInfo(field.type)) {
-                                .pointer => {
-                                    if (eql(u8, field.name, realname)) {
-                                        const child = @field(ctx, field.name);
-                                        for (child) |each| {
-                                            switch (field.type) {
-                                                []const []const u8 => {
-                                                    std.debug.assert(d.verb == .split);
-                                                    try w.writeAll(each);
-                                                    try w.writeAll("\n");
-                                                    //try out.writeAll( self.otherwise.blob.whitespace);
-                                                },
-                                                else => {
-                                                    std.debug.assert(d.verb == .foreach);
-                                                    try d.forEachTyped(@TypeOf(each), each, w);
-                                                },
-                                            }
-                                        }
-                                    }
-                                },
-                                else => unreachable,
-                            }
+                    .@"struct" => inline for (std.meta.fields(T)) |field| {
+                        if (comptime isStringish(field.type)) continue;
+                        switch (@typeInfo(field.type)) {
+                            .pointer => if (eql(u8, field.name, realname)) {
+                                const child = @field(ctx, field.name);
+                                for (child) |each| switch (field.type) {
+                                    []const []const u8 => {
+                                        std.debug.assert(d.verb == .split);
+                                        try w.writeAll(each);
+                                        try w.writeAll("\n");
+                                        //try out.writeAll( self.otherwise.blob.whitespace);
+                                    },
+                                    else => comptime unreachable,
+                                };
+                            },
+                            else => comptime unreachable,
                         }
                     },
-                    else => unreachable,
+                    else => comptime unreachable,
                 }
             },
         },
@@ -558,17 +534,15 @@ const Abx = @import("Antibiotic");
 const std = @import("std");
 const eql = std.mem.eql;
 const startsWith = std.mem.startsWith;
-const indexOf = std.mem.indexOf;
-const indexOfPosLinear = std.mem.indexOfPosLinear;
-const indexOfAnyPos = std.mem.indexOfAnyPos;
-const indexOfScalar = std.mem.indexOfScalar;
-const indexOfScalarPos = std.mem.indexOfScalarPos;
-const isUpper = std.ascii.isUpper;
+const findPos = std.mem.findPos;
+const findPosLinear = std.mem.findPosLinear;
+const findAnyPos = std.mem.findAnyPos;
+const findScalarPos = std.mem.findScalarPos;
 const count = std.mem.count;
-const isWhitespace = std.ascii.isWhitespace;
 const trim = std.mem.trim;
-const trimLeft = std.mem.trimLeft;
+const isUpper = std.ascii.isUpper;
 const whitespace = std.ascii.whitespace[0..];
+const isWhitespace = std.ascii.isWhitespace;
 
 const template_data = @import("builtins.zig");
 const builtin = template_data.builtin;
