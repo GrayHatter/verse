@@ -1,10 +1,12 @@
 name: Name,
 version: u32,
+/// Many bots will announce as compatible with, this is that with.
+requesting: ?Browser = null,
 /// Anything that announces itself as a bot is assumed to be benign
 malicious: bool = false,
 
-pub const unknown: Bot = .{ .name = .unknown, .version = 0 };
-pub const is_malicious: Bot = .{ .name = .malicious, .version = 0, .malicious = true };
+pub const unknown: Bot = .{ .name = .unknown, .version = 0, .requesting = .unknown };
+pub const malicious_bot: Bot = .{ .name = .malicious, .version = 0, .malicious = true };
 
 const Bot = @This();
 
@@ -12,6 +14,10 @@ pub const Name = enum {
     /// Ignores robots.txt
     amzn_searchbot,
     applebot,
+    /// Ignores robots.txt, but isn't considered malicious here because
+    /// Archive.org has a reputation for going out of their way to be extremely
+    /// ethical, and a good web citizen.
+    archiveorgbot,
     bingbot,
     claude_searchbot,
     claudebot,
@@ -19,6 +25,7 @@ pub const Name = enum {
     gptbot,
     lounge_irc_client,
     metaexternalagent,
+    techspybot,
     /// Ignores robots.txt
     youbot,
 
@@ -28,22 +35,29 @@ pub const Name = enum {
     pub const fields = @typeInfo(Name).@"enum".fields;
     pub const len = fields.len;
 
-    pub fn robotsTxtName(n: Name) *const [:0]const u8 {
+    pub fn robotsTxtName(n: Name) [:0]const u8 {
         return switch (n) {
             .amzn_searchbot => "Amzn-SearchBot",
             .applebot => "Applebot",
+            .archiveorgbot => "archive.org_bot",
             .bingbot => "Bingbot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
+            .techspybot => "TechSpyBot",
+            .youbot => "YouBot",
 
             // robots.txt doesn't apply
             .lounge_irc_client => "",
             .malicious => "",
             .unknown => "",
         };
+    }
+
+    test {
+        _ = &std.testing.refAllDecls(@This());
     }
 };
 
@@ -135,7 +149,7 @@ pub const Rules = struct {
                 score.* +|= 0.5;
                 return;
             }
-            if (std.mem.startsWith(u8, list.list.items[0], "\"Not_A Brand\";v=\"")) {
+            if (startsWith(u8, list.list.items[0], "\"Not_A Brand\";v=\"")) {
                 score.* +|= 0.5;
             }
         }
@@ -164,6 +178,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
     .values = [Name.len]Identity{
         .{ .bot = .amzn_searchbot, .network = null },
         .{ .bot = .applebot, .network = null },
+        .{ .bot = .archiveorgbot, .network = null },
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claude_searchbot, .network = null },
         .{ .bot = .claudebot, .network = null },
@@ -171,11 +186,17 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
+        .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = &.{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
+        // Split ordering
         .{ .bot = .malicious, .network = null },
         .{ .bot = .unknown, .network = null },
     },
 };
+
+test {
+    _ = &std.testing.refAllDecls(@This());
+}
 
 test "bot ident order" {
     inline for (Bot.Name.fields) |bot| {
@@ -184,8 +205,10 @@ test "bot ident order" {
     }
 }
 
-const UserAgent = @import("../UserAgent.zig");
+const Browser = @import("Browser.zig");
 const Request = @import("../Request.zig");
+const Robots = @import("../Robots.zig");
+const UserAgent = @import("../UserAgent.zig");
 const std = @import("std");
 const endsWith = std.mem.endsWith;
 const eql = std.mem.eql;
