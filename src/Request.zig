@@ -280,7 +280,7 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
     const uri: ?[]const u8 = zk.get(.REQUEST_PATH);
     const method = Methods.fromStr(zk.get(.REQUEST_METHOD) orelse "GET") catch {
         log.err("Unsupported Method seen '{any}'", .{zk.get(.REQUEST_METHOD)});
-        return error.InvalidRequest;
+        return error.InvalidMethod;
     };
     const remote_addr: ?RemoteAddr = zk.get(.REMOTE_ADDR);
     const accept: ?Accept = zk.get(.HTTP_ACCEPT);
@@ -305,9 +305,9 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
 
     return initCommon(
         a,
-        remote_addr orelse return error.InvalidRequest,
+        remote_addr orelse return error.RemoteAddressMissing,
         method,
-        uri orelse return error.InvalidRequest,
+        uri orelse return error.URIMissing,
         host,
         ua_slice,
         referer,
