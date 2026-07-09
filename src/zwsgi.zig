@@ -220,6 +220,7 @@ pub const zWSGIParam = enum {
     HTTP_COOKIE,
     HTTP_REFERER,
     HTTP_FROM,
+    HTTP_VIA,
 
     pub const fields = @typeInfo(zWSGIParam).@"enum".fields;
 

@@ -79,9 +79,7 @@ pub fn cleanFilename(in: u8, out: *Writer) error{WriteFailed}!void {
 
 test cleanFilename {
     const a = std.testing.allocator;
-
     const allowed = "this-filename-is-allowed";
-
     var allowed_reader: Reader = .fixed(allowed);
 
     var w: Writer.Allocating = .init(a);
@@ -112,6 +110,12 @@ test cleanWord {
     var w: Writer = .fixed(&w_b);
     try cleanWord('a', &w);
     try std.testing.expectEqualStrings("a", w.buffered());
+}
+
+pub fn cleanLen(text: []const u8) usize {
+    var w: Writer.Discarding = .init(&.{});
+    for (text) |c| clean(c, &w.writer) catch unreachable;
+    return w.count;
 }
 
 test Path {

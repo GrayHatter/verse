@@ -5,10 +5,27 @@ bytes: Bytes,
 
 const Antibiotic = @This();
 /// Abx is the suggested alias.
-const Abx = Antibiotic;
+pub const Abx = Antibiotic;
 
 pub const Html = @import("Antibiotic/Html.zig");
 pub const Path = @import("Antibiotic/Path.zig");
+
+pub const empty: Abx = .{ .bytes = .empty };
+
+/// Output Flavors
+pub const Flavor = enum {
+    html,
+    ascii,
+    filesys,
+
+    pub fn toType(f: Flavor) type {
+        return switch (f) {
+            .html => Html,
+            .ascii => Path,
+            .filesys => Path,
+        };
+    }
+};
 
 pub const Error = error{
     ReadFailed,
@@ -21,11 +38,15 @@ pub const Bytes = union(enum) {
     stream: *Reader,
     /// Owned is always cleaned text.
     owned: []const u8,
+    /// Buffered is owned unsanitized text.
+    buffered: []const u8,
+
+    pub const empty: Bytes = .{ .safe = &.{} };
 
     pub fn raze(b: *const Bytes, a: Allocator) void {
         switch (b) {
             .dirty, .clean => {},
-            .owned => |o| a.free(o),
+            .owned, .buffered => |o| a.free(o),
             // TODO
             .stream => unreachable,
         }
@@ -40,12 +61,36 @@ pub fn safe(text: []const u8) Antibiotic {
     return .{ .bytes = .{ .safe = text } };
 }
 
-pub fn abxAlloc(text: []const u8, a: Allocator) error{OutOfMemory}!Antibiotic {
-    return .{ .bytes = .{ .owned = try std.fmt.allocPrint(a, "{s}", .{text}) } };
+pub fn abxAlloc(comptime flavor: Flavor, text: []const u8, a: Allocator) error{OutOfMemory}!Antibiotic {
+    const len = maxCleanLen(text);
+    const bytes = try a.alloc(u8, len);
+    _ = flavor;
+    if (len == text.len) {
+        @memcpy(bytes, text);
+    } else {
+        @memcpy(bytes[len - text.len ..][0..text.len], text[0..text.len]);
+    }
+    return .{ .bytes = .{ .owned = bytes } };
 }
 
 pub fn safeDupe(text: []const u8, a: Allocator) error{OutOfMemory}!Antibiotic {
     return .{ .bytes = .{ .owned = try a.dupe(u8, text) } };
+}
+
+pub fn cleanLen(flavor: Flavor, txt: []const u8) usize {
+    return switch (flavor) {
+        .html => Html.cleanLen(txt),
+        .ascii => unreachable,
+        .filesys => unreachable,
+    };
+}
+
+fn maxCleanLen(txt: []const u8) usize {
+    var max: usize = 0;
+    const out_flavors = .{};
+    for (out_flavors) |flavor|
+        max = @max(max, cleanLen(flavor, txt));
+    return max;
 }
 
 pub const Rule = enum {
@@ -83,6 +128,7 @@ pub fn format(abiot: *const Antibiotic, w: *Writer) error{WriteFailed}!void {
         .dirty => |dirt| for (dirt) |d| try Html.clean(d, w),
         .safe => |s| try w.writeAll(s),
         .owned => |o| try w.writeAll(o),
+        .buffered => |o| try Html.format(.{ .text = o }, w),
         // TODO
         .stream => unreachable,
     }
