@@ -53,6 +53,7 @@ pub const Match = struct {
     /// Separate from the http interface as this is 'internal' to the routing
     /// subsystem, where a single endpoint may respond to multiple http methods.
     pub const Methods = packed struct(u11) {
+        // TODO https://www.iana.org/assignments/http-methods/http-methods.xhtml
         CONNECT: bool = false,
         DELETE: bool = false,
         GET: bool = false,
