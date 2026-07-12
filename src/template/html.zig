@@ -1,4 +1,6 @@
-pub const DOM = @import("html/dom.zig");
+pub const Dom = @import("html/Dom.zig");
+/// TODO remove this alias
+pub const DOM = Dom;
 pub const Extra = @import("html/extra.zig");
 
 pub const Attribute = struct {

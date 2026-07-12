@@ -1,18 +1,18 @@
 alloc: Allocator,
 elems: ArrayList(Elem),
-parent: ?*DOM = null,
-child: ?*DOM = null,
+parent: ?*Dom = null,
+child: ?*Dom = null,
 opened: ?Elem = null,
 
-const DOM = @This();
+const Dom = @This();
 
-pub fn create(a: Allocator) *DOM {
-    const self = a.create(DOM) catch unreachable;
-    self.* = DOM{ .alloc = a, .elems = .empty };
+pub fn create(a: Allocator) *Dom {
+    const self = a.create(Dom) catch unreachable;
+    self.* = Dom{ .alloc = a, .elems = .empty };
     return self;
 }
 
-pub fn open(self: *DOM, elem: HTML.E) *DOM {
+pub fn open(self: *Dom, elem: HTML.E) *Dom {
     if (self.child) |_| @panic("DOM Already Open");
     self.child = create(self.alloc);
     self.child.?.parent = self;
@@ -20,15 +20,15 @@ pub fn open(self: *DOM, elem: HTML.E) *DOM {
     return self.child.?;
 }
 
-pub fn pushSlice(self: *DOM, elems: []const HTML.E) void {
+pub fn pushSlice(self: *Dom, elems: []const HTML.E) void {
     for (elems) |elem| self.push(elem);
 }
 
-pub fn push(self: *DOM, elem: HTML.E) void {
+pub fn push(self: *Dom, elem: HTML.E) void {
     self.elems.append(self.alloc, elem) catch unreachable;
 }
 
-pub fn dupe(self: *DOM, elem: HTML.E) void {
+pub fn dupe(self: *Dom, elem: HTML.E) void {
     self.elems.append(self.alloc, HTML.E{
         .name = elem.name,
         .text = elem.text,
@@ -37,18 +37,18 @@ pub fn dupe(self: *DOM, elem: HTML.E) void {
     }) catch unreachable;
 }
 
-pub fn close(self: *DOM) *DOM {
+pub fn close(self: *Dom) *Dom {
     if (self.parent) |p| {
         self.opened.?.children = self.elems.toOwnedSlice(self.alloc) catch unreachable;
         p.push(self.opened.?);
         p.child = null;
         defer self.alloc.destroy(self);
         return p;
-    } else @panic("DOM ISN'T OPEN");
+    } else @panic("Dom ISN'T OPEN");
     unreachable;
 }
 
-pub fn done(self: *DOM) []HTML.E {
+pub fn done(self: *Dom) []HTML.E {
     if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     defer self.alloc.destroy(self);
     return self.elems.toOwnedSlice(self.alloc) catch unreachable;
@@ -63,26 +63,26 @@ fn freeChildren(a: Allocator, elems: []const Elem) void {
     }
 }
 
-pub fn raze(d: *DOM) void {
+pub fn raze(d: *Dom) void {
     freeChildren(d.alloc, d.elems.items);
     d.elems.deinit(d.alloc);
     d.alloc.destroy(d);
 }
 
-pub fn fmtFull(d: DOM, w: *Writer) Writer.Error!void {
+pub fn fmtFull(d: Dom, w: *Writer) Writer.Error!void {
     if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     for (d.elems.items) |e| {
         w.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
     }
 }
 
-pub fn format(d: DOM, w: *Writer) Writer.Error!void {
+pub fn format(d: Dom, w: *Writer) Writer.Error!void {
     for (d.elems.items) |e| {
         w.print("{f}", .{e}) catch unreachable;
     }
 }
 
-pub fn render(d: *DOM, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
+pub fn render(d: *Dom, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
     if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     defer d.raze();
 
@@ -97,7 +97,7 @@ pub fn render(d: *DOM, a: Allocator, comptime style: enum { full, compact }) ![]
 
 test render {
     const a = std.testing.allocator;
-    var dom: *DOM = .create(a);
+    var dom: *Dom = .create(a);
     dom = dom.open(HTML.form(null, &[_]HTML.Attr{
         .{ .key = "method", .value = "POST" },
         .{ .key = "action", .value = "/endpoint" },
