@@ -193,7 +193,10 @@ pub const Post = struct {
             .application => |ap| try parseApplication(a, ap, read_b),
             .multipart, .message => |mp| try Multi.parseContentType(a, mp, read_b),
             .text => |tx| try parseText(a, tx, read_b),
-            .audio, .font, .image, .video => @panic("content-type not implemented"),
+            .audio, .font, .image, .video => |_, tag| {
+                log.err("unable to parse unexpected post {s}", .{@tagName(tag)});
+                return error.NotImplemented;
+            },
         };
 
         return .{
@@ -346,7 +349,10 @@ fn jsonValueToString(a: std.mem.Allocator, value: json.Value) ![]u8 {
         .float => |f| try std.fmt.allocPrint(a, "{d}", .{f}),
         .string => |s| try a.dupe(u8, s),
         .number_string => |s| try a.dupe(u8, s),
-        else => @panic("not implemented"),
+        else => {
+            log.err("Unsupported json Value Type {any}", .{value});
+            return error.NotImplemented;
+        },
     };
 }
 
@@ -380,7 +386,11 @@ fn normJson(a: Allocator, data: []u8) ![]Item {
             .string,
             .number_string,
             => try jsonValueToString(a, v),
-            .object, .array => @panic("not implemented"), // TODO: determine how we want to handle objects
+            .object, .array => {
+                // TODO: determine how we want to handle objects
+                log.err("unable to parse json {any}", .{data});
+                return error.NotImplemented;
+            },
         };
         const name = try a.dupe(u8, k);
         list[i] = .{
@@ -398,14 +408,20 @@ fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]It
     return switch (ap) {
         .@"x-www-form-urlencoded" => try normWwwFormUrlEncoded(a, data),
         // Git just uses the raw data instead, no need to preprocess
-        .@"x-git-upload-pack-request" => &[0]Item{},
-        // Git just uses the raw data instead, no need to preprocess
-        .@"x-git-receive-pack-request" => &[0]Item{},
-        .@"octet-stream" => @panic("not implemented"),
+        .@"x-git-receive-pack-request",
+        .@"x-git-receive-pack-result",
+        .@"x-git-upload-pack-advertisement",
+        .@"x-git-upload-pack-request",
+        .@"x-git-upload-pack-result",
+        => &[0]Item{},
+        .@"octet-stream" => {
+            log.err("octet-stream in currently not implemented {any}", .{data});
+            return error.NotImplemented;
+        },
         .json => try normJson(a, data),
-        else => {
-            log.warn("Unsupported Content Type {s}", .{data});
-            return &[0]Item{};
+        _ => {
+            log.err("Unsupported Content Type {s}", .{data});
+            return error.UnsupportedType;
         },
     };
 }

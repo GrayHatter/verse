@@ -79,7 +79,7 @@ pub const Application = enum(usize) {
 
     pub fn string(comptime app: Application) [:0]const u8 {
         return switch (app) {
-            inline else => |r| "application/" ++ @tagName(r),
+            inline else => |r| comptimePrint("application/{s}", .{@tagName(r)}),
         };
     }
 
@@ -96,7 +96,7 @@ pub const Audio = enum {
 
     pub fn string(comptime app: Audio) [:0]const u8 {
         return switch (app) {
-            inline else => |r| "audio/" ++ @tagName(r),
+            inline else => |r| comptimePrint("audio/{s}", .{@tagName(r)}),
         };
     }
 };
@@ -108,7 +108,7 @@ pub const Font = enum {
 
     pub fn string(comptime app: Font) [:0]const u8 {
         return switch (app) {
-            inline else => |r| "font/" ++ @tagName(r),
+            inline else => |r| comptimePrint("font/{s}", .{@tagName(r)}),
         };
     }
 };
@@ -119,7 +119,7 @@ pub const Image = enum {
 
     pub fn string(comptime app: Image) [:0]const u8 {
         return switch (app) {
-            inline else => |r| "image/" ++ @tagName(r),
+            inline else => |r| comptimePrint("image/{s}", .{@tagName(r)}),
         };
     }
 };
@@ -133,7 +133,7 @@ pub const Text = enum {
 
     pub fn string(comptime app: Text) [:0]const u8 {
         return switch (app) {
-            inline else => |r| "text/" ++ @tagName(r),
+            inline else => |r| comptimePrint("text/{s}", .{@tagName(r)}),
         };
     }
 };
@@ -143,7 +143,7 @@ pub const Video = enum {
 
     pub fn string(comptime app: Video) [:0]const u8 {
         return switch (app) {
-            inline else => |r| "video/" ++ @tagName(r),
+            inline else => |r| comptimePrint("video/{s}", .{@tagName(r)}),
         };
     }
 };
@@ -225,16 +225,19 @@ pub const CharSet = enum {
     @"utf-8",
 };
 
-pub fn string(comptime ct: ContentType) []const u8 {
-    const kind: [:0]const u8 = switch (ct.base) {
-        inline else => |tag| @tagName(ct.base) ++ "/" ++ @tagName(tag),
+pub fn string(comptime ct: ContentType) [:0]const u8 {
+    return switch (ct.base) {
+        inline else => |tag| comptimePrint(
+            "{s}/{s}{s}",
+            .{
+                @tagName(ct.base),
+                @tagName(tag),
+                if (ct.parameter) |param| switch (param) {
+                    inline else => |p| "; charset=" ++ @tagName(p),
+                } else "",
+            },
+        ),
     };
-
-    if (ct.parameter) |param| {
-        return switch (param) {
-            inline else => |p| return kind ++ "; charset=" ++ @tagName(p),
-        };
-    } else return kind;
 }
 
 test string {
@@ -318,3 +321,4 @@ const endsWith = std.mem.endsWith;
 const indexOf = std.mem.indexOf;
 const eql = std.mem.eql;
 const log = std.log.scoped(.verse_content_type);
+const comptimePrint = std.fmt.comptimePrint;
