@@ -1,19 +1,25 @@
+//! ContentType
+//!
+//! Some of the most common ContentTypes are exposed directly as decl literals.
+//!
+//! Experimental: A few 'short' aliases are exposed for ergonomics.
+//! note: short aliases may be changed/removed from the API.
+
 base: ContentBase,
 parameter: ?CharSet = null,
 
 const ContentType = @This();
 
+pub const default: ContentType = .html_utf8;
+
+pub const html: ContentType = .@"text/html";
+pub const html_utf8: ContentType = .{ .base = .{ .text = .html }, .parameter = .@"utf-8" };
+pub const text: ContentType = .@"text/plain";
+pub const json: ContentType = .@"application/json";
+
 pub const @"text/plain": ContentType = .{ .base = .{ .text = .plain } };
 pub const @"text/html": ContentType = .{ .base = .{ .text = .html }, .parameter = .@"utf-8" };
 pub const @"application/json": ContentType = .{ .base = .{ .application = .json }, .parameter = .@"utf-8" };
-
-pub const html: ContentType = .@"text/html";
-pub const json: ContentType = .@"application/json";
-
-pub const default: ContentType = .{
-    .base = .{ .text = .html },
-    .parameter = .@"utf-8",
-};
 
 pub const ContentBase = union(Base) {
     application: Application,
@@ -167,9 +173,9 @@ pub const MultiPart = union(enum) {
         boundary: []const u8,
 
         pub fn fromStr(str: []const u8) !MultiPart {
-            if (indexOf(u8, str, "boundary=\"")) |i| {
+            if (find(u8, str, "boundary=\"")) |i| {
                 return .{ .mixed = .{ .boundary = str[i + 10 .. str.len - 1] } };
-            } else if (indexOf(u8, str, "boundary=")) |i| {
+            } else if (find(u8, str, "boundary=")) |i| {
                 return .{ .mixed = .{ .boundary = str[i + 9 ..] } };
             } else return error.InvalidMultiPart;
         }
@@ -178,9 +184,9 @@ pub const MultiPart = union(enum) {
         boundary: []const u8,
 
         pub fn fromStr(str: []const u8) !MultiPart {
-            if (indexOf(u8, str, "boundary=\"")) |i| {
+            if (find(u8, str, "boundary=\"")) |i| {
                 return .{ .@"form-data" = .{ .boundary = str[i + 10 .. str.len - 1] } };
-            } else if (indexOf(u8, str, "boundary=")) |i| {
+            } else if (find(u8, str, "boundary=")) |i| {
                 return .{ .@"form-data" = .{ .boundary = str[i + 9 ..] } };
             } else return error.InvalidMultiPart;
         }
@@ -241,14 +247,17 @@ pub fn string(comptime ct: ContentType) [:0]const u8 {
 }
 
 test string {
-    try std.testing.expectEqualStrings("text/html; charset=utf-8", default.string());
-    try std.testing.expectEqualStrings("image/png", (ContentType{ .base = .{ .image = .png } }).string());
-
+    try std.testing.expectEqualStrings(
+        "text/html; charset=utf-8",
+        default.string(),
+    );
+    try std.testing.expectEqualStrings(
+        "image/png",
+        (ContentType{ .base = .{ .image = .png } }).string(),
+    );
     try std.testing.expectEqualStrings(
         "text/html",
-        (ContentType{
-            .base = .{ .text = .html },
-        }).string(),
+        (ContentType{ .base = .{ .text = .html } }).string(),
     );
 }
 
@@ -318,7 +327,7 @@ test ContentType {
 const std = @import("std");
 const startsWith = std.mem.startsWith;
 const endsWith = std.mem.endsWith;
-const indexOf = std.mem.indexOf;
+const find = std.mem.find;
 const eql = std.mem.eql;
 const log = std.log.scoped(.verse_content_type);
 const comptimePrint = std.fmt.comptimePrint;
