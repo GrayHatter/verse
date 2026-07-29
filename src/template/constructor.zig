@@ -46,7 +46,8 @@ fn getOffset(T: type, name: []const u8, base: usize) usize {
             return @offsetOf(T, field) + base;
         },
         .@"union" => return 0,
-        else => unreachable,
+        .@"enum" => return 0,
+        else => comptime unreachable,
     }
 }
 
@@ -111,6 +112,8 @@ fn baseType(T: type, name: []const u8) type {
             .@"struct" => return field_type,
             .int => return field_type,
             .@"union" => return field_type,
+            //.@"enum" => return field_type,
+            .void => return void,
             else => @compileError("Unexpected kind " ++ @typeName(field_type)),
         },
     }
@@ -119,7 +122,7 @@ fn baseType(T: type, name: []const u8) type {
 fn fieldType(T: type, name: []const u8) type {
     var local: [0xff]u8 = undefined;
     const field = local[0..makeFieldName(name, &local)];
-    return @FieldType(T, field); // not in 0.13.0
+    return @FieldType(T, field);
 }
 
 pub fn commentTag(blob: []const u8) ?usize {

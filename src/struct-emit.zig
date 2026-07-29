@@ -53,6 +53,13 @@ pub const AbstTree = struct {
         try self.children.appendBounded(new);
     }
 
+    pub fn fmtEnum(at: AbstTree, w: *Writer) !void {
+        std.debug.assert(at.children.items.len == 0);
+        try w.writeAll("pub const ");
+        try w.writeAll(at.name);
+        try w.writeAll(" = void;\n");
+    }
+
     pub fn format(at: AbstTree, w: *Writer) !void {
         try w.writeAll("pub const ");
         try w.writeAll(at.name);
@@ -175,6 +182,8 @@ pub fn main(init: std.process.Init) !void {
         \\        }
         \\    };
         \\}
+        \\
+        \\
     );
 
     for (compiled.data) |tplt| {
@@ -307,7 +316,31 @@ pub const Switch = struct {
         return self;
     }
 
-    pub fn format(sw: Switch, w: *Writer) !void {
+    pub fn isEnum(sw: *const Switch) bool {
+        var itr = sw.tree.iterator();
+        while (itr.next()) |each| {
+            if (each.value_ptr.*.children.items.len > 0) return false;
+        }
+        return true;
+    }
+
+    pub fn fmtEnum(sw: *const Switch, w: *Writer) !void {
+        try w.writeAll("pub const ");
+        try w.writeAll(sw.name);
+        try w.writeAll(" = union(enum) {\n");
+        for (sw.members.items) |tag| {
+            try w.print("{s},\n", .{tag.name});
+        }
+
+        try w.writeAll("\n");
+        var itr = sw.tree.iterator();
+        while (itr.next()) |each| {
+            try w.print("{f}\n", .{std.fmt.alt(each.value_ptr.*.*, .fmtEnum)});
+        }
+        try w.writeAll("};\n");
+    }
+
+    pub fn fmtUnion(sw: *const Switch, w: *Writer) !void {
         try w.writeAll("pub const ");
         try w.writeAll(sw.name);
         try w.writeAll(" = union(enum) {\n");
@@ -318,10 +351,17 @@ pub const Switch = struct {
         try w.writeAll("\n");
         var itr = sw.tree.iterator();
         while (itr.next()) |each| {
-            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            //log.debug("tree: {s} ({})", .{ each.value_ptr.*.name, each.value_ptr.*.children.items.len });
             try w.print("{f}\n", .{each.value_ptr.*});
         }
         try w.writeAll("};\n");
+    }
+
+    pub fn format(sw: *const Switch, w: *Writer) !void {
+        return if (sw.isEnum())
+            sw.fmtEnum(w)
+        else
+            sw.fmtUnion(w);
     }
 };
 
@@ -571,3 +611,4 @@ const compiled = @import("comptime_templates");
 const Directive = @import("template/directive.zig");
 const constructor = @import("template/constructor.zig");
 const verse_buildopts = @import("verse_buildopts");
+const log = std.log.scoped(.verse_struct_emit);

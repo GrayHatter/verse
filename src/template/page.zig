@@ -216,34 +216,44 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                             if (comptime opt.child == []const u8) comptime unreachable;
                             try optional(opt.child, data, ofs, out);
                         },
-                        .array => |arr| for (data) |each|
-                            try print(arr.child, each, ofs, out),
+                        .array => |arr| for (data) |each| try print(arr.child, each, ofs, out),
                         .@"union" => switch (data) {
                             inline else => |case, tag| {
-                                if (data == tag) {
-                                    const tagT = @TypeOf(case); // std.meta.TagPayload(T, tag);
-                                    const start, const end = comptime brk: {
-                                        var start: usize = 0;
-                                        for (ofs) |of| {
-                                            start += 1;
-                                            switch (of.kind) {
+                                const tagT = @TypeOf(case); // std.meta.TagPayload(T, tag);
+                                const start: usize, const end: usize = comptime brk: {
+                                    var start: usize = 0;
+                                    switch (tagT) {
+                                        void => name: for (@typeInfo(T).@"union".fields) |fld| {
+                                            for (ofs[start..]) |of| switch (of.kind) {
                                                 .component => |cmp| {
+                                                    start += 1;
                                                     if (cmp.kind == tagT) {
-                                                        break :brk .{ start, start + cmp.len };
+                                                        if (eql(u8, fld.name, @tagName(tag))) {
+                                                            break :brk .{ start, start + cmp.len };
+                                                        } else continue :name;
                                                     }
                                                 },
-                                                else => {},
-                                            }
-                                        } else unreachable;
-                                    };
-                                    try print(@TypeOf(case), case, ofs[start..end], out);
-                                }
+                                                else => start += 1,
+                                            } else @panic(@typeName(T) ++ @tagName(tag));
+                                        },
+                                        else => for (ofs[start..]) |of| switch (of.kind) {
+                                            .component => |cmp| {
+                                                start += 1;
+                                                if (cmp.kind == tagT)
+                                                    break :brk .{ start, start + cmp.len };
+                                            },
+                                            else => start += 1,
+                                        } else @panic(@typeName(T) ++ @tagName(tag)),
+                                    }
+                                };
+                                try print(@TypeOf(case), case, ofs[start..end], out);
                             },
                         },
                         .@"struct" => try print(T, data, ofs, out),
                         // I don't actually know if this is unreachable, but I don't understand
                         // when you'd want to use a for like this. Should be an int (typed usize?)?
                         .bool => unreachable,
+                        .void => {},
                         else => {
                             const err = std.fmt.comptimePrint("unexpected type {s}\n", .{@typeName(T)});
                             @compileLog(@typeInfo(T));
