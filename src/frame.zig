@@ -13,7 +13,7 @@ io: Io,
 /// Base Request object from the client.
 request: *const Request,
 /// Connection to the downstream client/request
-downstream: Downstream,
+downstream: *Downstream,
 /// Request URI as received by Verse
 uri: Uri.Iterator,
 
@@ -47,23 +47,62 @@ status: ?std.http.Status = null,
 headers_done: bool = false,
 
 /// Unstable API; may be altered or removed in the future
-server: *const anyopaque,
+server: *const Server,
 
 const Frame = @This();
 
 pub const Downstream = struct {
     gateway: Gateway,
-    reader: *Reader,
-    writer: *Writer,
+    reader: Io.net.Stream.Reader,
+    writer: Io.net.Stream.Writer,
 
     pub const Gateway = union(enum) {
-        zwsgi: *zWSGIRequest,
-        http: *std.http.Server,
+        zwsgi: zWSGIRequest,
+        http: std.http.Server,
     };
 
     pub const Error = error{WriteFailed};
     // Largest single IP packet size
     pub const ONESHOT_SIZE = 14720;
+
+    pub fn init(s: Io.net.Stream, a: Allocator, io: Io) error{OutOfMemory}!Downstream {
+        const r_b: []u8 = try a.alloc(u8, 0x10000);
+        errdefer a.free(r_b);
+        const w_b: []u8 = try a.alloc(u8, 0x40000);
+
+        errdefer comptime unreachable;
+        return .{
+            .gateway = .{ .http = undefined },
+            .reader = s.reader(io, r_b),
+            .writer = s.writer(io, w_b),
+        };
+    }
+
+    pub fn http(s: Io.net.Stream, a: Allocator, io: Io) Downstream {
+        const r_b: []u8 = try a.alloc(u8, 0x10000);
+        errdefer a.free(r_b);
+        const w_b: []u8 = try a.alloc(u8, 0x40000);
+
+        errdefer comptime unreachable;
+        return .{
+            .gateway = .{ .http = undefined },
+            .reader = s.reader(io, r_b),
+            .writer = s.writer(io, w_b),
+        };
+    }
+
+    pub fn zwsgi(s: Io.net.Stream, a: Allocator, io: Io) Downstream {
+        const r_b: []u8 = try a.alloc(u8, 0x10000);
+        errdefer a.free(r_b);
+        const w_b: []u8 = try a.alloc(u8, 0x40000);
+
+        errdefer comptime unreachable;
+        return .{
+            .gateway = .{ .http = undefined },
+            .reader = s.reader(io, r_b),
+            .writer = s.writer(io, w_b),
+        };
+    }
 };
 
 /// sendPage is the default way to respond in verse using the Template system.
@@ -72,7 +111,7 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
     frame.status = frame.status orelse .ok;
 
     try frame.sendHeaders(.close);
-    try frame.downstream.writer.print("{f}", .{page});
+    try frame.downstream.writer.interface.print("{f}", .{page});
     return;
 }
 
@@ -87,7 +126,7 @@ pub fn sendJSON(f: *Frame, comptime code: std.http.Status, json: anytype) Networ
     f.content_type = .json;
 
     try f.sendHeaders(.close);
-    try f.downstream.writer.print("{f}", .{std.json.fmt(
+    try f.downstream.writer.interface.print("{f}", .{std.json.fmt(
         json,
         .{ .emit_null_optional_fields = false },
     )});
@@ -97,7 +136,7 @@ pub fn sendHTML(f: *Frame, comptime code: std.http.Status, html: []const u8) Net
     f.status = code;
     f.content_type = .html;
     try f.sendHeaders(.close);
-    try f.downstream.writer.writeAll(html);
+    try f.downstream.writer.interface.writeAll(html);
 }
 
 pub fn redirect(f: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
@@ -115,7 +154,7 @@ pub fn redirect(f: *Frame, loc: []const u8, comptime scode: std.http.Status) Net
     };
 
     try f.sendHeaders(.more);
-    try f.downstream.writer.print("Location: {s}\r\n\r\n", .{loc});
+    try f.downstream.writer.interface.print("Location: {s}\r\n\r\n", .{loc});
 }
 
 pub fn acceptWebsocket(frame: *Frame) !Websocket {
@@ -123,22 +162,22 @@ pub fn acceptWebsocket(frame: *Frame) !Websocket {
 }
 
 pub fn init(
+    srv: *const Server,
+    downstream: *Downstream,
+    request: *const Request,
+    auth: Auth.Provider,
     a: Allocator,
     io: Io,
-    srv: *const Server,
-    req: *const Request,
-    downstream: Downstream,
-    auth: Auth.Provider,
 ) !Frame {
     return .{
         .alloc = a,
         .io = io,
-        .request = req,
+        .request = request,
         .downstream = downstream,
-        .uri = try Uri.split(req.uri),
+        .uri = try Uri.split(request.uri),
         .auth_provider = auth,
         .headers = .empty,
-        .user = auth.authenticate(&req.headers, req.now) catch null,
+        .user = auth.authenticate(&request.headers, request.now) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),
         .response_data = .{},
@@ -154,28 +193,28 @@ pub const SendHeadersEnd = enum {
 pub fn sendHeaders(f: *Frame, comptime end: SendHeadersEnd) NetworkError!void {
     std.debug.assert(!f.headers_done);
     // Verse headers
-    try f.downstream.writer.writeAll(f.HttpHeader("HTTP/1.1"));
+    try f.downstream.writer.interface.writeAll(f.HttpHeader("HTTP/1.1"));
     const s_name = "Server: verse/" ++ build_version ++ "\r\n";
-    try f.downstream.writer.writeAll(s_name);
+    try f.downstream.writer.interface.writeAll(s_name);
 
     if (f.content_type) |ct| {
-        try f.downstream.writer.writeAll("Content-Type: ");
+        try f.downstream.writer.interface.writeAll("Content-Type: ");
         switch (ct.base) {
             inline else => |tag, name| {
-                try f.downstream.writer.print("{s}/{s}", .{ @tagName(name), @tagName(tag) });
+                try f.downstream.writer.interface.print("{s}/{s}", .{ @tagName(name), @tagName(tag) });
             },
         }
         if (ct.parameter) |param|
-            try f.downstream.writer.print("; charset={s}", .{@tagName(param)});
-        try f.downstream.writer.writeAll("\r\n");
+            try f.downstream.writer.interface.print("; charset={s}", .{@tagName(param)});
+        try f.downstream.writer.interface.writeAll("\r\n");
     }
     // Custom Headers
-    try f.downstream.writer.print("{f}", .{std.fmt.alt(f.headers, .fmt)});
+    try f.downstream.writer.interface.print("{f}", .{std.fmt.alt(f.headers, .fmt)});
     for (f.cookie_jar.cookies.items) |cookie| {
-        try f.downstream.writer.print("{f}\r\n", .{std.fmt.alt(cookie, .header)});
+        try f.downstream.writer.interface.print("{f}\r\n", .{std.fmt.alt(cookie, .header)});
     }
     switch (end) {
-        .close => try f.downstream.writer.writeAll("\r\n"),
+        .close => try f.downstream.writer.interface.writeAll("\r\n"),
         .more => return,
     }
     f.headers_done = true;
@@ -229,7 +268,8 @@ pub const DumpDebugOptions = struct {
 pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     switch (frame.downstream.gateway) {
         .zwsgi => |zw| {
-            var itr = zw.known.iterator();
+            var knowns = zw.known;
+            var itr = knowns.iterator();
             while (itr.next()) |entry| {
                 if (entry.value.*) |value| {
                     std.debug.print("\tDumpDebug '{s}' => '{s}'\n", .{ @tagName(entry.key), value });

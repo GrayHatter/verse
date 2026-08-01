@@ -46,13 +46,13 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
 
 pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
     const m = Message.init(msg, .text);
-    try m.write(ws.frame.downstream.writer);
-    try ws.frame.downstream.writer.flush();
+    try m.write(&ws.frame.downstream.writer.interface);
+    try ws.frame.downstream.writer.interface.flush();
 }
 
 pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
-    return Message.read(ws.frame.downstream.reader, buffer) catch |err| {
-        std.debug.print("reader failed! {}\n", .{err});
+    return Message.read(&ws.frame.downstream.reader.interface, buffer) catch |err| {
+        log.err("reader failed! {}\n", .{err});
         return error.ReadFailed;
     };
 }
@@ -264,3 +264,4 @@ const Frame = @import("frame.zig");
 const Hash = std.crypto.hash.Sha1;
 const base64 = std.base64.standard.Encoder;
 const nativeToBig = std.mem.nativeToBig;
+const log = std.log.scoped(.verse_websocket);

@@ -164,7 +164,7 @@ pub fn robotsTxt(
             f.status = .ok;
             f.content_type = .@"text/plain";
             try f.sendHeaders(.close);
-            try f.downstream.writer.writeAll(text);
+            try f.downstream.writer.interface.writeAll(text);
         }
 
         pub fn endpoint(f: *Frame) Router.Error!void {

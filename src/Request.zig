@@ -276,7 +276,12 @@ fn initCommon(
     };
 }
 
-pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp) !Request {
+pub fn initZWSGI(
+    zwsgi: *zWSGIRequest,
+    data: Data,
+    now: Timestamp,
+    a: Allocator,
+) !Request {
     const zk = &zwsgi.known;
     const uri: ?[]const u8 = zk.get(.REQUEST_PATH);
     const method = Methods.fromStr(zk.get(.REQUEST_METHOD) orelse "GET") catch {
@@ -326,11 +331,11 @@ pub fn initZWSGI(a: Allocator, zwsgi: *zWSGIRequest, data: Data, now: Timestamp)
 }
 
 pub fn initHttp(
-    a: Allocator,
     http: *std.http.Server.Request,
     stream: *const Stream,
     data: Data,
     now: Timestamp,
+    a: Allocator,
 ) !Request {
     var headers: Headers = .empty;
 

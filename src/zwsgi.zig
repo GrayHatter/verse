@@ -2,8 +2,6 @@
 //! Speaks the uwsgi protocol
 router: *const Router,
 options: Options,
-auth: Auth.Provider,
-
 unix_file_name: []const u8,
 
 const zWSGI = @This();
@@ -20,21 +18,20 @@ pub const Options = struct {
     };
 };
 
-pub fn init(router: *const Router, opts: Options, sopts: Server.Options) zWSGI {
+pub fn init(router: *const Router, opts: Options) zWSGI {
     return .{
         .unix_file_name = opts.file,
         .router = router,
         .options = opts,
-        .auth = sopts.auth,
     };
 }
 
 var running: bool = true;
 
-pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
+pub fn listen(z: *zWSGI, io: Io) !Io.net.Server {
     var cwd = Io.Dir.cwd();
     if (cwd.access(io, z.unix_file_name, .{})) {
-        log.warn("File {s} already exists, zwsgi can not start.", .{z.unix_file_name});
+        log.err("File {s} already exists, zwsgi can not start.", .{z.unix_file_name});
         return error.FileExists;
     } else |err| switch (err) {
         error.FileNotFound => {},
@@ -44,7 +41,22 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
         },
     }
 
-    defer cwd.deleteFile(io, z.unix_file_name) catch |err| switch (err) {
+    const uaddr = try net.UnixAddress.init(z.unix_file_name);
+    const lstn = try uaddr.listen(io, .{});
+    log.info("Unix server listening", .{});
+
+    if (z.options.chmod) |cmod| {
+        var b: [2048:0]u8 = undefined;
+        const len = try cwd.realPathFile(io, z.unix_file_name, &b);
+        b[len] = 0;
+        const path: [*:0]const u8 = b[0..len :0];
+        try system.chmodPath(path, cmod);
+    }
+    return lstn;
+}
+
+pub fn raze(z: *zWSGI, io: Io) void {
+    Io.Dir.cwd().deleteFile(io, z.unix_file_name) catch |err| switch (err) {
         error.FileNotFound => {}, // Not optimal, but not fatal.
         else => {
             log.err(
@@ -54,60 +66,20 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
             @panic("Cleanup failed");
         },
     };
+}
 
+pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
-    const uaddr = try net.UnixAddress.init(z.unix_file_name);
-    var server: net.Server = try uaddr.listen(io, .{});
-    log.warn("Unix server listening", .{});
-    defer server.deinit(io);
-    var pollfds: [2]pollfd = undefined;
+    const server = try z.listen(io);
 
-    if (z.options.chmod) |cmod| {
-        var b: [2048:0]u8 = undefined;
-        const len = try cwd.realPathFile(io, z.unix_file_name, &b);
-        b[len] = 0;
-        const path: [*:0]const u8 = b[0..len :0];
-        try system.chmodPath(path, cmod);
-    }
-
-    const sigset = system.defaultSigSet();
-    const sigfd: Io.File = .{
-        .handle = system.signalfd(
-            -1,
-            &sigset,
-            @bitCast(system.O{ .NONBLOCK = false }),
-        ) catch @panic("fd failed"),
-        .flags = .{ .nonblocking = false },
-    };
-
+    const pollfds: [2]pollfd = undefined;
+    const ready: usize = 0;
     while (true) {
-        pollfds = .{
-            .{ .fd = sigfd.handle, .events = std.math.maxInt(i16), .revents = 0 },
-            .{ .fd = server.socket.handle, .events = std.math.maxInt(i16), .revents = 0 },
-        };
-        const ready = system.ppoll(
-            &pollfds,
-            &.{ .sec = 10, .nsec = 100 * ns_per_ms },
-            &sigset,
-        ) catch |err| switch (err) {
-            error.SignalInterrupt => {
-                log.warn("signaled, cleaning up", .{});
-                break;
-            },
-            else => return err,
-        };
         if (ready > 0 and future_list.items.len < 20) {
             if (pollfds[0].revents != 0) {
                 log.err("signal", .{});
-                var r_b: [@sizeOf(system.signalfd_siginfo)]u8 = undefined;
-                var r = sigfd.reader(io, &r_b);
-                const siginfo: system.signalfd_siginfo = r.interface.takeStruct(
-                    system.signalfd_siginfo,
-                    system.endian,
-                ) catch unreachable;
-                std.debug.print("siginfo {}\n\n\n", .{siginfo});
                 break;
             }
             if (pollfds[1].revents != 0) {
@@ -134,6 +106,22 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
+pub fn initRequest(
+    _: *const zWSGI,
+    stream: Io.net.Stream,
+    now: Io.Timestamp,
+    a: Allocator,
+    io: Io,
+) !struct { Frame.Downstream, Request } {
+    log.debug("setting up request", .{});
+
+    var ds: Frame.Downstream = try .init(stream, a, io);
+    ds.gateway = .{ .zwsgi = try zWSGIRequest.init(a, &ds.reader.interface) };
+    const request_data = try requestData(a, &ds.gateway.zwsgi, &ds.reader.interface);
+    const request = try Request.initZWSGI(&ds.gateway.zwsgi, request_data, now, a);
+    return .{ ds, request };
+}
+
 pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     defer stream.close(io);
     var timer: Io.Timestamp = Io.Clock.awake.now(io);
@@ -143,24 +131,12 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
-    const r_b: []u8 = try a.alloc(u8, 0x10000);
-    const w_b: []u8 = try a.alloc(u8, 0x40000);
-    var reader = stream.reader(io, r_b);
-    var writer = stream.writer(io, w_b);
-
-    log.debug("setting up request", .{});
-    var zreq = try zWSGIRequest.init(a, &reader.interface);
-    const request_data = try requestData(a, &zreq, &reader.interface);
-    const request = try Request.initZWSGI(a, &zreq, request_data, now);
+    var downstream, const request = try z.initRequest(stream, now, a, io);
 
     const srv_interface: *const Server.Interface = @fieldParentPtr("zwsgi", z);
     const srvr: *Server = @alignCast(@constCast(@fieldParentPtr("interface", srv_interface)));
 
-    var frame: Frame = try .init(a, io, srvr, &request, .{
-        .gateway = .{ .zwsgi = &zreq },
-        .reader = &reader.interface,
-        .writer = &writer.interface,
-    }, z.auth);
+    var frame: Frame = try .init(srvr, &downstream, &request, srvr.auth, a, io);
 
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
@@ -171,7 +147,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
                 request.remote_addr,
                 @tagName(request.method),
                 @intFromEnum(frame.status orelse .ok),
-                zreq.known.get(.REQUEST_URI) orelse "[ERROR: URI EMPTY]",
+                request.uri,
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
         );
@@ -189,7 +165,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);
     z.router.builder(&frame, routed_endpoint);
-    writer.interface.flush() catch {};
+    downstream.writer.interface.flush() catch {};
 }
 
 pub const zWSGIParam = enum {
@@ -327,7 +303,7 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
 
 test init {
     const router = Router.Routes(&.{});
-    _ = init(&router, .default, .{ .mode = .{ .zwsgi = .default }, .auth = .disabled });
+    _ = init(&router, .default);
 }
 
 const std = @import("std");

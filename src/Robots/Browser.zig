@@ -1,7 +1,7 @@
 name: Name,
 // This was a u16, but then I realized, I don't trust browsers.
 version: u32,
-version_string: []const u8 = "",
+version_string: []const u8 = &.{},
 
 const Browser = @This();
 

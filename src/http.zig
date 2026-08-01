@@ -1,6 +1,5 @@
 //! Verse HTTP server
 router: *const Router,
-auth: Auth.Provider,
 srv_address: net.IpAddress,
 
 const HTTP = @This();
@@ -34,19 +33,42 @@ pub const Options = struct {
     };
 };
 
-pub fn init(router: *const Router, opts: Options, sopts: Server.Options) !HTTP {
+pub fn init(router: *const Router, opts: Options) !HTTP {
     return .{
         .router = router,
-        .auth = sopts.auth,
         .srv_address = try net.IpAddress.parse(opts.host, opts.port),
     };
+}
+
+pub fn raze(http: *HTTP, io: Io) void {
+    _ = http;
+    _ = io;
+}
+
+pub fn listen(http: *HTTP, io: Io) !Io.net.Server {
+    return try http.srv_address.listen(io, .{});
+}
+
+pub fn initRequest(
+    _: *const HTTP,
+    stream: Io.net.Stream,
+    now: Io.Timestamp,
+    a: Allocator,
+    io: Io,
+) !struct { Frame.Downstream, Request } {
+    var ds: Frame.Downstream = try .init(stream, a, io);
+    ds.gateway = .{ .http = .init(&ds.reader.interface, &ds.writer.interface) };
+    var hreq = try ds.gateway.http.receiveHead();
+    const reqdata = try requestData(a, &hreq);
+    const req = try Request.initHttp(&hreq, &stream, reqdata, now, a);
+    return .{ ds, req };
 }
 
 pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
     var future_buf: [20]OnceFuture = undefined;
     var future_list: ArrayList(OnceFuture) = .initBuffer(&future_buf);
 
-    var srv = try http.srv_address.listen(io, .{});
+    var srv = try http.listen(io);
     defer srv.deinit(io);
 
     var pollfds: [2]pollfd = undefined;
@@ -119,45 +141,40 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
-    const r_b: []u8 = try a.alloc(u8, 0x10000);
-    const w_b: []u8 = try a.alloc(u8, 0x40000);
-    var reader = stream.reader(io, r_b);
-    var writer = stream.writer(io, w_b);
-    var hsrv = std.http.Server.init(&reader.interface, &writer.interface);
-
-    var hreq = try hsrv.receiveHead();
-    const reqdata = try requestData(a, &hreq);
-    const req = try Request.initHttp(a, &hreq, &stream, reqdata, now);
+    var downstream, const request = try http.initRequest(stream, now, a, io);
 
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
     const srvr: *Server = @alignCast(@fieldParentPtr("interface", ifc));
 
-    var frame: Frame = try .init(a, io, srvr, &req, .{
-        .gateway = .{ .http = &hsrv },
-        .reader = &reader.interface,
-        .writer = &writer.interface,
-    }, http.auth);
+    var frame: Frame = try .init(
+        srvr,
+        &downstream,
+        &request,
+        srvr.auth,
+        a,
+        io,
+    );
 
     errdefer comptime unreachable;
 
     const callable = http.router.fallback(&frame, http.router.route);
     http.router.builder(&frame, callable);
 
-    if (writer.err) |err| {
+    if (downstream.writer.err) |err| {
         std.debug.print("stream writer error {}\n", .{err});
     }
 
-    writer.interface.flush() catch unreachable; // TODO
+    downstream.writer.interface.flush() catch unreachable; // TODO
 
     const lap = timer.untilNow(io, .awake);
     srvr.stats.log(.{
-        .addr = req.remote_addr,
+        .addr = request.remote_addr,
         .code = frame.status orelse .internal_server_error,
         .page_size = 0,
-        .time = req.now.toSeconds(),
+        .time = request.now.toSeconds(),
         .rss = arena.queryCapacity(),
-        .ua = req.user_agent,
-        .uri = req.uri,
+        .ua = request.user_agent,
+        .uri = request.uri,
         .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
     }, io);
 }
@@ -215,10 +232,12 @@ test HTTP {
 
     var server: Server = .{
         .interface = .{
-            .http = try init(&Router.TestingRouter, .localPort(9345), .default),
+            .http = try init(&Router.TestingRouter, .localPort(9345)),
         },
         .stats = .disabled,
         .options = .default,
+        .auth = .disabled,
+        .router = &Router.TestingRouter,
     };
 
     var thread = try std.Thread.spawn(.{}, threadFn, .{ &server.interface.http, a, io });

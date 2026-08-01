@@ -56,6 +56,23 @@ pub const Name = enum {
         };
     }
 
+    pub fn rules(comptime name: Name) []const Robots.RuleFn {
+        return switch (name) {
+            .amzn_searchbot => "Amzn-SearchBot",
+            .applebot => "Applebot",
+            .archiveorgbot => "archive.org_bot",
+            .bingbot => "Bingbot",
+            .claude_searchbot => "Claude-SearchBot",
+            .claudebot => "ClaudeBot",
+            .googlebot => "GoogleBot",
+            .gptbot => "GPTBot",
+            .metaexternalagent => "meta-externalagent",
+            .lounge_irc_client => "",
+            .malicious => "",
+            .unknown => "",
+        };
+    }
+
     test {
         _ = &std.testing.refAllDecls(@This());
     }
