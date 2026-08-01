@@ -217,6 +217,13 @@ test Agent {
         Agent{ .bot = .{ .name = .amzn_searchbot, .version = 0, .malicious = true } },
         Agent.init(amzn),
     );
+
+    // TODO write test (deferred until testing harness)
+    const internet_archive = .{
+        "Mozilla/5.0 (compatible; archive-spam-check)",
+        "spam-janitor-url-resolver/1.0 (+https://archive.org/community-search/about)",
+    };
+    _ = internet_archive;
 }
 
 pub fn init(ua_str: []const u8) UserAgent {

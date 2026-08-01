@@ -108,6 +108,7 @@ pub const Encoding = struct {
 pub const Language = struct {
     en: f16,
     zh: f16,
+    // fr-CH,fr;q=0.9,en-CH;q=0.8,en;q=0.7,de-CH;q=0.6,de;q=0.5,gsw-CH;q=0.4,gsw;q=0.3,fr-FR;q=0.2,en-US;q=0.1
 
     bytes: []const u8,
 
