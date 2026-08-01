@@ -59,6 +59,7 @@ pub fn initRequest(
     var ds: Frame.Downstream = try .init(stream, a, io);
     ds.gateway = .{ .http = .init(&ds.reader.interface, &ds.writer.interface) };
     var hreq = try ds.gateway.http.receiveHead();
+    log.debug("http request uri: {s}", .{hreq.head.target});
     const reqdata = try requestData(a, &hreq);
     const req = try Request.initHttp(&hreq, &stream, reqdata, now, a);
     return .{ ds, req };
