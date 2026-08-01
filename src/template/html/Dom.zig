@@ -7,60 +7,63 @@ opened: ?Elem = null,
 const Dom = @This();
 
 pub fn create(a: Allocator) *Dom {
-    const self = a.create(Dom) catch unreachable;
-    self.* = Dom{ .alloc = a, .elems = .empty };
-    return self;
+    const d = a.create(Dom) catch unreachable;
+    d.* = Dom{ .alloc = a, .elems = .empty };
+    return d;
 }
 
-pub fn open(self: *Dom, elem: HTML.E) *Dom {
-    if (self.child) |_| @panic("DOM Already Open");
-    self.child = create(self.alloc);
-    self.child.?.parent = self;
-    self.child.?.opened = elem;
-    return self.child.?;
+pub fn open(d: *Dom, elem: HTML.E) *Dom {
+    if (d.child) |_| @panic("DOM Already Open");
+    d.child = create(d.alloc);
+    d.child.?.parent = d;
+    d.child.?.opened = elem;
+    return d.child.?;
 }
 
-pub fn pushSlice(self: *Dom, elems: []const HTML.E) void {
-    for (elems) |elem| self.push(elem);
+pub fn pushSlice(d: *Dom, elems: []const HTML.E) void {
+    for (elems) |elem| d.push(elem);
 }
 
-pub fn push(self: *Dom, elem: HTML.E) void {
-    self.elems.append(self.alloc, elem) catch unreachable;
+pub fn push(d: *Dom, elem: HTML.E) void {
+    d.elems.append(d.alloc, elem) catch unreachable;
 }
 
-pub fn dupe(self: *Dom, elem: HTML.E) void {
-    self.elems.append(self.alloc, HTML.E{
-        .name = elem.name,
-        .text = elem.text,
-        .children = if (elem.children) |c| self.alloc.dupe(HTML.E, c) catch null else null,
-        .attrs = if (elem.attrs) |a| self.alloc.dupe(HTML.Attribute, a) catch null else null,
+pub fn dupe(d: *Dom, elem: HTML.E) void {
+    d.elems.append(d.alloc, switch (elem) {
+        .tag => HTML.E{ .tag = .{
+            .name = elem.tag.name,
+            .children = d.alloc.dupe(HTML.E, elem.tag.children) catch &.{},
+            .attrs = d.alloc.dupe(HTML.Attribute, elem.tag.attrs) catch &.{},
+        } },
+        .bytes => HTML.E{ .bytes = d.alloc.dupe(u8, elem.bytes) catch &.{} },
     }) catch unreachable;
 }
 
-pub fn close(self: *Dom) *Dom {
-    if (self.parent) |p| {
-        self.opened.?.children = self.elems.toOwnedSlice(self.alloc) catch unreachable;
-        p.push(self.opened.?);
+pub fn close(d: *Dom) *Dom {
+    if (d.parent) |p| {
+        d.opened.?.tag.children = d.elems.toOwnedSlice(d.alloc) catch unreachable;
+        p.push(d.opened.?);
         p.child = null;
-        defer self.alloc.destroy(self);
+        defer d.alloc.destroy(d);
         return p;
     } else @panic("Dom ISN'T OPEN");
     unreachable;
 }
 
-pub fn done(self: *Dom) []HTML.E {
-    if (self.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
-    defer self.alloc.destroy(self);
-    return self.elems.toOwnedSlice(self.alloc) catch unreachable;
+pub fn done(d: *Dom) []HTML.E {
+    if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
+    defer d.alloc.destroy(d);
+    return d.elems.toOwnedSlice(d.alloc) catch unreachable;
 }
 
 fn freeChildren(a: Allocator, elems: []const Elem) void {
-    for (elems) |elem| {
-        if (elem.children) |children| {
-            freeChildren(a, children);
-            a.free(children);
-        }
-    }
+    for (elems) |elem| switch (elem) {
+        .tag => |tag| {
+            freeChildren(a, tag.children);
+            a.free(tag.children);
+        },
+        .bytes => |b| a.free(b),
+    };
 }
 
 pub fn raze(d: *Dom) void {
@@ -72,7 +75,7 @@ pub fn raze(d: *Dom) void {
 pub fn fmtFull(d: Dom, w: *Writer) Writer.Error!void {
     if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
     for (d.elems.items) |e| {
-        w.print("{f}", .{std.fmt.alt(e, .pretty)}) catch unreachable;
+        w.print("{f}", .{std.fmt.alt(e, .fmtPretty)}) catch unreachable;
     }
 }
 
@@ -98,14 +101,14 @@ pub fn render(d: *Dom, a: Allocator, comptime style: enum { full, compact }) ![]
 test render {
     const a = std.testing.allocator;
     var dom: *Dom = .create(a);
-    dom = dom.open(HTML.form(null, &[_]HTML.Attr{
+    dom = dom.open(HTML.form(&.{}, &[_]HTML.Attr{
         .{ .key = "method", .value = "POST" },
         .{ .key = "action", .value = "/endpoint" },
     }));
-    dom = dom.open(HTML.element("button", null, &[_]HTML.Attr{
-        .{ .key = "name", .value = "new" },
-    }));
-    dom.dupe(HTML.element("_text", "create new", null));
+    dom = dom.open(
+        HTML.element("button", &.{}, &.{.{ .key = "name", .value = "new" }}),
+    );
+    dom.dupe(HTML.text("create new"));
     dom = dom.close();
     dom = dom.close();
 
@@ -117,14 +120,14 @@ test render {
     try std.testing.expectEqualStrings(expected_compact, compact);
 
     dom = .create(a);
-    dom = dom.open(HTML.form(null, &[_]HTML.Attr{
+    dom = dom.open(HTML.form(&.{}, &[_]HTML.Attr{
         .{ .key = "method", .value = "POST" },
         .{ .key = "action", .value = "/endpoint" },
     }));
-    dom = dom.open(HTML.element("button", null, &[_]HTML.Attr{
+    dom = dom.open(HTML.element("button", &.{}, &.{
         .{ .key = "name", .value = "new" },
     }));
-    dom.dupe(HTML.element("_text", "create new", null));
+    dom.dupe(HTML.E.txt("create new"));
     dom = dom.close();
     dom = dom.close();
 
@@ -153,7 +156,7 @@ test "open close" {
     var dom = create(a);
     try std.testing.expect(dom.child == null);
 
-    var new_dom = dom.open(HTML.div(null, null));
+    var new_dom = dom.open(HTML.div(&.{}, &.{}));
     try std.testing.expect(new_dom.child == null);
     try std.testing.expect(dom.child == new_dom);
     const closed = new_dom.close();
