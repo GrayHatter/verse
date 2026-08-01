@@ -22,18 +22,20 @@ pub fn fileOnDisk(f: *Frame) Route.Error!void {
     defer file.close(f.io);
     var r_b: [0x4000]u8 = undefined;
     var reader = file.reader(f.io, &r_b);
-
     f.status = .ok;
     f.content_type = content_type;
     try f.sendHeaders(.close);
-    _ = reader.interface.stream(&f.downstream.writer.interface, .limited(0xFFFFFF)) catch |err| switch (err) {
-        error.EndOfStream => {},
+    while (reader.interface.stream(&f.downstream.writer.interface, .limited(0xFFFFFF))) |num| {
+        log.debug("streaming ({s}) {}", .{ fname, num });
+    } else |err| switch (err) {
+        error.EndOfStream => return,
         error.ReadFailed => return error.ServerFault,
         error.WriteFailed => return error.WriteFailed,
-    };
+    }
 }
 
 const std = @import("std");
+const log = std.log.scoped(.verse_staticfile);
 const find = std.mem.find;
 const Frame = @import("frame.zig");
 const Route = @import("router.zig");
