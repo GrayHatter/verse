@@ -58,6 +58,7 @@ pub fn first(uri: *Uri) void {
 }
 
 pub fn format(uri: Uri, w: *std.Io.Writer) error{WriteFailed}!void {
+    try w.writeByte('/');
     try w.writeAll(uri.path);
 }
 
