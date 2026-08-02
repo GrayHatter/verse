@@ -175,7 +175,7 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
         .time = request.now.toSeconds(),
         .rss = arena.queryCapacity(),
         .ua = request.user_agent,
-        .uri = request.uri,
+        .uri = frame.uri.path,
         .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
     }, io);
 }

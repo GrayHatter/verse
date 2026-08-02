@@ -1,7 +1,8 @@
 /// Unstable API; likely to exist in some form, but might be changed
 remote_addr: RemoteAddr,
 method: Methods,
-uri: []const u8,
+/// Target is the raw, unsanitized, client supplied value
+target: []const u8,
 host: ?Host,
 user_agent: ?UserAgent,
 referer: ?Referer,
@@ -88,7 +89,7 @@ pub const Encoding = struct {
         var e: Encoding = .none;
         inline for (@typeInfo(Encoding).@"struct".fields) |f| {
             if (comptime eql(u8, f.name, "bytes")) continue;
-            if (indexOf(u8, str, f.name)) |_| {
+            if (find(u8, str, f.name)) |_| {
                 @field(e, f.name) = true;
             }
         }
@@ -120,7 +121,7 @@ pub const Language = struct {
         };
         inline for (@typeInfo(Language).@"struct".fields) |f| {
             if (comptime eql(u8, f.name, "bytes")) continue;
-            if (indexOf(u8, str, f.name)) |idx| {
+            if (find(u8, str, f.name)) |idx| {
                 if (str.len == idx + f.name.len or
                     str[idx + f.name.len] == '-' or
                     str[idx + f.name.len] == ';' or
@@ -235,7 +236,7 @@ fn initCommon(
     a: Allocator,
     remote_addr: RemoteAddr,
     _method: Methods,
-    uri: []const u8,
+    target: []const u8,
     host: ?[]const u8,
     ua: ?[]const u8,
     referer: ?Referer,
@@ -268,7 +269,7 @@ fn initCommon(
         .method = method,
         .referer = referer,
         .remote_addr = remote_addr,
-        .uri = uri,
+        .target = target,
         .user_agent = if (ua) |u| .init(u) else null,
         .protocol = .parse(proto),
         .secure = secure,
@@ -283,7 +284,7 @@ pub fn initZWSGI(
     a: Allocator,
 ) !Request {
     const zk = &zwsgi.known;
-    const uri: ?[]const u8 = zk.get(.REQUEST_PATH);
+    const target: ?[]const u8 = zk.get(.REQUEST_URI);
     const method = Methods.fromStr(zk.get(.REQUEST_METHOD) orelse "GET") catch {
         log.err("Unsupported Method seen '{any}'", .{zk.get(.REQUEST_METHOD)});
         return error.InvalidMethod;
@@ -313,7 +314,7 @@ pub fn initZWSGI(
         a,
         remote_addr orelse return error.RemoteAddressMissing,
         method,
-        uri orelse return error.URIMissing,
+        target orelse return error.URIMissing,
         host,
         ua_slice,
         referer,
@@ -374,7 +375,7 @@ pub fn initHttp(
     var remote_addr: RemoteAddr = undefined;
     var ipbuf: [48]u8 = undefined;
     const ipport = try bufPrint(&ipbuf, "{f}", .{stream.socket.address});
-    if (lastIndexOfScalar(u8, ipport, ':')) |i| {
+    if (findScalarLast(u8, ipport, ':')) |i| {
         // TODO lower this to remove the a.dupe
         remote_addr = try a.dupe(u8, ipport[0..i]);
     } else @panic("invalid address from http server");
@@ -410,9 +411,11 @@ const Allocator = std.mem.Allocator;
 const Stream = std.Io.net.Stream;
 const Timestamp = std.Io.Timestamp;
 const log = std.log.scoped(.verse);
-const indexOf = std.mem.indexOf;
+const find = std.mem.find;
+const findScalar = std.mem.findScalar;
+const findScalarPos = std.mem.findScalarPos;
 const startsWith = std.mem.startsWith;
-const lastIndexOfScalar = std.mem.lastIndexOfScalar;
+const findScalarLast = std.mem.findScalarLast;
 const eql = std.mem.eql;
 const eqlIgnoreCase = std.ascii.eqlIgnoreCase;
 const allocPrint = std.fmt.allocPrint;

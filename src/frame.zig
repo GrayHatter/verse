@@ -14,8 +14,8 @@ io: Io,
 request: *const Request,
 /// Connection to the downstream client/request
 downstream: *Downstream,
-/// Request URI as received by Verse
-uri: Uri.Iterator,
+/// Request URI; parsed & validated by Verse
+uri: Uri,
 
 // TODO fix this unstable API
 auth_provider: Auth.Provider,
@@ -51,6 +51,7 @@ server: *const Server,
 
 const Frame = @This();
 
+pub const Uri = @import("Uri.zig");
 pub const Downstream = struct {
     gateway: Gateway,
     reader: Io.net.Stream.Reader,
@@ -174,7 +175,7 @@ pub fn init(
         .io = io,
         .request = request,
         .downstream = downstream,
-        .uri = try Uri.split(request.uri),
+        .uri = try .init(request.target),
         .auth_provider = auth,
         .headers = .empty,
         .user = auth.authenticate(&request.headers, request.now) catch null,
@@ -329,7 +330,6 @@ const IOVec = iov.IOVec;
 const NetworkError = errors.NetworkError;
 const Request = @import("Request.zig");
 const ResponseData = @import("response-data.zig");
-const Uri = @import("uri.zig");
 const Router = @import("router.zig");
 const Server = @import("server.zig");
 const Websocket = @import("websocket.zig");

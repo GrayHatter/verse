@@ -157,14 +157,14 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
         log.err(
-            "{s}: [{d:.3}] {s} - {s}:{} {s} -- \"{s}\"",
+            "{s}: [{d:.3}] {s} - {s}:{} {f} -- \"{s}\"",
             .{
                 if (downstream.gateway == .zwsgi) "zWSGI" else "HTTP",
                 @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
                 request.remote_addr,
                 @tagName(request.method),
                 @intFromEnum(frame.status orelse .ok),
-                request.uri,
+                frame.uri,
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
         );
@@ -175,7 +175,7 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
             .time = request.now.toSeconds(),
             .rss = arena.queryCapacity(),
             .ua = request.user_agent,
-            .uri = request.uri,
+            .uri = frame.uri.path,
             .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
         }, io);
     }

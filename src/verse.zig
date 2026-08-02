@@ -11,7 +11,7 @@ pub const Headers = @import("headers.zig");
 pub const Request = @import("Request.zig");
 pub const Router = @import("router.zig");
 pub const Server = @import("server.zig");
-pub const Uri = @import("uri.zig");
+pub const Uri = @import("Uri.zig");
 
 const cookies = @import("cookies.zig");
 pub const Cookie = cookies.Cookie;
