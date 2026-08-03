@@ -4,24 +4,22 @@
 /// To use Cookie auth provider in verse, you only need to supply it a Provider
 /// that can do user lookups.
 const UserFinder = struct {
-    pub fn provider(self: *UserFinder) verse.auth.Provider {
-        return .{
-            .ctx = self,
-            .vtable = .{
-                .authenticate = null,
-                .valid = null,
-                .createSession = null,
-                .getCookie = null,
-                .lookupUser = lookupUser,
-            },
-        };
-    }
+    auth: verse.Auth = .{
+        .vtable = &.{
+            .lookupUser = lookupUser,
+            .authenticate = null,
+            .valid = null,
+            .createSession = null,
+            .getUserCookie = null,
+            .getUserToken = null,
+        },
+    },
 
     /// The unique user identifier is named `username` here. But if usernames
     /// are mutable, it may be better to use an identifier that doesn't change
     /// for the entire life of the user. A database unique primary key is
     /// another common option for the user identifier.
-    pub fn lookupUser(_: *anyopaque, username: []const u8) !verse.auth.User {
+    pub fn lookupUser(_: *const verse.Auth, username: []const u8) !verse.Auth.User {
         // Extra care should be taken to ensure a user lookup function doesn't
         // leak any information about acceptable users. In this case because
         // Cookie auth validates the token is valid before calling user lookup
@@ -41,9 +39,9 @@ pub fn main() !void {
     // Step 0: Create a user lookup object. This example is stateless, but you
     // could also have your user lookup provider connect to an external
     // authentication server here as well.
-    var finder = UserFinder{};
+    const finder = UserFinder{};
     // Step 1: Set up the Cookie auth provider.
-    var cookie_auth = verse.auth.Cookie.init(.{
+    var cookie_auth = verse.Auth.Cookie.init(.{
         // This is the key used to generate and verify user tokens. Anyone who
         // is able to learn or guess this secret key could generate tokens that
         // could impersonate any user. It must be kept secure. Consider storing
@@ -52,13 +50,13 @@ pub fn main() !void {
         // The base auth provider. This one only does user lookups, but a more
         // complicated version may replace the other default steps, e.g. a
         // custom authentication function, or generate a different cookie.
-        .base = finder.provider(),
+        .auth = finder.auth,
     });
 
     // Step 2: Start a normal Verse Server with an authentication Provider
     var server = try verse.Server.init(&routes, .{
         .mode = .{ .http = .localPort(8089) },
-        .auth = cookie_auth.provider(),
+        .auth = &cookie_auth.auth,
     });
 
     server.serve(std.heap.page_allocator) catch |err| {
@@ -105,12 +103,12 @@ fn index(frame: *Frame) Router.Error!void {
 /// Generally, you'd want to authenticate the user before giving them a token.
 /// Validating a submitted username and password is the most common option.
 fn create(frame: *Frame) Router.Error!void {
-    var user = verse.auth.User{
+    var user: verse.Auth.User = .{
         .unique_id = "example_user",
         .username = "example_user",
     };
-    frame.auth_provider.createSession(&user, frame.request.now) catch return error.Unknown;
-    if (frame.auth_provider.getCookie(user) catch null) |cookie| {
+    frame.server.auth.createSession(&user, frame.request.now) catch return error.Unknown;
+    if (frame.server.auth.getUserCookie(user) catch null) |cookie| {
         try frame.cookie_jar.add(cookie);
     }
     try frame.redirect("/", .found);

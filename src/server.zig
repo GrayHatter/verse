@@ -1,4 +1,4 @@
-auth: Auth.Provider,
+auth: *Auth,
 interface: Interface,
 options: Options,
 router: *const Router,
@@ -31,7 +31,7 @@ pub const Interface = union(Name) {
 pub const Options = struct {
     io: Options.IoMode = .threaded,
     mode: RunMode,
-    auth: Auth.Provider = .disabled,
+    auth: ?*Auth = null,
     stats: Stats.Options = .disabled,
     threads: u16 = 1,
     logging: Logging = .stdout,
@@ -39,7 +39,7 @@ pub const Options = struct {
     pub const default: Options = .{
         .io = .threaded,
         .mode = .{ .http = .localdevel },
-        .auth = .disabled,
+        .auth = null,
         .threads = 1,
         .stats = .disabled,
         .logging = .stdout,
@@ -61,7 +61,7 @@ pub fn init(router: *const Router, opts: Options) !Server {
             .http => |h| .{ .http = try Http.init(router, h) },
             .other => .{ .other = {} },
         },
-        .auth = opts.auth,
+        .auth = opts.auth orelse .disabled,
         .stats = .disabled,
     };
 }
@@ -286,7 +286,7 @@ const ArrayList = std.ArrayList;
 const ns_per_ms = std.time.ns_per_ms;
 const log = std.log.scoped(.verse);
 
-const Auth = @import("auth.zig");
+const Auth = @import("Auth.zig");
 const Router = @import("router.zig");
 const Stats = @import("stats.zig");
 const Frame = @import("frame.zig");

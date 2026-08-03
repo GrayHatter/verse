@@ -21,12 +21,18 @@ pub const cookie_auth = struct {
 /// that confirmed authentication as a cookie using this CookieAuth provider.
 pub fn CookieAuth(HMAC: type) type {
     return struct {
-        base: ?Provider,
-        // TODO consider expanding key memory safety here. The costs associated
-        // with lock locking, or zeroing the memory seem high for the security
-        // improvements, but this may not always be the case.
+        auth: Auth = .{
+            .vtable = &.{
+                .authenticate = authenticate,
+                .valid = valid,
+                .lookupUser = lookupUser,
+                .createSession = createSession,
+                .getUserCookie = getCookie,
+                .getUserToken = getToken,
+            },
+        },
         server_secret_key: []const u8,
-        /// Max age in seconds a session cookie is valid for.
+        /// Max age a session cookie can be valid.
         max_age: Duration,
         cookie_name: []const u8,
 
@@ -62,14 +68,23 @@ pub fn CookieAuth(HMAC: type) type {
         pub fn init(opts: struct {
             server_secret_key: []const u8,
             alloc: ?Allocator = null,
-            base: ?Provider = null,
+            auth: Auth = .{
+                .vtable = &.{
+                    .authenticate = authenticate,
+                    .valid = valid,
+                    .lookupUser = lookupUser,
+                    .createSession = createSession,
+                    .getUserCookie = getCookie,
+                    .getUserToken = getToken,
+                },
+            },
             max_age: Duration = .fromSeconds(86400 * 365),
             cookie_name: []const u8 = "verse_session_secret",
         }) Self {
             return .{
+                .auth = opts.auth,
                 .server_secret_key = opts.server_secret_key,
                 .alloc = opts.alloc,
-                .base = opts.base,
                 .max_age = opts.max_age,
                 .cookie_name = opts.cookie_name,
             };
@@ -115,34 +130,28 @@ pub fn CookieAuth(HMAC: type) type {
             return error.InvalidAuth;
         }
 
-        pub fn authenticate(ptr: *anyopaque, headers: *const Headers, now: Timestamp) Error!User {
-            const ca: *Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| {
-                // If base provider offers authenticate, we should defer to it
-                if (base.vtable.authenticate) |_| {
-                    return base.authenticate(headers, now);
-                }
+        pub fn authenticate(ptr: *Auth, headers: *const Headers, now: Timestamp) Error!User {
+            const cook_auth: *align(4) Self = @fieldParentPtr("auth", ptr);
 
-                if (headers.getCustom("Cookie")) |cookies| {
-                    // This actually isn't technically invalid, it's only
-                    // currently not implemented.
-                    if (cookies.list.items.len > 1) return error.InvalidAuth;
-                    const cookie = cookies.list.items[0];
-                    var itr = tokenizeSequence(u8, cookie, "; ");
-                    while (itr.next()) |tkn| {
-                        if (startsWith(u8, tkn, ca.cookie_name)) {
-                            var un_buf: [64]u8 = undefined;
-                            var hmac = HMAC.init(ca.server_secret_key);
-                            const user_id = try validateToken(
-                                &hmac,
-                                tkn[ca.cookie_name.len + 1 ..],
-                                un_buf[0..],
-                                now,
-                                ca.max_age,
-                            );
+            if (headers.getCustom("Cookie")) |cookies| {
+                // This actually isn't technically invalid, it's only
+                // currently not implemented.
+                if (cookies.list.items.len > 1) return error.InvalidAuth;
+                const cookie = cookies.list.items[0];
+                var itr = tokenizeSequence(u8, cookie, "; ");
+                while (itr.next()) |tkn| {
+                    if (startsWith(u8, tkn, cook_auth.cookie_name)) {
+                        var un_buf: [64]u8 = undefined;
+                        var hmac = HMAC.init(cook_auth.server_secret_key);
+                        const user_id = try validateToken(
+                            &hmac,
+                            tkn[cook_auth.cookie_name.len + 1 ..],
+                            un_buf[0..],
+                            now,
+                            cook_auth.max_age,
+                        );
 
-                            return base.lookupUser(user_id);
-                        }
+                        return ptr.lookupUser(user_id);
                     }
                 }
             }
@@ -150,19 +159,25 @@ pub fn CookieAuth(HMAC: type) type {
             return error.UnknownUser;
         }
 
-        pub fn valid(ptr: *const anyopaque, user: *const User) bool {
-            const ca: *const Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| return base.valid(user);
-            return false;
+        pub const valid = null;
+        pub const lookupUser = null;
+
+        pub fn getToken(ptr: *Auth, user: User, now: Timestamp) Error![]const u8 {
+            const cook_auth: *align(4) Self = @fieldParentPtr("auth", ptr);
+
+            const prefix_len: usize = (if (user.unique_id) |u| u.len + 1 else 0) +
+                if (user.session_extra_data) |ed| ed.len + 1 else 0;
+            if (prefix_len > cook_auth.session_buffer.len / 2) {
+                if (cook_auth.alloc == null) return error.NoSpaceLeft;
+                return error.NoSpaceLeft;
+            }
+
+            var hmac: HMAC = .init(cook_auth.server_secret_key);
+
+            return try mkToken(&hmac, cook_auth.session_buffer[0..], &user, now);
         }
 
-        pub fn lookupUser(ptr: *anyopaque, user_id: []const u8) Error!User {
-            const ca: *Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| return base.lookupUser(user_id);
-            return error.UnknownUser;
-        }
-
-        pub fn mkToken(hm: *HMAC, token: []u8, user: *const User, now: Timestamp) Error!usize {
+        pub fn mkToken(hm: *HMAC, token: []u8, user: *const User, now: Timestamp) Error![]const u8 {
             var buffer: [Self.ibuf_size]u8 = [_]u8{0} ** Self.ibuf_size;
             buffer[0] = Token.Version;
             var b: []u8 = buffer[1..];
@@ -191,34 +206,25 @@ pub fn CookieAuth(HMAC: type) type {
 
             const final = buffer[0 .. buffer.len - b.len];
             if (token.len < b64_enc.calcSize(final.len)) return error.NoSpaceLeft;
-            return b64_enc.encode(token, final).len;
+            return b64_enc.encode(token, final);
         }
 
-        pub fn createSession(ptr: *anyopaque, user: *User, now: Timestamp) Error!void {
-            const ca: *Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| base.createSession(user, now) catch |e| switch (e) {
-                error.NotProvided => {},
-                else => return e,
-            };
+        pub fn createSession(ptr: *Auth, user: *User, now: Timestamp) Error!void {
+            const cook_auth: *align(4) Self = @fieldParentPtr("auth", ptr);
 
             const prefix_len: usize = (if (user.unique_id) |u| u.len + 1 else 0) +
                 if (user.session_extra_data) |ed| ed.len + 1 else 0;
-            if (prefix_len > ca.session_buffer.len / 2) {
-                if (ca.alloc == null) return error.NoSpaceLeft;
+            if (prefix_len > cook_auth.session_buffer.len / 2) {
+                if (cook_auth.alloc == null) return error.NoSpaceLeft;
                 return error.NoSpaceLeft;
             }
 
-            var hmac = HMAC.init(ca.server_secret_key);
-            const len = try mkToken(&hmac, ca.session_buffer[0..], user, now);
-            user.session_next = ca.session_buffer[0..len];
+            var hmac = HMAC.init(cook_auth.server_secret_key);
+            const token_buf = try mkToken(&hmac, cook_auth.session_buffer[0..], user, now);
+            user.session_next = cook_auth.session_buffer[0..token_buf.len];
         }
 
-        pub fn getCookie(ptr: *anyopaque, user: User) Error!?ReqCookie {
-            const ca: *Self = @ptrCast(@alignCast(ptr));
-            if (ca.base) |base| if (base.vtable.getCookie) |_| {
-                return base.getCookie(user);
-            };
-
+        pub fn getCookie(_: *const Auth, user: User) Error!?ReqCookie {
             if (user.session_next) |next| {
                 return .{
                     .name = "verse_session_secret",
@@ -232,19 +238,6 @@ pub fn CookieAuth(HMAC: type) type {
             }
             return null;
         }
-
-        pub fn provider(ca: *Self) Provider {
-            return .{
-                .ctx = ca,
-                .vtable = .{
-                    .authenticate = authenticate,
-                    .valid = valid,
-                    .lookupUser = lookupUser,
-                    .createSession = createSession,
-                    .getCookie = getCookie,
-                },
-            };
-        }
     };
 }
 
@@ -255,16 +248,15 @@ test Cookie {
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
-    const provider = ath.provider();
 
     var user = User{
         .unique_id = "testing user",
     };
 
-    try provider.createSession(&user, now);
+    try ath.auth.createSession(&user, now);
 
     try std.testing.expect(user.session_next != null);
-    const cookie = try provider.getCookie(user);
+    const cookie = try ath.auth.getUserCookie(user);
 
     try std.testing.expect(cookie != null);
     try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
@@ -285,17 +277,16 @@ test "Cookie ExtraData" {
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
-    const provider = ath.provider();
 
     var user = User{
         .unique_id = "testing user",
         .session_extra_data = "extra data",
     };
 
-    try provider.createSession(&user, now);
+    try ath.auth.createSession(&user, now);
 
     try std.testing.expect(user.session_next != null);
-    const cookie = try provider.getCookie(user);
+    const cookie = try ath.auth.getUserCookie(user);
 
     try std.testing.expect(cookie != null);
     try std.testing.expectStringStartsWith(cookie.?.value, user.session_next.?);
@@ -317,14 +308,13 @@ test "Cookie token" {
         .alloc = a,
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
-    const provider = ath.provider();
 
     var user = User{ .unique_id = "testing user" };
 
-    try provider.createSession(&user, now);
+    try ath.auth.createSession(&user, now);
 
     try std.testing.expect(user.session_next != null);
-    const cookie = try provider.getCookie(user);
+    const cookie = try ath.auth.getUserCookie(user);
 
     try std.testing.expect(cookie != null);
     try std.testing.expectStringStartsWith(cookie.?.value[9..], "AAAdGVzdGluZyB1c2VyA");
@@ -355,11 +345,10 @@ const toBytes = std.mem.toBytes;
 const b64_enc = std.base64.url_safe.Encoder;
 const b64_dec = std.base64.url_safe.Decoder;
 
-const auth = @import("../auth.zig");
-const Provider = @import("Provider.zig");
-const User = @import("user.zig");
-const Error = auth.Error;
+const Auth = @import("../Auth.zig");
+const User = @import("User.zig");
+const Error = Auth.Error;
 const Headers = @import("../headers.zig");
 const ReqCookie = @import("../cookies.zig").Cookie;
-const unsafe = auth.unsafe;
-const timing_safe = auth.timing_safe;
+const unsafe = Auth.unsafe;
+const timing_safe = Auth.timing_safe;

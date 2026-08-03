@@ -17,9 +17,6 @@ downstream: *Downstream,
 /// Request URI; parsed & validated by Verse
 uri: Uri,
 
-// TODO fix this unstable API
-auth_provider: Auth.Provider,
-
 /// user is set to exactly what is provided directly by the active
 /// Auth.Provider. It's possible for an Auth.Provider to return a User that is
 /// invalid. Depending on the need for any given use, users should always verify
@@ -166,7 +163,7 @@ pub fn init(
     srv: *const Server,
     downstream: *Downstream,
     request: *const Request,
-    auth: Auth.Provider,
+    auth: *Auth,
     a: Allocator,
     io: Io,
 ) !Frame {
@@ -176,7 +173,6 @@ pub fn init(
         .request = request,
         .downstream = downstream,
         .uri = try .init(request.target),
-        .auth_provider = auth,
         .headers = .empty,
         .user = auth.authenticate(&request.headers, request.now) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
@@ -320,7 +316,7 @@ test {
 }
 
 const Allocator = std.mem.Allocator;
-const Auth = @import("auth.zig");
+const Auth = @import("Auth.zig");
 const ContentType = @import("content-type.zig");
 const Cookies = @import("cookies.zig");
 const Error = errors.Error;

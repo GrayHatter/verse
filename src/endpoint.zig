@@ -540,7 +540,7 @@ test Endpoints {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
-const Auth = @import("auth.zig");
+const Auth = @import("Auth.zig");
 const Server = @import("server.zig");
 const Router = @import("router.zig");
 const testing = @import("testing.zig");

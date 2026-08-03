@@ -154,10 +154,10 @@ pub const Endpoint = struct {
         const include_ip: bool = switch (server.stats.options.auth_mode) {
             .stats_disabled => return f.sendDefaultErrorPage(.gone),
             .auth_required => if (f.user) |user|
-                if (f.auth_provider.valid(&user)) true else return error.Unauthorized
+                if (f.server.auth.valid(&user)) true else return error.Unauthorized
             else
                 return f.sendDefaultErrorPage(.not_implemented),
-            .sensitive => if (f.user) |user| f.auth_provider.valid(&user) else false,
+            .sensitive => if (f.user) |user| f.server.auth.valid(&user) else false,
             .open => true,
         };
 

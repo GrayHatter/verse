@@ -1,6 +1,6 @@
 //! Verse: The framework.
 //!
-pub const auth = @import("auth.zig");
+pub const Auth = @import("Auth.zig");
 pub const stats = @import("stats.zig");
 pub const template = @import("template.zig");
 

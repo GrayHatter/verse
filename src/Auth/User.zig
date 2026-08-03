@@ -40,7 +40,7 @@ user_ptr: ?*anyopaque = null,
 
 /// Provider used to create this User, or the Provider that should be used to
 /// validate or look up details about this User.
-origin_provider: ?*const Provider = null,
+auth_ptr: ?*const Auth = null,
 
 const User = @This();
 
@@ -49,14 +49,12 @@ pub const invalid_user: User = .{
 };
 
 pub fn valid(u: *const User) bool {
-    if (comptime builtin.mode == .Debug) {
-        if (u.origin_provider == null)
-            @panic("It is IB to call user.valid() without an origin_provider");
-    }
     if (u.unique_id == null) return false;
-    if (u.origin_provider) |provider| return provider.valid(u);
-    return false;
+    if (u.auth_ptr == null and comptime builtin.mode == .Debug) {
+        @panic("It is IB to call user.valid() without an origin_auth");
+    }
+    return u.auth_ptr.?.valid(u);
 }
 
-const Provider = @import("Provider.zig");
 const builtin = @import("builtin");
+const Auth = @import("../Auth.zig");

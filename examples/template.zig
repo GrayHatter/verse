@@ -75,7 +75,7 @@ pub fn main(init: std.process.Init) !void {
 
     var server = try verse.Server.init(&routes, .{
         .mode = .{ .http = .localPort(8082) },
-        .auth = .disabled,
+        .auth = null,
     });
 
     server.serve(alloc) catch |err| {

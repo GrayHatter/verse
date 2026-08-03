@@ -256,7 +256,6 @@ test HTTP {
     thread.join();
 }
 
-const Auth = @import("auth.zig");
 const Server = @import("server.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");

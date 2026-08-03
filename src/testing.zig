@@ -247,5 +247,5 @@ const Request = @import("Request.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Server = @import("server.zig");
-const auth = @import("auth.zig");
+const auth = @import("Auth.zig");
 const splitUri = Router.splitUri;

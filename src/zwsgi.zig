@@ -322,4 +322,3 @@ const Server = @import("server.zig");
 const Frame = @import("frame.zig");
 const Request = @import("Request.zig");
 const Router = @import("router.zig");
-const Auth = @import("auth.zig");
