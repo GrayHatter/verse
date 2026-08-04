@@ -87,8 +87,6 @@ pub fn format(d: Dom, w: *Writer) Writer.Error!void {
 
 pub fn render(d: *Dom, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
     if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
-    defer d.raze();
-
     var html: Writer.Allocating = .init(a);
     if (comptime style == .full) {
         try d.fmtFull(&html.writer);
@@ -113,6 +111,7 @@ test render {
     dom = dom.close();
 
     const compact = try dom.render(a, .compact);
+    dom.raze();
     defer a.free(compact);
     const expected_compact =
         \\<form method="POST" action="/endpoint"><button name="new">create new</button></form>
@@ -132,6 +131,7 @@ test render {
     dom = dom.close();
 
     const full = try dom.render(a, .full);
+    dom.raze();
     defer a.free(full);
     const expected_full =
         \\<form method="POST" action="/endpoint">
