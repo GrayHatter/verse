@@ -3,18 +3,26 @@ pub const SmokeTestOptions = struct {
     recurse: bool,
     retry_with_fake_user: bool,
 
+    const default_soft_errors = &[_]Router.Error{
+        // By default, the soft errors are DataMissing, DataInvalid [because
+        // smokeTest is unable to generate the default or expected data],
+        // and NotFound [for the same reason, smokeTest is unlikely to be
+        // able to generate the required routing information]
+        error.DataInvalid,
+        error.DataMissing,
+        error.NotFound,
+    };
+
     pub const default: SmokeTestOptions = .{
         .recurse = true,
-        .soft_errors = &[_]Router.Error{
-            // By default, the soft errors are DataMissing, DataInvalid [because
-            // smokeTest is unable to generate the default or expected data],
-            // and NotFound [for the same reason, smokeTest is unlikely to be
-            // able to generate the required routing information]
-            error.DataInvalid,
-            error.DataMissing,
-            error.NotFound,
-        },
+        .soft_errors = default_soft_errors,
         .retry_with_fake_user = false,
+    };
+
+    pub const with_fake_user: SmokeTestOptions = .{
+        .recurse = true,
+        .soft_errors = default_soft_errors,
+        .retry_with_fake_user = true,
     };
 };
 
@@ -40,21 +48,20 @@ pub fn smokeTest(
                                 if (opts.retry_with_fake_user and
                                     (err == error.Unauthenticated or err == error.Unauthorized))
                                 {
-                                    var provider = auth.TestingAuth.init();
+                                    var testing_auth = Auth.Testing.init();
 
-                                    fc.frame.user = provider.getValidUser();
+                                    fc.frame.user = testing_auth.getValidUser();
                                     func(&fc.frame) catch |err2| {
                                         for (opts.soft_errors) |soft| {
                                             if (err2 == soft) break;
                                         } else {
-                                            std.debug.print(
+                                            log.err(
                                                 \\
                                                 \\Smoke test error for endpoint '{s}':
                                                 \\Match {}
                                                 \\Error1 {}
                                                 \\Error2 {}
                                                 \\Retry with valid user failed. {}
-                                                \\
                                             ,
                                                 .{ name, func, err, err2, fc.frame.user.? },
                                             );
@@ -63,8 +70,8 @@ pub fn smokeTest(
                                         }
                                     };
                                 } else {
-                                    std.debug.print(
-                                        "Smoke test error for endpoint '{s}':\n    Match {}\n",
+                                    log.err(
+                                        "Smoke test error for endpoint '{s}':\n    Match {}",
                                         .{ name, func },
                                     );
                                     return err;
@@ -83,6 +90,14 @@ pub fn smokeTest(
     }
 }
 
+test smokeTest {
+    try smokeTest(std.testing.allocator, &.{}, .{
+        .soft_errors = &.{},
+        .recurse = true,
+        .retry_with_fake_user = true,
+    }, "");
+}
+
 pub fn fuzzTest(trgt: Router.Target) !void {
     const Context = struct {
         target: *const Router.Target,
@@ -91,27 +106,17 @@ pub fn fuzzTest(trgt: Router.Target) !void {
             var buffer: [8164]u8 = undefined;
             const len = smth.slice(&buffer);
             const input = buffer[0..len];
-            var fc = try FrameCtx.initRequest(
-                std.testing.allocator,
-                .{ .query_data = input },
-            );
+            var fc = try FrameCtx.initRequest(std.testing.allocator, .{ .query_data = input });
             defer fc.raze(std.testing.allocator);
 
             try context.target.build(&fc.frame);
         }
     };
-    try std.testing.fuzz(
-        Context{ .target = &trgt },
-        Context.testOne,
-        .{},
-    );
+    try std.testing.fuzz(Context{ .target = &trgt }, Context.testOne, .{});
 }
 
 pub fn headers() Headers {
-    return .{
-        .known = .{},
-        .extended = .{},
-    };
+    return .{ .known = .{}, .extra = undefined };
 }
 
 pub const RequestOptions = struct {
@@ -128,18 +133,18 @@ pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
         .cookie_jar = .init(a),
         .data = .{
             .post = null,
-            .query = Request.Data.QueryData.init(a, opt.query_data) catch unreachable,
+            .query = Request.Data.Query.init(a, opt.query_data) catch unreachable,
         },
         .headers = headers(),
-        .host = "localhost",
+        .host = .init("localhost"),
         .method = .GET,
         .protocol = .default,
-        .downstream = undefined,
         .referer = null,
         .remote_addr = "127.0.0.1",
         .secure = true,
-        .uri = opt.uri,
+        .target = opt.uri,
         .user_agent = .init("Verse Internal Testing/0.0"),
+        .now = undefined,
     };
     return self;
 }
@@ -165,7 +170,7 @@ pub const FrameCtx = struct {
                 .alloc = a,
                 // todo lifetime
                 .request = request(a, undefined, ropt),
-                .uri = splitUri("/") catch unreachable,
+                .uri = .init("/") catch unreachable,
                 .auth_provider = .invalid,
                 .response_data = .init(a),
                 .headers = headers(),
@@ -190,6 +195,8 @@ pub const FrameCtx = struct {
 };
 
 test {
+    _ = &std.testing.refAllDecls(@This());
+
     var fc = try FrameCtx.init(std.testing.allocator);
     defer fc.raze(std.testing.allocator);
 
@@ -242,10 +249,10 @@ test {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.verse_testing);
 const Headers = @import("headers.zig");
 const Request = @import("Request.zig");
 const Frame = @import("frame.zig");
 const Router = @import("router.zig");
 const Server = @import("server.zig");
-const auth = @import("Auth.zig");
-const splitUri = Router.splitUri;
+const Auth = @import("Auth.zig");

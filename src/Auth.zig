@@ -166,7 +166,7 @@ pub const Testing = struct {
     auth: Auth = .{
         .vtable = &.{
             .valid = valid_,
-            .lookupUser = lookupUser_,
+            .lookupUser = Testing.lookupUser,
             .authenticate = null,
             .createSession = null,
             .getUserCookie = null,
@@ -178,7 +178,7 @@ pub const Testing = struct {
         return .{};
     }
 
-    pub fn getValidUser(ta: *Testing) User {
+    pub fn getValidUser(ta: *const Testing) User {
         return .{
             .auth_ptr = &ta.auth,
             .unique_id = "_force_valid_user",
@@ -187,20 +187,15 @@ pub const Testing = struct {
         };
     }
 
-    fn lookupUser(_: *const Testing, user_id: []const u8) Error!User {
+    pub fn lookupUser(ptr: *const Auth, user_id: []const u8) Error!User {
+        const ta: *const Testing = @fieldParentPtr("auth", ptr);
+        _ = ta;
         // Using std.mem.eql in this way is not a safe implementation for any
         // reasonable authentication system. The specific constant time
         // comparison you should use depends strongly on the auth source.
         if (unsafe.eql(u8, "12345", user_id)) {
-            return .{
-                .unique_id = null,
-            };
+            return .{ .unique_id = null };
         } else return error.UnknownUser;
-    }
-
-    pub fn lookupUser_(self: *const Auth, user_id: []const u8) Error!User {
-        const typed: *const Testing = @ptrCast(@alignCast(self));
-        return typed.lookupUser(user_id);
     }
 
     pub fn valid_(_: *const Auth, u: *const User) bool {
