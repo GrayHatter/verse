@@ -1,11 +1,17 @@
-//! MTLS auth Provider. Implements mTLS authentication, with verification done
-//! by a rproxy (example configuration provided in contrib/), providing a higher
-//! level of security and authenticity than other, more common methods of
-//! authentication. If you need exceptionally high security, you can chain this
-//! authentication system, with another such as a cookie based authentication to
-//! provide 2fa or password verification on top of mTLS. Allowing you to verify
-//! both the device using mTLS, the user via credentials, 2FA via any token
-//! based credential.
+//! Mutual TLS authentication.
+//!
+//! Implements mTLS authentication, with cert/key verification done by a reverse
+//! proxy (nginx verified and supported, with an example configuration provided
+//! in contrib/)
+//!
+//! mTLS can provide a higher level of security and authenticity than other or
+//! more common methods. Because mTLS exchange targets a lower, it can be
+//! chained with other auth methods (e.g. cookie or session auth) to provide a
+//! higher level of security. Or, mTLS can be used to provide a 2nd factor auth.
+//! Used in this way, mTLS can be used to verify both the device using mTLS, and
+//! then the user via different credentials.
+//!
+//! See https://srctree.gr.ht/repo/srctree for an example of mTLS auth in use.
 
 auth: Auth = .{
     .vtable = &.{
@@ -20,7 +26,6 @@ auth: Auth = .{
 
 const MTLS = @This();
 
-/// TODO document misuse of default without a base provider
 pub fn authenticate(ptr: *Auth, headers: *const Headers, _: Timestamp) Error!User {
     if (headers.getCustomValue("MTLS_ENABLED")) |enabled| {
         // MTLS validation as currently supported here is done by the

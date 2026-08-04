@@ -2,7 +2,7 @@
 pub const Cookie = CookieAuth(Hmac.sha2.HmacSha256);
 
 pub const cookie_auth = struct {
-    /// Why are you using sha1?
+    // Why are you using sha1?
     pub const sha1 = CookieAuth(Hmac.HmacSha1);
 
     pub const sha2 = struct {

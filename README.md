@@ -69,6 +69,8 @@ and your HTML, looks like HTML
   * Write Software You Can Love
   * Follow the Zig Zen
 
+See also: [SOCIAL.md](SOCIAL.md)
+
 ## How do I ...
 There are a number of [demos/sites in examples/](examples/) that can get you
 started quickly. But there are a number of intentionally omitted features. Most

@@ -1,11 +1,17 @@
-//! Verse Authentication
+//! Authentication
 //!
+//! Verse Auth provides plugable auth components for Authentication (authorization is
+//! currently planned).
 //!
+//! Verse.Auth intends to be secure in all uses, and hard to misuse. All bug
+//! reports are encouraged. Any unexpected behavior is a bug unless otherwise
+//! documented within the source code.
 //!
+//! If you discover an exploitable bug, please report directly to `security@gr.ht` before
+//! disclosing publicly. All bug reports are appreciated!
 
 vtable: *const VTable,
 
-const cookie = @import("Auth/cookie.zig");
 pub const Cookie = cookie.Cookie;
 pub const MTLS = @import("Auth/mtls.zig");
 pub const User = @import("Auth/User.zig");
@@ -227,6 +233,7 @@ const Timestamp = std.Io.Timestamp;
 
 const Headers = @import("headers.zig");
 const RequestCookie = @import("cookies.zig").Cookie;
+const cookie = @import("Auth/cookie.zig");
 
 // Verse.Auth attempts to provide strong security guarantees where reasonable
 // e.g. std.mem.eql faster, but doesn't work in constant time. In an effort to
