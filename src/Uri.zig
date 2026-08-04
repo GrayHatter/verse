@@ -57,6 +57,12 @@ pub fn first(uri: *Uri) void {
     comptime unreachable;
 }
 
+pub fn withoutPrefix(uri: Uri) ?[]const u8 {
+    if (uri.index < uri.path.len - 1)
+        return uri.path[uri.index..];
+    return null;
+}
+
 pub fn format(uri: Uri, w: *std.Io.Writer) error{WriteFailed}!void {
     try w.writeByte('/');
     try w.writeAll(uri.path);
