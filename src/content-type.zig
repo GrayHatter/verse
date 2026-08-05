@@ -136,9 +136,11 @@ pub const Text = enum {
     html,
     javascript,
     xml,
+    event_stream,
 
     pub fn string(comptime app: Text) [:0]const u8 {
         return switch (app) {
+            .event_stream => "text/event-stream",
             inline else => |r| comptimePrint("text/{s}", .{@tagName(r)}),
         };
     }
