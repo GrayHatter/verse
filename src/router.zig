@@ -107,17 +107,14 @@ pub const Match = struct {
 };
 
 pub const Target = union(enum) {
-    /// An endpoint function that's expected to return the requested page
-    /// data.
+    /// An endpoint function that's expected to return the requested page data.
     build: BuildFn,
     /// A router function that will either
-    /// 1) consume the next URI token, and itself call the next routing
-    /// function/handler, or
-    /// 2) return the build function pointer that will be called directly to
-    /// generate the page.
+    /// 1) consume the next URI token, and itself call the next routing function/handler
+    /// 2) return the build function pointer that will be called directly to generate the page.
     route: RouteFn,
-    /// A Match array for a sub directory, that can be handled by the same
-    /// routing function. Provided for convenience.
+    /// A Match array for a sub directory, that can be handled by the same routing function.
+    /// Provided for convenience.
     simple: []const Match,
 };
 
@@ -414,6 +411,58 @@ test "smoke" {
     const a = std.testing.allocator;
     try testing.smokeTest(a, &root, .default, "");
     try testing.smokeTest(a, &root_with_static, .default, "");
+}
+
+const Magic = struct {
+    str: []const u8,
+    depth: usize,
+
+    pub const Error = error{
+        UriEmpty,
+        UnsupportedMagicChar,
+        NotImplemented,
+    };
+
+    pub fn init(str: []const u8) Magic.Error!Magic {
+        if (str.len == 0) return error.UriEmpty;
+        switch (str[0]) {
+            '/' => {},
+            ':' => return error.NotImplemented,
+            else => return error.UnsupportedMagicChar, // Magic URIs must start with a supported char
+        }
+
+        return .{
+            .str = str,
+            .depth = std.mem.countScalar(u8, str, '/'),
+        };
+    }
+
+    pub fn singleRoute(str: []const u8) Match {
+        if (str[0] == str[str.len - 1]) {
+            switch (str[0]) {
+                ':' => unreachable,
+                else => return .{ .name = str, .target = .{ .build = default }, .methods = .all },
+            }
+        } else return .{ .name = str, .target = .{ .build = default }, .methods = .all };
+    }
+
+    pub fn routesAlloc(m: Magic, a: Allocator) error{OutOfMemory}![]Match {
+        const route = try a.alloc(Match, m.depth);
+        route[0] = singleRoute(m.str);
+        return route;
+    }
+};
+
+test "magic" {
+    const str = "/";
+    const magic_router: Magic = try .init(str);
+    const magic = try magic_router.routesAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(magic);
+
+    try std.testing.expectEqualDeep(
+        magic,
+        &[1]Match{.{ .name = str, .target = root[0].target, .methods = .all }},
+    );
 }
 
 const std = @import("std");
