@@ -6,13 +6,11 @@ target: []const u8,
 host: ?Host,
 user_agent: ?UserAgent,
 referer: ?Referer,
-accept: ?Accept,
-accept_encoding: Encoding = .none,
-accept_language: Language = .default,
+accept: Accept,
 authorization: ?Authorization,
 protocol: Protocol,
 secure: bool,
-client_hints: ClientHints = .{},
+client_hints: ClientHints = .empty,
 
 headers: Headers,
 /// Default API, still unstable, but unlike to drastically change
@@ -73,7 +71,17 @@ pub const Host = struct {
 };
 
 pub const RemoteAddr = []const u8;
-pub const Accept = []const u8;
+pub const Accept = struct {
+    mime: ?[]const u8,
+    encoding: ?Encoding,
+    lang: ?Language,
+
+    pub const any: Accept = .{
+        .mime = "*/*",
+        .encoding = null,
+        .lang = null,
+    };
+};
 pub const Authorization = []const u8;
 pub const Referer = []const u8;
 
@@ -240,9 +248,7 @@ fn initCommon(
     host: ?[]const u8,
     ua: ?[]const u8,
     referer: ?Referer,
-    accept: ?Accept,
-    accept_encoding: Encoding,
-    accept_language: Language,
+    accept: Accept,
     authorization: ?Authorization,
     headers: Headers,
     cookies: ?[]const u8,
@@ -259,8 +265,6 @@ fn initCommon(
 
     return .{
         .accept = accept,
-        .accept_encoding = accept_encoding,
-        .accept_language = accept_language,
         .authorization = authorization,
         .cookie_jar = if (cookies) |ch| try .initFromHeader(a, ch) else .init(a),
         .data = data,
@@ -290,12 +294,12 @@ pub fn initZWSGI(
         return error.InvalidMethod;
     };
     const remote_addr: ?RemoteAddr = zk.get(.REMOTE_ADDR);
-    const accept: ?Accept = zk.get(.HTTP_ACCEPT);
+    const accept_mime: ?[]const u8 = zk.get(.HTTP_ACCEPT);
     const host: ?[]const u8 = zk.get(.HTTP_HOST);
     const ua_slice: ?[]const u8 = zk.get(.HTTP_USER_AGENT);
     const referer: ?Referer = zk.get(.HTTP_REFERER);
-    const encoding: Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else .none;
-    const language: Language = if (zk.get(.HTTP_ACCEPT_LANGUAGE)) |al| .fromStr(al) else .default;
+    const encoding: ?Encoding = if (zk.get(.HTTP_ACCEPT_ENCODING)) |ae| .fromStr(ae) else null;
+    const language: ?Language = if (zk.get(.HTTP_ACCEPT_LANGUAGE)) |al| .fromStr(al) else null;
     const authorization: ?Authorization = zk.get(.HTTP_AUTHORIZATION);
     const cookie_header: ?[]const u8 = zk.get(.HTTP_COOKIE);
     const proto: []const u8 = zk.get(.SERVER_PROTOCOL) orelse "ERROR";
@@ -318,9 +322,11 @@ pub fn initZWSGI(
         host,
         ua_slice,
         referer,
-        accept,
-        encoding,
-        language,
+        Accept{
+            .mime = accept_mime,
+            .lang = language,
+            .encoding = encoding,
+        },
         authorization,
         headers,
         cookie_header,
@@ -340,12 +346,12 @@ pub fn initHttp(
 ) !Request {
     var headers: Headers = .empty;
 
-    var accept: ?Accept = null;
+    var accept_mime: ?[]const u8 = null;
     var host: ?[]const u8 = null;
     var ua_string: ?[]const u8 = null;
     var referer: ?Referer = null;
-    var encoding: Encoding = .none;
-    var language: Language = .default;
+    var encoding: ?Encoding = null;
+    var language: ?Language = null;
     var authorization: ?Authorization = null;
     var cookie_header: ?[]const u8 = null;
     const proto: []const u8 = @tagName(http.head.version);
@@ -354,7 +360,7 @@ pub fn initHttp(
     while (itr.next()) |head| {
         try headers.addCustom(a, head.name, head.value);
         if (eqlIgnoreCase("accept", head.name)) {
-            accept = head.value;
+            accept_mime = head.value;
         } else if (eqlIgnoreCase("host", head.name)) {
             host = head.value;
         } else if (eqlIgnoreCase("user-agent", head.name)) {
@@ -388,9 +394,11 @@ pub fn initHttp(
         host,
         ua_string,
         referer,
-        accept,
-        encoding,
-        language,
+        Accept{
+            .mime = accept_mime,
+            .lang = language,
+            .encoding = encoding,
+        },
         authorization,
         headers,
         cookie_header,

@@ -149,9 +149,9 @@ pub const Chrome = struct {
 
     pub const Rules = struct {
         pub fn obviousBot(_: UserAgent, r: *const Request, score: *f16) !void {
-            if (eql(u8, r.accept_encoding.bytes, "zstd,gzip,deflate,br")) {
+            if (r.accept.encoding) |enc| if (eql(u8, enc.bytes, "zstd,gzip,deflate,br")) {
                 score.* += 100.0;
-            }
+            };
         }
     };
 };
@@ -298,11 +298,11 @@ pub const Rules = struct {
     pub const AGE_STEP: usize = DAY * 45;
 
     pub fn acceptEncodingFormatting(_: UserAgent, r: *const Request, score: *f16) !void {
-        if (find(u8, r.accept_encoding.bytes, ",")) |i| {
-            if (i == r.accept_encoding.bytes.len - 1 or r.accept_encoding.bytes[i + 1] != ' ') {
+        if (r.accept.encoding) |enc| if (find(u8, enc.bytes, ",")) |i| {
+            if (i == enc.bytes.len - 1 or enc.bytes[i + 1] != ' ') {
                 score.* += 0.5;
             }
-        }
+        };
     }
 
     pub fn checkAge(ua: UserAgent, r: *const Request, score: *f16) !void {
@@ -382,7 +382,7 @@ pub const Rules = struct {
                     101, 59,  118, 61,  98,  51,  59,  113, 61,  48,  46,  55,
                 };
                 const accept_str = normal ++ obfuscated;
-                if (r.accept) |racpt| if (eql(u8, racpt, accept_str)) {
+                if (r.accept.mime) |mime| if (eql(u8, mime, accept_str)) {
                     score.* = @max(score.*, 1.0);
                 };
             },
@@ -390,7 +390,7 @@ pub const Rules = struct {
     }
 
     pub fn acceptLang(_: UserAgent, r: *const Request, score: *f16) !void {
-        if (std.mem.eql(u8, r.accept_language.bytes, "en")) score.* = @max(score.*, 1.0);
+        if (std.mem.eql(u8, (r.accept.lang orelse Request.Language.default).bytes, "en")) score.* = @max(score.*, 1.0);
     }
 
     test acceptLang {
@@ -398,17 +398,17 @@ pub const Rules = struct {
         var score: f16 = 0.0;
 
         score = 0.0;
-        req.accept_language = .fromStr("en");
+        req.accept.lang = .fromStr("en");
         try acceptLang(undefined, &req, &score);
         try std.testing.expectEqual(1.0, score);
 
         score = 0.0;
-        req.accept_language = .fromStr("en-US,en;q=0.9");
+        req.accept.lang = .fromStr("en-US,en;q=0.9");
         try acceptLang(undefined, &req, &score);
         try std.testing.expectEqual(0.0, score);
 
         score = 0.0;
-        req.accept_language = .fromStr("zh-CN,zh;q=0.9,en;q=0.8");
+        req.accept.lang = .fromStr("zh-CN,zh;q=0.9,en;q=0.8");
         try acceptLang(undefined, &req, &score);
         try std.testing.expectEqual(0.0, score);
     }

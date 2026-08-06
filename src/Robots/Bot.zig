@@ -148,10 +148,12 @@ pub const Rules = struct {
     fn acceptEncodingDepth(_: UserAgent, r: *const Request, score: *f16) !void {
         var add: f16 = 0.3;
 
-        if (r.accept_encoding.br) add -= 0.1;
-        if (r.accept_encoding.deflate) add -= 0.1;
-        if (r.accept_encoding.zstd) add -= 0.1;
-        if (r.accept_encoding.gzip) add -= 0.1;
+        if (r.accept.encoding) |encode| {
+            if (encode.br) add -= 0.1;
+            if (encode.deflate) add -= 0.1;
+            if (encode.zstd) add -= 0.1;
+            if (encode.gzip) add -= 0.1;
+        } else add += 1.0;
 
         score.* = score.* + add;
     }

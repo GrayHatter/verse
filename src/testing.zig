@@ -128,7 +128,7 @@ pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
     _ = buf;
     const self = a.create(Request) catch @panic("OOM");
     self.* = .{
-        .accept = "*/*",
+        .accept = .any,
         .authorization = null,
         .cookie_jar = .init(a),
         .data = .{
