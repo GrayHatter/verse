@@ -3,6 +3,7 @@
 
 index: usize = 0,
 path: []const u8,
+/// Non null when `?` is present in the URI. Does not include the first `?`
 query: ?[]const u8,
 bytes: []const u8,
 
@@ -16,7 +17,7 @@ pub fn init(target: []const u8) error{BadData}!Uri {
     var path = target[i..];
     var query: ?[]const u8 = null;
     if (findScalarPos(u8, path, 0, '?')) |q| {
-        query = path[q..];
+        query = path[q + 1 ..];
         path = path[0..q];
     }
 
