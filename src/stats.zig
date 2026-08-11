@@ -167,7 +167,8 @@ pub const Endpoint = struct {
         const rows = data[0..@min(server.stats.count, data.len)];
 
         for (rows, 0..) |*row, i| {
-            const src = &server.stats.rows[i % server.stats.rows.len];
+            const src_idx: usize = (server.stats.count - 1 - i) % server.stats.rows.len;
+            const src = &server.stats.rows[src_idx];
             const ua_str: []const u8, const ua_ver: ?usize = if (src.ua) |sua|
                 switch (sua.agent) {
                     .bot => |b| .{ @tagName(b.name), 0 },
