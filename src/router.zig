@@ -411,6 +411,8 @@ test "smoke" {
     const a = std.testing.allocator;
     try testing.smokeTest(a, &root, .default, "");
     try testing.smokeTest(a, &root_with_static, .default, "");
+    try testing.smokeTest(a, &root, .with_fake_user, "");
+    try testing.smokeTest(a, &root_with_static, .with_fake_user, "");
 }
 
 const Magic = struct {
