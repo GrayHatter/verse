@@ -46,6 +46,8 @@ pub const TemplateType = enum {
     safe,
     /// raw markdown translated to html
     markdown,
+    /// helper that will turn path segments into the shortest uri
+    uri,
 
     pub fn fromStr(s: []const u8) !TemplateType {
         inline for (std.meta.fields(TemplateType)) |ht| {

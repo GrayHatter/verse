@@ -382,6 +382,7 @@ fn templateType(a: Allocator, html_type: ?Directive.TemplateType, struct_name: [
             .abx, .antibiotic => try a.dupe(u8, "Abx"),
             .safe => try a.dupe(u8, "[]const u8"),
             .markdown => try a.dupe(u8, "Markdown"),
+            .uri => try a.dupe(u8, "Uri.Builder"),
         };
     } else {
         return try a.dupe(u8, default_str_type);

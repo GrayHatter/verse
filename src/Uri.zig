@@ -53,9 +53,9 @@ pub fn isDir(uri: Uri) bool {
     return uri.path[uri.path.len - 1] == '/';
 }
 
-pub fn first(uri: *Uri) void {
-    _ = uri;
-    comptime unreachable;
+pub fn first(uri: *Uri) []const u8 {
+    uri.index = 0;
+    return uri.next() orelse unreachable;
 }
 
 pub fn withoutPrefix(uri: Uri) ?[]const u8 {
@@ -131,8 +131,70 @@ test Uri {
     try std.testing.expectEqual(null, uri.next());
 }
 
+pub const Builder = struct {
+    base: []const u8,
+    params: []const []const u8,
+
+    pub fn uri(comptime str: []const u8, params: *const [countParam(str)][]const u8) !Builder {
+        return .{
+            .base = str,
+            .params = params,
+        };
+    }
+
+    fn countParam(str: []const u8) usize {
+        return std.mem.count(u8, str, "{s}");
+    }
+
+    pub fn format(b: Builder, w: *std.Io.Writer) !void {
+        var idx: usize = 0;
+        var pos: usize = 0;
+        while (findPos(u8, b.base, idx, "{s}")) |start| {
+            defer idx = start + 3;
+            try w.writeAll(b.base[idx..start]);
+            defer pos += 1;
+            try w.writeAll(b.params[pos]);
+        }
+        if (idx != b.base.len) {
+            try w.writeAll(b.base[idx..]);
+        }
+    }
+};
+
+test Builder {
+    var buf: [2048]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buf);
+
+    const b: Builder = try .uri("/repos/{s}/search", &.{"srctree"});
+    try w.print("{f}", .{b});
+    try std.testing.expectEqualStrings("/repos/srctree/search", w.buffered());
+    w.end = 0;
+
+    const b1: Builder = try .uri("/repos/{s}/tags", &.{"verse"});
+    try w.print("{f}", .{b1});
+    try std.testing.expectEqualStrings("/repos/verse/tags", w.buffered());
+    w.end = 0;
+
+    const b2: Builder = try .uri("/repos/{s}/ref/{s}", &.{ "verse", "devel" });
+    try w.print("{f}", .{b2});
+    try std.testing.expectEqualStrings("/repos/verse/ref/devel", w.buffered());
+    w.end = 0;
+
+    const b3: Builder = try .uri("/repos/{s}/ref/{s}", &.{ "verse", "devel" });
+    try w.print("{f}", .{b3});
+    try std.testing.expectEqualStrings("/repos/verse/ref/devel", w.buffered());
+    w.end = 0;
+
+    const b4: Builder = try .uri("/repos/{s}/ref/{s}", &.{ "hastur", buf[1..6] });
+    try w.print("{f}", .{b4});
+    // because why *wouldn't* you do this?
+    try std.testing.expectEqualStrings("/repos/hastur/ref/repos", w.buffered());
+    w.end = 0;
+}
+
 const std = @import("std");
 const find = std.mem.find;
+const findPos = std.mem.findPos;
 const findScalarLast = std.mem.findScalarLast;
 const findScalar = std.mem.findScalar;
 const findScalarPos = std.mem.findScalarPos;
