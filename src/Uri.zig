@@ -180,9 +180,9 @@ test Builder {
     try std.testing.expectEqualStrings("/repos/verse/ref/devel", w.buffered());
     w.end = 0;
 
-    const b3: Builder = try .uri("/repos/{s}/ref/{s}", &.{ "verse", "devel" });
+    const b3: Builder = try .uri("/srctree/repos/{s}/ref/{s}", &.{ "verse", "devel" });
     try w.print("{f}", .{b3});
-    try std.testing.expectEqualStrings("/repos/verse/ref/devel", w.buffered());
+    try std.testing.expectEqualStrings("/srctree/repos/verse/ref/devel", w.buffered());
     w.end = 0;
 
     const b4: Builder = try .uri("/repos/{s}/ref/{s}", &.{ "hastur", buf[1..6] });
