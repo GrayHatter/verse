@@ -7,7 +7,6 @@ stats: Stats,
 usrptr: ?*const anyopaque = null,
 
 const Server = @This();
-var running: bool = true;
 
 pub const zWSGI = @import("zwsgi.zig");
 pub const Http = @import("http.zig");
