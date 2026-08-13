@@ -11,12 +11,6 @@ const Server = @This();
 pub const zWSGI = @import("zwsgi.zig");
 pub const Http = @import("http.zig");
 
-pub const RunMode = union(Interface.Name) {
-    zwsgi: zWSGI.Options,
-    http: Http.Options,
-    other: void,
-};
-
 pub const Interface = union(Name) {
     zwsgi: zWSGI,
     http: Http,
@@ -36,6 +30,12 @@ pub const Options = struct {
     stats: Stats.Options = .disabled,
     threads: u16 = 1,
     logging: Logging = .stdout,
+
+    pub const RunMode = union(Interface.Name) {
+        zwsgi: zWSGI.Options,
+        http: Http.Options,
+        other: void,
+    };
 
     pub const default: Options = .{
         .io = .threaded,
