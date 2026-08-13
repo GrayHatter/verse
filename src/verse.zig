@@ -1,16 +1,16 @@
 //! Verse: The framework.
 //!
 pub const Auth = @import("Auth.zig");
-pub const stats = @import("stats.zig");
+pub const Stats = @import("Stats.zig");
 pub const template = @import("template.zig");
 
 pub const Antibiotic = @import("Antibiotic");
 pub const ContentType = @import("content-type.zig");
-pub const Frame = @import("frame.zig");
-pub const Headers = @import("headers.zig");
+pub const Frame = @import("Frame.zig");
+pub const Headers = @import("Headers.zig");
 pub const Request = @import("Request.zig");
-pub const Router = @import("router.zig");
-pub const Server = @import("server.zig");
+pub const Router = @import("Router.zig");
+pub const Server = @import("Server.zig");
 pub const Uri = @import("Uri.zig");
 
 const cookies = @import("cookies.zig");

@@ -173,7 +173,7 @@ fn routeCount(endpoints: anytype) usize {
 
 test routeCount {
     comptime {
-        const Frame = @import("frame.zig");
+        const Frame = @import("Frame.zig");
         try std.testing.expectEqual(0, routeCount(.{
             struct {
                 const verse_name = .testing;
@@ -429,7 +429,7 @@ fn buildRoutes(EP: type) [routeCount(.{EP})]Router.Match {
 
 test Endpoints {
     const Example = struct {
-        const Frame = @import("frame.zig");
+        const Frame = @import("Frame.zig");
         pub fn nopEndpoint(_: *Frame) Router.Error!void {}
     };
 
@@ -541,6 +541,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const Auth = @import("Auth.zig");
-const Server = @import("server.zig");
-const Router = @import("router.zig");
+const Server = @import("Server.zig");
+const Router = @import("Router.zig");
 const testing = @import("testing.zig");

@@ -1,6 +1,6 @@
 //! Quick start example using Verse Endpoints.
 const Endpoints = verse.Endpoints(.{
-    verse.stats.Endpoint,
+    verse.Stats.Endpoint,
 });
 
 pub fn main() !void {

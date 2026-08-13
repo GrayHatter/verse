@@ -190,8 +190,8 @@ test robotsTxt {
 pub const Browser = @import("Robots/Browser.zig");
 pub const Bot = @import("Robots/Bot.zig");
 
-const Router = @import("router.zig");
-const Frame = @import("frame.zig");
+const Router = @import("Router.zig");
+const Frame = @import("Frame.zig");
 const UA = @import("UserAgent.zig");
 const Request = @import("Request.zig");
 

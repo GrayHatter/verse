@@ -13,7 +13,7 @@
 vtable: *const VTable,
 
 pub const Cookie = cookie.Cookie;
-pub const MTLS = @import("Auth/mtls.zig");
+pub const Mtls = @import("Auth/mtls.zig");
 pub const User = @import("Auth/User.zig");
 
 const Auth = @This();
@@ -221,7 +221,7 @@ test Testing {
 }
 
 test {
-    _ = std.testing.refAllDecls(MTLS);
+    _ = std.testing.refAllDecls(Mtls);
     _ = std.testing.refAllDecls(cookie);
     _ = std.testing.refAllDecls(User);
     _ = &Testing;
@@ -231,7 +231,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Timestamp = std.Io.Timestamp;
 
-const Headers = @import("headers.zig");
+const Headers = @import("Headers.zig");
 const RequestCookie = @import("cookies.zig").Cookie;
 const cookie = @import("Auth/cookie.zig");
 

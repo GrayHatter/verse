@@ -9,7 +9,7 @@ usrptr: ?*const anyopaque = null,
 const Server = @This();
 
 pub const zWSGI = @import("zwsgi.zig");
-pub const Http = @import("http.zig");
+pub const Http = @import("Http.zig");
 
 pub const Interface = union(Name) {
     zwsgi: zWSGI,
@@ -288,8 +288,8 @@ const ns_per_ms = std.time.ns_per_ms;
 const log = std.log.scoped(.verse);
 
 const Auth = @import("Auth.zig");
-const Router = @import("router.zig");
-const Stats = @import("stats.zig");
-const Frame = @import("frame.zig");
+const Router = @import("Router.zig");
+const Stats = @import("Stats.zig");
+const Frame = @import("Frame.zig");
 const Logging = @import("Logging.zig");
 const system = @import("system.zig");

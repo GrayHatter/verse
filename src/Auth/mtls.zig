@@ -108,7 +108,7 @@ const log = std.log.scoped(.verse);
 const User = @import("User.zig");
 const Auth = @import("../Auth.zig");
 const Error = Auth.Error;
-const Headers = @import("../headers.zig");
+const Headers = @import("../Headers.zig");
 
 const Clock = std.Io.Clock;
 const Timestamp = std.Io.Timestamp;

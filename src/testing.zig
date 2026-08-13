@@ -250,9 +250,9 @@ test {
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.verse_testing);
-const Headers = @import("headers.zig");
+const Headers = @import("Headers.zig");
 const Request = @import("Request.zig");
-const Frame = @import("frame.zig");
-const Router = @import("router.zig");
-const Server = @import("server.zig");
+const Frame = @import("Frame.zig");
+const Router = @import("Router.zig");
+const Server = @import("Server.zig");
 const Auth = @import("Auth.zig");

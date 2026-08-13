@@ -179,7 +179,7 @@ test Jar {
     try std.testing.expectEqual(j.cookies.items.len, 1);
 }
 
-const Headers = @import("headers.zig");
+const Headers = @import("Headers.zig");
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

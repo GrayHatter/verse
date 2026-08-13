@@ -318,7 +318,7 @@ const ns_per_ms = std.time.ns_per_ms;
 const system = @import("system.zig");
 const pollfd = system.pollfd;
 
-const Server = @import("server.zig");
-const Frame = @import("frame.zig");
+const Server = @import("Server.zig");
+const Frame = @import("Frame.zig");
 const Request = @import("Request.zig");
-const Router = @import("router.zig");
+const Router = @import("Router.zig");

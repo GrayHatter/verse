@@ -256,19 +256,18 @@ test HTTP {
     thread.join();
 }
 
-const Server = @import("server.zig");
-const Frame = @import("frame.zig");
-const Router = @import("router.zig");
+const Server = @import("Server.zig");
+const Frame = @import("Frame.zig");
+const Router = @import("Router.zig");
 const Request = @import("Request.zig");
 
 const std = @import("std");
-const net = std.Io.net;
-const Stream = net.Stream;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const log = std.log.scoped(.Verse);
-const HttpServer = std.http.Server;
 const Io = std.Io;
+const net = Io.net;
+const Stream = net.Stream;
+const log = std.log.scoped(.Verse);
 const ns_per_ms = std.time.ns_per_ms;
 
 const system = @import("system.zig");

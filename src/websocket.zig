@@ -256,11 +256,11 @@ const Opcode = enum(u4) {
 
 const std = @import("std");
 const builtin = @import("builtin");
+const Frame = @import("Frame.zig");
 const Io = std.Io;
 const Reader = Io.Reader;
 const Writer = Io.Writer;
 const endian = builtin.target.cpu.arch.endian();
-const Frame = @import("frame.zig");
 const Hash = std.crypto.hash.Sha1;
 const base64 = std.base64.standard.Encoder;
 const nativeToBig = std.mem.nativeToBig;

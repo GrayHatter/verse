@@ -37,6 +37,6 @@ pub fn fileOnDisk(f: *Frame) Route.Error!void {
 const std = @import("std");
 const log = std.log.scoped(.verse_staticfile);
 const find = std.mem.find;
-const Frame = @import("frame.zig");
-const Route = @import("router.zig");
+const Frame = @import("Frame.zig");
+const Route = @import("Router.zig");
 const ContentType = @import("content-type.zig");

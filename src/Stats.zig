@@ -130,7 +130,7 @@ pub fn log(stats: *Stats, data: Data, io: Io) void {
 }
 
 pub const Endpoint = struct {
-    const Router = @import("router.zig");
+    const Router = @import("Router.zig");
     const PageData = @import("template.zig").PageData;
     const S = @import("template.zig").Structs;
     pub const verse_name = .stats;
@@ -231,8 +231,8 @@ pub const Endpoint = struct {
 };
 
 const std = @import("std");
-const Frame = @import("frame.zig");
-const Server = @import("server.zig");
+const Frame = @import("Frame.zig");
+const Server = @import("Server.zig");
 const UserAgent = @import("UserAgent.zig");
 const Robots = @import("Robots.zig");
 const Timestamp = std.Io.Timestamp;

@@ -26,8 +26,6 @@ const Request = @This();
 pub const Data = @import("Request/Data.zig");
 pub const ClientHints = @import("Request/ClientHints.zig");
 pub const UserAgent = @import("UserAgent.zig");
-const Headers = @import("headers.zig");
-const Cookies = @import("cookies.zig");
 
 /// This API is unstable and may be removed or updated in the future.
 pub const Host = struct {
@@ -413,6 +411,9 @@ test Request {
     std.testing.refAllDecls(Request);
     _ = &Host;
 }
+
+const Headers = @import("Headers.zig");
+const Cookies = @import("cookies.zig");
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
