@@ -3,6 +3,8 @@ interface: Interface,
 options: Options,
 router: *const Router,
 stats: Stats,
+/// secret user pointer that can be referenced from within request handlers.
+usrptr: ?*const anyopaque = null,
 
 const Server = @This();
 var running: bool = true;
