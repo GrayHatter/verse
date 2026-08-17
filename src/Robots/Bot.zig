@@ -5,8 +5,16 @@ requesting: ?Browser = null,
 /// Anything that announces itself as a bot is assumed to be benign
 malicious: bool = false,
 
-pub const unknown: Bot = .{ .name = .unknown, .version = 0, .requesting = .unknown };
-pub const malicious_bot: Bot = .{ .name = .malicious, .version = 0, .malicious = true };
+pub const unknown: Bot = .{
+    .name = .unknown,
+    .version = 0,
+    .requesting = .unknown,
+};
+pub const malicious_bot: Bot = .{
+    .name = .malicious,
+    .version = 0,
+    .malicious = true,
+};
 
 const Bot = @This();
 
@@ -19,12 +27,18 @@ pub const Name = enum {
     /// ethical, and a good web citizen.
     archiveorgbot,
     bingbot,
+    /// AI bot
     claude_searchbot,
+    /// AI bot
     claudebot,
     googlebot,
+    /// AI bot
     gptbot,
+    /// IRC link fetching user agent
     lounge_irc_client,
     metaexternalagent,
+    /// AI bot
+    scrybot,
     techspybot,
     /// Ignores robots.txt
     youbot,
@@ -47,6 +61,7 @@ pub const Name = enum {
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
+            .scrybot => "ScryBot",
             .youbot => "YouBot",
 
             // robots.txt doesn't apply
@@ -67,9 +82,47 @@ pub const Name = enum {
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
+            .techspybot => "TechSpyBot",
+            .scrybot => "ScryBot",
+            .youbot => "YouBot",
+
+            // separator
             .lounge_irc_client => "",
             .malicious => "",
             .unknown => "",
+        };
+    }
+
+    pub fn obeysCrawlDelay(comptime name: Name) bool {
+        return switch (name) {
+            // Unverified
+            .amzn_searchbot => false,
+            // Unverified
+            .applebot => false,
+            // Unverified
+            .archiveorgbot => false,
+            // Unverified
+            .bingbot => false,
+            // Unverified
+            .claude_searchbot => false,
+            // Unverified
+            .claudebot => false,
+            // Unverified
+            .googlebot => false,
+            // Unverified
+            .gptbot => false,
+            // Unverified
+            .metaexternalagent => false,
+            // Unverified
+            .techspybot => false,
+            // Unverified
+            .scrybot => false,
+            // Unverified
+            .youbot => false,
+            // separator
+            .lounge_irc_client => false,
+            .malicious => false,
+            .unknown => false,
         };
     }
 
@@ -93,6 +146,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
     } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
+    } else if (startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)")) {
+        return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = false };
     } else if (eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)")) {
         return .{ .name = .metaexternalagent, .version = 1 };
     } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
@@ -205,6 +260,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
+        .{ .bot = .scrybot, .network = null },
         .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = &.{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
         // Split ordering
