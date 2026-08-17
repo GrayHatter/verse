@@ -37,6 +37,8 @@ pub const Name = enum {
     /// IRC link fetching user agent
     lounge_irc_client,
     metaexternalagent,
+    /// AI bot (link/contact doesn't resolve)
+    reflectionbot,
     /// AI bot, malicious; (retries 502 multiple times)
     scrybot,
     techspybot,
@@ -61,6 +63,7 @@ pub const Name = enum {
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
+            .reflectionbot => "ReflectionBot",
             .scrybot => "ScryBot",
             .youbot => "YouBot",
 
@@ -83,6 +86,7 @@ pub const Name = enum {
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
+            .reflectionbot => "ReflectionBot",
             .scrybot => "ScryBot",
             .youbot => "YouBot",
 
@@ -150,6 +154,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = true };
     } else if (eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)")) {
         return .{ .name = .metaexternalagent, .version = 1 };
+    } else if (eql(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)")) {
+        return .{ .name = .reflectionbot, .version = 1, .malicious = true };
     } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
         return .{ .name = .lounge_irc_client, .version = 0 };
     } else if (startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0")) {
@@ -260,6 +266,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
+        .{ .bot = .reflectionbot, .network = null },
         .{ .bot = .scrybot, .network = null },
         .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = &.{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list

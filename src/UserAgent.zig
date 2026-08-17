@@ -226,6 +226,12 @@ test Agent {
         Agent.init(scry),
     );
 
+    const reflect = "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .reflectionbot, .version = 1, .malicious = true } },
+        Agent.init(reflect),
+    );
+
     // TODO write test (deferred until testing harness)
     const internet_archive = .{
         "Mozilla/5.0 (compatible; archive-spam-check)",
