@@ -37,7 +37,7 @@ pub const Name = enum {
     /// IRC link fetching user agent
     lounge_irc_client,
     metaexternalagent,
-    /// AI bot
+    /// AI bot, malicious; (retries 502 multiple times)
     scrybot,
     techspybot,
     /// Ignores robots.txt
@@ -147,7 +147,7 @@ pub fn resolve(str: []const u8) ?Bot {
     } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
     } else if (startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)")) {
-        return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = false };
+        return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = true };
     } else if (eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)")) {
         return .{ .name = .metaexternalagent, .version = 1 };
     } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {

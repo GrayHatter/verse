@@ -38,6 +38,8 @@ pub const Agent = union(enum) {
     pub fn init(str: []const u8) Agent {
         if (startsWith(u8, str, "Mozilla/")) {
             return .mozilla(str);
+        } else if (asBot(str)) |bot| {
+            return bot;
         } else if (asScript(str)) |scrpt| {
             return scrpt;
         }
@@ -46,9 +48,9 @@ pub const Agent = union(enum) {
 
     fn mozilla(str: []const u8) Agent {
         if (indexOf(u8, str, "Bot") orelse indexOf(u8, str, "bot")) |idx| {
-            if (idx < str.len - 3) {
+            if (idx + 4 < str.len) {
                 switch (str[idx + 3]) {
-                    '/' => return asBot(str),
+                    '/' => if (asBot(str)) |bot| return bot,
                     ';', ')', ' ' => return .{ .bot = .unknown },
                     else => {},
                 }
@@ -76,9 +78,9 @@ pub const Agent = union(enum) {
         } else return null;
     }
 
-    fn asBot(str: []const u8) Agent {
+    fn asBot(str: []const u8) ?Agent {
         if (Bot.resolve(str)) |bot| return .{ .bot = bot };
-        return .{ .bot = .unknown };
+        return null;
     }
 
     fn parseVersion(str: []const u8, target: []const u8) error{Invalid}!u32 {
@@ -216,6 +218,12 @@ test Agent {
     try std.testing.expectEqualDeep(
         Agent{ .bot = .{ .name = .amzn_searchbot, .version = 0, .malicious = true } },
         Agent.init(amzn),
+    );
+
+    const scry = "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .scrybot, .version = 1, .malicious = true } },
+        Agent.init(scry),
     );
 
     // TODO write test (deferred until testing harness)
