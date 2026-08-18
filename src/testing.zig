@@ -145,6 +145,7 @@ pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
         .target = opt.uri,
         .user_agent = .init("Verse Internal Testing/0.0"),
         .now = undefined,
+        .client_hints = .empty,
     };
     return self;
 }

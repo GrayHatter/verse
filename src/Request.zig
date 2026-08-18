@@ -10,7 +10,7 @@ accept: Accept,
 authorization: ?Authorization,
 protocol: Protocol,
 secure: bool,
-client_hints: ClientHints = .empty,
+client_hints: ClientHints,
 
 headers: Headers,
 /// Default API, still unstable, but unlike to drastically change
@@ -276,6 +276,7 @@ fn initCommon(
         .protocol = .parse(proto),
         .secure = secure,
         .now = now,
+        .client_hints = .init(&headers),
     };
 }
 
