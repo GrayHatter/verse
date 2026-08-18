@@ -232,6 +232,12 @@ test Agent {
         Agent.init(reflect),
     );
 
+    const disc = "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .discordbot, .version = 2, .malicious = false } },
+        Agent.init(disc),
+    );
+
     // TODO write test (deferred until testing harness)
     const internet_archive = .{
         "Mozilla/5.0 (compatible; archive-spam-check)",

@@ -31,10 +31,12 @@ pub const Name = enum {
     claude_searchbot,
     /// AI bot
     claudebot,
+    discordbot,
+    /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     googlebot,
     /// AI bot
     gptbot,
-    /// IRC link fetching user agent
+    /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     lounge_irc_client,
     metaexternalagent,
     /// AI bot (link/contact doesn't resolve)
@@ -59,6 +61,7 @@ pub const Name = enum {
             .bingbot => "Bingbot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
+            .discordbot => "DiscordBot",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
@@ -82,6 +85,7 @@ pub const Name = enum {
             .bingbot => "Bingbot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
+            .discordbot => "DiscordBot",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
@@ -90,7 +94,6 @@ pub const Name = enum {
             .scrybot => "ScryBot",
             .youbot => "YouBot",
 
-            // separator
             .lounge_irc_client => "",
             .malicious => "",
             .unknown => "",
@@ -111,6 +114,8 @@ pub const Name = enum {
             .claude_searchbot => false,
             // Unverified
             .claudebot => false,
+            // Allowed to ignore robots.txt
+            .discordbot => false,
             // Unverified
             .googlebot => false,
             // Unverified
@@ -123,8 +128,30 @@ pub const Name = enum {
             .scrybot => false,
             // Unverified
             .youbot => false,
-            // separator
+
             .lounge_irc_client => false,
+            .malicious => false,
+            .unknown => false,
+        };
+    }
+
+    pub fn ident(comptime name: Name, str: []const u8) bool {
+        return switch (name) {
+            .amzn_searchbot => find(u8, str, "Amzn-SearchBot/") != null,
+            .applebot => endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)"),
+            .googlebot => endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)"),
+            .claudebot => endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)"),
+            .claude_searchbot => endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)"),
+            .bingbot => find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)") != null,
+            .gptbot => endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)"),
+            .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
+            .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
+            .reflectionbot => eql(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)"),
+            .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
+            .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
+            .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
+            .techspybot => false,
+            .archiveorgbot => false,
             .malicious => false,
             .unknown => false,
         };
@@ -136,29 +163,31 @@ pub const Name = enum {
 };
 
 pub fn resolve(str: []const u8) ?Bot {
-    if (find(u8, str, "Amzn-SearchBot/0.1") != null) {
+    if (Bot.Name.amzn_searchbot.ident(str)) {
         return .{ .name = .amzn_searchbot, .version = parseVersion(str, "Amzn-SearchBot/") catch 0, .malicious = true };
-    } else if (endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)")) {
+    } else if (Bot.Name.applebot.ident(str)) {
         return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
-    } else if (endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)")) {
+    } else if (Bot.Name.googlebot.ident(str)) {
         return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
-    } else if (endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)")) {
+    } else if (Bot.Name.claudebot.ident(str)) {
         return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
-    } else if (endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)")) {
+    } else if (Bot.Name.claude_searchbot.ident(str)) {
         return .{ .name = .claude_searchbot, .version = parseVersion(str, "Claude-SearchBot/") catch 0 };
-    } else if (find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")) |_| {
+    } else if (Bot.Name.bingbot.ident(str)) {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
-    } else if (endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)")) {
+    } else if (Bot.Name.gptbot.ident(str)) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
-    } else if (startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)")) {
+    } else if (Bot.Name.scrybot.ident(str)) {
         return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = true };
-    } else if (eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)")) {
+    } else if (Bot.Name.metaexternalagent.ident(str)) {
         return .{ .name = .metaexternalagent, .version = 1 };
-    } else if (eql(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)")) {
+    } else if (Bot.Name.reflectionbot.ident(str)) {
         return .{ .name = .reflectionbot, .version = 1, .malicious = true };
-    } else if (eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0")) {
+    } else if (Bot.Name.discordbot.ident(str)) {
+        return .{ .name = .discordbot, .version = 2 };
+    } else if (Bot.Name.lounge_irc_client.ident(str)) {
         return .{ .name = .lounge_irc_client, .version = 0 };
-    } else if (startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0")) {
+    } else if (Bot.Name.youbot.ident(str)) {
         return .{ .name = .youbot, .version = parseVersion(str, "YouBot/") catch 0, .malicious = true };
     }
     return null;
@@ -247,11 +276,20 @@ pub const TxtRules = struct {
 pub const Network = struct {
     nets: []const []const u8,
     exaustive: bool = true,
+
+    pub const cloud_gcp: Network = .{
+        .nets = &.{
+            "35.224.0.0/12",
+            "35.240.0.0/13",
+            "35.208.0.0/12",
+        },
+        .exaustive = false,
+    };
 };
 
 pub const Identity = struct {
     bot: Bot.Name,
-    network: ?*const Network,
+    network: ?Network,
 };
 
 pub const bots: std.EnumArray(Name, Identity) = .{
@@ -262,14 +300,15 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .bingbot, .network = null },
         .{ .bot = .claude_searchbot, .network = null },
         .{ .bot = .claudebot, .network = null },
-        .{ .bot = .googlebot, .network = &.{ .nets = &[_][]const u8{"66.249"} } },
-        .{ .bot = .gptbot, .network = &.{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
+        .{ .bot = .discordbot, .network = .cloud_gcp },
+        .{ .bot = .googlebot, .network = .{ .nets = &[_][]const u8{"66.249"} } },
+        .{ .bot = .gptbot, .network = .{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
         .{ .bot = .reflectionbot, .network = null },
         .{ .bot = .scrybot, .network = null },
         .{ .bot = .techspybot, .network = null },
-        .{ .bot = .youbot, .network = &.{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
+        .{ .bot = .youbot, .network = .{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
         // Split ordering
         .{ .bot = .malicious, .network = null },
         .{ .bot = .unknown, .network = null },
