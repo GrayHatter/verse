@@ -61,7 +61,6 @@ pub const Name = enum {
             .bingbot => "Bingbot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
-            .discordbot => "DiscordBot",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
@@ -70,10 +69,11 @@ pub const Name = enum {
             .scrybot => "ScryBot",
             .youbot => "YouBot",
 
-            // robots.txt doesn't apply
-            .lounge_irc_client => "",
-            .malicious => "",
-            .unknown => "",
+            // robots.txt doesn't apply so returns a friendly name
+            .discordbot => "DiscordBot",
+            .lounge_irc_client => "Lounge (IRC helper)",
+            .malicious => "Malicious Bot",
+            .unknown => "Other Unknown Bot",
         };
     }
 
@@ -163,31 +163,31 @@ pub const Name = enum {
 };
 
 pub fn resolve(str: []const u8) ?Bot {
-    if (Bot.Name.amzn_searchbot.ident(str)) {
+    if (Name.amzn_searchbot.ident(str)) {
         return .{ .name = .amzn_searchbot, .version = parseVersion(str, "Amzn-SearchBot/") catch 0, .malicious = true };
-    } else if (Bot.Name.applebot.ident(str)) {
+    } else if (Name.applebot.ident(str)) {
         return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
-    } else if (Bot.Name.googlebot.ident(str)) {
+    } else if (Name.googlebot.ident(str)) {
         return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
-    } else if (Bot.Name.claudebot.ident(str)) {
+    } else if (Name.claudebot.ident(str)) {
         return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
-    } else if (Bot.Name.claude_searchbot.ident(str)) {
+    } else if (Name.claude_searchbot.ident(str)) {
         return .{ .name = .claude_searchbot, .version = parseVersion(str, "Claude-SearchBot/") catch 0 };
-    } else if (Bot.Name.bingbot.ident(str)) {
+    } else if (Name.bingbot.ident(str)) {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
-    } else if (Bot.Name.gptbot.ident(str)) {
+    } else if (Name.gptbot.ident(str)) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
-    } else if (Bot.Name.scrybot.ident(str)) {
+    } else if (Name.scrybot.ident(str)) {
         return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = true };
-    } else if (Bot.Name.metaexternalagent.ident(str)) {
+    } else if (Name.metaexternalagent.ident(str)) {
         return .{ .name = .metaexternalagent, .version = 1 };
-    } else if (Bot.Name.reflectionbot.ident(str)) {
+    } else if (Name.reflectionbot.ident(str)) {
         return .{ .name = .reflectionbot, .version = 1, .malicious = true };
-    } else if (Bot.Name.discordbot.ident(str)) {
+    } else if (Name.discordbot.ident(str)) {
         return .{ .name = .discordbot, .version = 2 };
-    } else if (Bot.Name.lounge_irc_client.ident(str)) {
+    } else if (Name.lounge_irc_client.ident(str)) {
         return .{ .name = .lounge_irc_client, .version = 0 };
-    } else if (Bot.Name.youbot.ident(str)) {
+    } else if (Name.youbot.ident(str)) {
         return .{ .name = .youbot, .version = parseVersion(str, "YouBot/") catch 0, .malicious = true };
     }
     return null;
