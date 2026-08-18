@@ -39,7 +39,7 @@ pub const Name = enum {
     metaexternalagent,
     /// AI bot (link/contact doesn't resolve)
     reflectionbot,
-    /// AI bot, malicious; (retries 502 multiple times)
+    /// AI bot, malicious; (ignores robots.txt, repeated retries on 502)
     scrybot,
     techspybot,
     /// Ignores robots.txt
