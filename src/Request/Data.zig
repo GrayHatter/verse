@@ -164,20 +164,54 @@ pub const Kind = enum {
 };
 
 pub const Item = struct {
-    kind: Kind = .@"form-data",
-    segment: []u8,
     name: []const u8,
     value: []const u8,
+    kind: Kind = .@"form-data",
+
+    /// segments name=value&name2=otherval
+    /// segment in  name=%22dquote%22
+    /// segment out name="dquote"
+    fn parseNormSegment(seg: []const u8, buf: []u8) Item {
+        if (find(u8, buf, "=")) |i| {
+            const v_raw = buf[i + 1 ..];
+            return .{
+                .name = buf[0..i],
+                .value = if (v_raw.len > 2) normalizeUrlEncoded(seg[i + 1 ..], v_raw) else v_raw,
+            };
+        } else return .{
+            .name = buf,
+            .value = &.{},
+        };
+    }
+
+    test parseNormSegment {
+        const static = "first=1";
+        var vari = static.*;
+
+        const itm = parseNormSegment(static, &vari);
+        try std.testing.expectEqualDeep(Item{
+            .name = "first",
+            .value = "1",
+        }, itm);
+
+        const static2 = "second=this%20is%20a%20string";
+        var vari2 = static2.*;
+        const itm2 = parseNormSegment(static2, &vari2);
+        try std.testing.expectEqualDeep(Item{
+            .name = "second",
+            .value = "this is a string",
+        }, itm2);
+    }
 };
 
 pub const Post = struct {
-    bytes: []u8,
+    source: []const u8,
+    buffer: []u8,
     items: []Item,
     content_type: ContentType,
 
     pub fn init(a: Allocator, size: usize, reader: *Reader, ct: ContentType) !Post {
-        //reader.fillMore() catch {}; // TODO fix me
-        const read_b = reader.readAlloc(a, size) catch |err| switch (err) {
+        const source = reader.readAlloc(a, size) catch |err| switch (err) {
             error.EndOfStream => {
                 log.err("unable to read full amount, {} seek {} end {}", .{ size, reader.seek, reader.end });
                 return err;
@@ -187,12 +221,13 @@ pub const Post = struct {
                 return err;
             },
         };
-        if (read_b.len != size) return error.UnexpectedHttpBodySize;
+        if (source.len != size) return error.UnexpectedHttpBodySize;
+        const buf = try a.dupe(u8, source);
 
         const items = switch (ct.base) {
-            .application => |ap| try parseApplication(a, ap, read_b),
-            .multipart, .message => |mp| try Multi.parseContentType(a, mp, read_b),
-            .text => |tx| try parseText(a, tx, read_b),
+            .application => |ap| try parseApplication(a, ap, source, buf),
+            .multipart, .message => |mp| try Multi.parseContentType(a, mp, source),
+            .text => |tx| try a.dupe(Item, &parseText(tx, buf)),
             .audio, .font, .image, .video => |_, tag| {
                 log.err("unable to parse unexpected post {s}", .{@tagName(tag)});
                 return error.NotImplemented;
@@ -200,7 +235,8 @@ pub const Post = struct {
         };
 
         return .{
-            .bytes = read_b,
+            .source = source,
+            .buffer = buf,
             .items = items,
             .content_type = ct,
         };
@@ -220,12 +256,17 @@ pub const Query = struct {
     items: []Item,
 
     /// TODO leaks on error
-    pub fn init(a: Allocator, query: []const u8) !Query {
-        var itr = splitScalar(u8, query, '&');
-        const count = std.mem.count(u8, query, "&") + 1;
+    pub fn init(query_str: []const u8, a: Allocator) !Query {
+        var itr = splitScalar(u8, query_str, '&');
+        const count = countScalar(u8, query_str, '&') + 1;
         const items = try a.alloc(Item, count);
+        errdefer a.free(items);
+        const query = try a.dupe(u8, query_str);
+        errdefer a.free(query);
         for (items) |*item| {
-            item.* = try parseSegment(a, itr.next().?);
+            var str = query[itr.index orelse 0 ..];
+            const next = itr.next() orelse &.{};
+            item.* = .parseNormSegment(next, str[0..str.len]);
         }
 
         return .{
@@ -236,37 +277,6 @@ pub const Query = struct {
 
     pub fn validate(qdata: Query, comptime T: type) !T {
         return Validate(T).initQuery(qdata);
-    }
-
-    /// segments name=value&name2=otherval
-    /// segment in  name=%22dquote%22
-    /// segment out name="dquote"
-    fn parseSegment(a: Allocator, seg: []const u8) !Item {
-        const segment = try a.dupe(u8, seg);
-        if (indexOf(u8, segment, "=")) |i| {
-            const value_len = segment.len - i - 1;
-
-            if (value_len > 0) {
-                var value = segment[i + 1 ..];
-                value = try normalizeUrlEncoded(seg[i + 1 ..], value);
-                return .{
-                    .segment = segment,
-                    .name = segment[0..i],
-                    .value = value,
-                };
-            }
-            return .{
-                .segment = segment,
-                .name = segment[0..i],
-                .value = segment[i + 1 ..],
-            };
-        } else {
-            return .{
-                .segment = segment,
-                .name = segment,
-                .value = segment[segment.len..segment.len],
-            };
-        }
     }
 };
 
@@ -311,12 +321,12 @@ test Validate {
         .opt_str = null,
     }, data);
 
-    a.free(post.bytes);
-    for (post.items) |item| a.free(item.segment);
+    a.free(post.source);
+    a.free(post.buffer);
     a.free(post.items);
 }
 
-fn normalizeUrlEncoded(in: []const u8, out: []u8) ![]u8 {
+fn normalizeUrlEncoded(in: []const u8, out: []u8) []u8 {
     var len: usize = 0;
     var i: usize = 0;
     while (i < in.len) {
@@ -329,7 +339,7 @@ fn normalizeUrlEncoded(in: []const u8, out: []u8) ![]u8 {
                     char = c.*;
                     continue;
                 }
-                char = std.fmt.parseInt(u8, in[i + 1 ..][0..2], 16) catch '%';
+                char = parseInt(u8, in[i + 1 ..][0..2], 16) catch '%';
                 i += 2;
             },
             else => |o| char = o,
@@ -356,16 +366,18 @@ fn jsonValueToString(a: std.mem.Allocator, value: json.Value) ![]u8 {
     };
 }
 
-fn normWwwFormUrlEncoded(a: Allocator, data: []u8) ![]Item {
-    var itr = splitScalar(u8, data, '&');
-    const count = std.mem.count(u8, data, "&") +| 1;
+fn normWwwFormUrlEncoded(a: Allocator, src: []const u8, buf: []u8) ![]Item {
+    const count = countScalar(u8, src, '&') +| 1;
     const items = try a.alloc(Item, count);
+    errdefer comptime unreachable;
+
+    var itr = splitScalar(u8, src, '&');
     for (items) |*item| {
+        const data = buf[itr.index orelse 0 ..];
         const idata = itr.next().?;
-        item.segment = try a.dupe(u8, idata);
-        if (indexOf(u8, idata, "=")) |i| {
-            item.name = try normalizeUrlEncoded(idata[0..i], item.segment[0..i]);
-            item.value = try normalizeUrlEncoded(idata[i + 1 ..], item.segment[i + 1 ..]);
+        if (find(u8, idata, "=")) |i| {
+            item.name = normalizeUrlEncoded(idata[0..i], data[0..i]);
+            item.value = normalizeUrlEncoded(idata[i + 1 ..], data[i + 1 ..]);
         }
     }
     return items;
@@ -395,7 +407,6 @@ fn normJson(a: Allocator, data: []u8) ![]Item {
         const name = try a.dupe(u8, k);
         list[i] = .{
             .kind = .json,
-            .segment = name, // TODO: determine what should go here
             .name = name,
             .value = val,
         };
@@ -404,9 +415,9 @@ fn normJson(a: Allocator, data: []u8) ![]Item {
     return list;
 }
 
-fn parseApplication(a: Allocator, ap: ContentType.Application, data: []u8) ![]Item {
+fn parseApplication(a: Allocator, ap: ContentType.Application, source: []const u8, data: []u8) ![]Item {
     return switch (ap) {
-        .@"x-www-form-urlencoded" => try normWwwFormUrlEncoded(a, data),
+        .@"x-www-form-urlencoded" => normWwwFormUrlEncoded(a, source, data),
         // Git just uses the raw data instead, no need to preprocess
         .@"x-git-receive-pack-request",
         .@"x-git-receive-pack-result",
@@ -448,7 +459,7 @@ const Multi = struct {
 
     fn update(md: *Multi, str: []const u8) void {
         var trimmed = std.mem.trim(u8, str, " \t\n\r");
-        if (indexOf(u8, trimmed, "=")) |i| {
+        if (find(u8, trimmed, "=")) |i| {
             if (eql(u8, trimmed[0..i], "name")) {
                 md.name = std.mem.trim(u8, trimmed[i + 1 ..], "\"");
             } else if (eql(u8, trimmed[0..i], "filename")) {
@@ -474,16 +485,15 @@ const Multi = struct {
         return error.ParseError;
     }
 
-    fn parseFormData(a: Allocator, data: []const u8) !Item {
+    fn parseFormData(data: []const u8) !Item {
         std.debug.assert(std.mem.startsWith(u8, data, "\r\n"));
-        if (indexOf(u8, data, "\r\n\r\n")) |i| {
+        if (find(u8, data, "\r\n\r\n")) |i| {
             var post_item = Item{
-                .segment = try a.dupe(u8, data),
                 .name = &.{},
                 .value = data[i + 4 ..],
             };
 
-            if (indexOfPos(u8, data, 2, "\r\n")) |h_idx| {
+            if (findPos(u8, data, 2, "\r\n")) |h_idx| {
                 const md = try parse(data[2..h_idx]);
                 if (md.name) |name|
                     post_item.name = name;
@@ -497,9 +507,7 @@ const Multi = struct {
     fn parseContentType(a: Allocator, mp: ContentType.MultiPart, data: []const u8) ![]Item {
         var boundry_buffer: [74]u8 = @splat('-');
         switch (mp) {
-            .mixed => {
-                return error.NotImplemented;
-            },
+            .mixed => return error.NotImplemented,
             .@"form-data" => |fd| {
                 @memcpy(boundry_buffer[2..][0..fd.boundary.len], fd.boundary);
                 const boundry = boundry_buffer[0 .. fd.boundary.len + 2];
@@ -508,7 +516,7 @@ const Multi = struct {
                 var itr = splitSequence(u8, data, boundry);
                 _ = itr.first(); // the RFC says I'm supposed to ignore the preamble :<
                 for (items) |*itm| {
-                    itm.* = try Multi.parseFormData(a, itr.next().?);
+                    itm.* = try Multi.parseFormData(itr.next().?);
                 }
                 std.debug.assert(eql(u8, itr.rest(), "--\r\n"));
                 return items;
@@ -517,18 +525,12 @@ const Multi = struct {
     }
 };
 
-fn parseText(a: Allocator, tx: ContentType.Text, data: []const u8) ![]Item {
-    _ = tx;
-    const dupe = try a.dupe(u8, data);
-    return try a.dupe(Item, &[1]Item{.{
-        .segment = dupe,
-        .name = &.{},
-        .value = dupe,
-    }});
+fn parseText(_: ContentType.Text, data: []const u8) [1]Item {
+    return .{.{ .name = &.{}, .value = data }};
 }
 
 pub fn readQuery(a: Allocator, query: []const u8) !Query {
-    return Query.init(a, query);
+    return Query.init(query, a);
 }
 
 test {
@@ -560,8 +562,8 @@ test "postdata init" {
         try std.testing.expectEqualStrings(expect[1], item.value);
     }
 
-    a.free(post.bytes);
-    for (post.items) |item| a.free(item.segment);
+    a.free(post.buffer);
+    a.free(post.source);
     a.free(post.items);
 
     const vectextra =
@@ -572,13 +574,40 @@ test "postdata init" {
         "application/x-www-form-urlencoded",
     ));
 
-    inline for (postextra.items, .{ .{ "title", "" }, .{ "desc", "" }, .{ "thing", "\"double quote\"" } }) |item, expect| {
+    inline for (postextra.items, .{
+        .{ "title", "" },
+        .{ "desc", "" },
+        .{ "thing", "\"double quote\"" },
+    }) |item, expect| {
         try std.testing.expectEqualStrings(expect[0], item.name);
         try std.testing.expectEqualStrings(expect[1], item.value);
     }
-    a.free(postextra.bytes);
-    for (postextra.items) |item| a.free(item.segment);
+    a.free(postextra.buffer);
+    a.free(postextra.source);
     a.free(postextra.items);
+
+    {
+        const vectlong =
+            \\title=&desc=&thing=%22double quote%22&last=this+is_real!
+        ;
+        reader = std.Io.Reader.fixed(vectlong);
+        const postlong: Post = try .init(a, vectlong.len, &reader, try .fromStr(
+            "application/x-www-form-urlencoded",
+        ));
+
+        inline for (postlong.items, .{
+            .{ "title", "" },
+            .{ "desc", "" },
+            .{ "thing", "\"double quote\"" },
+            .{ "last", "this is_real!" },
+        }) |item, expect| {
+            try std.testing.expectEqualStrings(expect[0], item.name);
+            try std.testing.expectEqualStrings(expect[1], item.value);
+        }
+        a.free(postlong.buffer);
+        a.free(postlong.source);
+        a.free(postlong.items);
+    }
 }
 
 test json {
@@ -594,7 +623,7 @@ test json {
     ;
 
     const alloc = std.testing.allocator;
-    const items = try parseApplication(alloc, .json, @constCast(json_string));
+    const items = try parseApplication(alloc, .json, json_string, @constCast(json_string));
 
     try std.testing.expectEqualStrings(items[0].name, "string");
     try std.testing.expectEqualStrings(items[0].value, "value");
@@ -636,7 +665,8 @@ const ContentType = @import("../content-type.zig");
 const eql = std.mem.eql;
 const splitScalar = std.mem.splitScalar;
 const splitSequence = std.mem.splitSequence;
-const indexOf = std.mem.indexOf;
-const indexOfPos = std.mem.indexOfPos;
+const find = std.mem.find;
+const findPos = std.mem.findPos;
+const countScalar = std.mem.countScalar;
 const json = std.json;
 const log = std.log.scoped(.verse_request_data);

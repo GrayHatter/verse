@@ -197,7 +197,7 @@ fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
             post_data = try .init(a, hlen, reader, try .fromStr(h_type));
             log.debug(
                 "post data \"{s}\" {{{any}}}",
-                .{ post_data.?.bytes, post_data.?.bytes },
+                .{ post_data.?.buffer, post_data.?.buffer },
             );
 
             for (post_data.?.items) |itm| {

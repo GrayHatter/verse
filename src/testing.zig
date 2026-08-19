@@ -133,7 +133,7 @@ pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
         .cookie_jar = .init(a),
         .data = .{
             .post = null,
-            .query = Request.Data.Query.init(a, opt.query_data) catch unreachable,
+            .query = Request.Data.Query.init(opt.query_data, a) catch @panic("OOM, probably"),
         },
         .headers = headers(),
         .host = .init("localhost"),
