@@ -32,8 +32,8 @@ user: ?Auth.User = null,
 /// reading it later. Use with caution, as may leak if misused.
 response_data: ResponseData,
 
-/// Response Headers
-headers: Headers,
+/// Response Headers: `frame.response_headers.addCustom("Name", "Value");`
+response_headers: Headers,
 /// Response Cookies
 cookie_jar: Cookies.Jar,
 // TODO document content_type
@@ -173,7 +173,7 @@ pub fn init(
         .request = request,
         .downstream = downstream,
         .uri = try .init(request.target),
-        .headers = .empty,
+        .response_headers = .empty,
         .user = auth.authenticate(&request.headers, request.now) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),
@@ -206,7 +206,7 @@ pub fn sendHeaders(f: *Frame, comptime end: SendHeadersEnd) NetworkError!void {
         try f.downstream.writer.interface.writeAll("\r\n");
     }
     // Custom Headers
-    try f.downstream.writer.interface.print("{f}", .{std.fmt.alt(f.headers, .fmt)});
+    try f.downstream.writer.interface.print("{f}", .{std.fmt.alt(f.response_headers, .fmt)});
     for (f.cookie_jar.cookies.items) |cookie| {
         try f.downstream.writer.interface.print("{f}\r\n", .{std.fmt.alt(cookie, .header)});
     }
