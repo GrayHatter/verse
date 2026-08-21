@@ -1,7 +1,7 @@
 //! Antibiotic: some basic input sanitation helpers.
 //! It won't cure every condition, but it can help treat many diseases
 
-bytes: Bytes,
+data: Data,
 
 const Antibiotic = @This();
 /// Abx is the suggested alias.
@@ -10,7 +10,7 @@ pub const Abx = Antibiotic;
 pub const Html = @import("Antibiotic/Html.zig");
 pub const Path = @import("Antibiotic/Path.zig");
 
-pub const empty: Abx = .{ .bytes = .empty };
+pub const empty: Abx = .{ .data = .empty };
 
 /// Output Flavors
 pub const Flavor = enum {
@@ -32,7 +32,7 @@ pub const Error = error{
     WriteFailed,
 };
 
-pub const Bytes = union(enum) {
+pub const Data = union(enum) {
     dirty: []const u8,
     safe: []const u8,
     stream: *Reader,
@@ -41,9 +41,9 @@ pub const Bytes = union(enum) {
     /// Buffered is owned unsanitized text.
     buffered: []const u8,
 
-    pub const empty: Bytes = .{ .safe = &.{} };
+    pub const empty: Data = .{ .safe = &.{} };
 
-    pub fn raze(b: *const Bytes, a: Allocator) void {
+    pub fn raze(b: *const Data, a: Allocator) void {
         switch (b) {
             .dirty, .clean => {},
             .owned, .buffered => |o| a.free(o),
@@ -54,11 +54,11 @@ pub const Bytes = union(enum) {
 };
 
 pub fn abx(text: []const u8) Antibiotic {
-    return .{ .bytes = .{ .dirty = text } };
+    return .{ .data = .{ .dirty = text } };
 }
 
 pub fn safe(text: []const u8) Antibiotic {
-    return .{ .bytes = .{ .safe = text } };
+    return .{ .data = .{ .safe = text } };
 }
 
 pub fn abxAlloc(comptime flavor: Flavor, text: []const u8, a: Allocator) error{OutOfMemory}!Antibiotic {
@@ -70,11 +70,11 @@ pub fn abxAlloc(comptime flavor: Flavor, text: []const u8, a: Allocator) error{O
     } else {
         @memcpy(bytes[len - text.len ..][0..text.len], text[0..text.len]);
     }
-    return .{ .bytes = .{ .owned = bytes } };
+    return .{ .data = .{ .owned = bytes } };
 }
 
 pub fn safeDupe(text: []const u8, a: Allocator) error{OutOfMemory}!Antibiotic {
-    return .{ .bytes = .{ .owned = try a.dupe(u8, text) } };
+    return .{ .data = .{ .owned = try a.dupe(u8, text) } };
 }
 
 pub fn cleanLen(flavor: Flavor, txt: []const u8) usize {
@@ -124,7 +124,7 @@ pub const Rule = enum {
 };
 
 pub fn format(abiot: *const Antibiotic, w: *Writer) error{WriteFailed}!void {
-    switch (abiot.bytes) {
+    switch (abiot.data) {
         .dirty => |dirt| for (dirt) |d| try Html.clean(d, w),
         .safe => |s| try w.writeAll(s),
         .owned => |o| try w.writeAll(o),
