@@ -1,7 +1,7 @@
 options: Options,
 mutex: Mutex,
 start_time: Timestamp,
-count: usize,
+count: Count,
 mean: Mean,
 rows: []Line,
 
@@ -26,9 +26,46 @@ pub const disabled: Stats = .{
     .options = .disabled,
     .mutex = .init,
     .start_time = undefined,
-    .count = 0,
+    .count = .zero,
     .mean = .{},
     .rows = &.{},
+};
+
+pub const Count = struct {
+    informational: usize,
+    success: usize,
+    redirect: usize,
+    err_client: usize,
+    err_server: usize,
+
+    pub const zero: Count = .{
+        .informational = 0,
+        .success = 0,
+        .redirect = 0,
+        .err_client = 0,
+        .err_server = 0,
+    };
+
+    pub fn inc(c: *Count, s: std.http.Status) void {
+        const int: u10 = @intFromEnum(s);
+        switch (int) {
+            100...199 => c.informational +|= 1,
+            200...299 => c.success +|= 1,
+            300...399 => c.redirect +|= 1,
+            400...499 => c.err_client +|= 1,
+            500...599 => c.err_server +|= 1,
+            // If we don't know it, it's a server error
+            else => c.err_server +|= 1,
+        }
+    }
+
+    pub fn sum(c: Count) usize {
+        return c.informational +
+            c.success +
+            c.redirect +
+            c.err_client +
+            c.err_server;
+    }
 };
 
 const Mean = struct {
@@ -99,7 +136,7 @@ pub const Data = struct {
 pub fn init(rows: []Line, start: Timestamp, opts: Options) Stats {
     return .{
         .options = opts,
-        .count = 0,
+        .count = .zero,
         .mean = .{},
         .mutex = .init,
         .rows = rows,
@@ -111,11 +148,11 @@ pub fn log(stats: *Stats, data: Data, io: Io) void {
     if (stats.options.auth_mode == .stats_disabled) return;
     stats.mutex.lock(io) catch return;
     defer stats.mutex.unlock(io);
-    const row: *Line = &stats.rows[stats.count % stats.rows.len];
+    const row: *Line = &stats.rows[stats.count.sum() % stats.rows.len];
     row.* = .{
         .addr = .init(data.addr),
         .code = data.code,
-        .number = stats.count,
+        .number = stats.count.sum(),
         .page_size = data.page_size,
         .rss = data.rss,
         .time = @intCast(data.time), // TODO FIXME
@@ -123,7 +160,7 @@ pub fn log(stats: *Stats, data: Data, io: Io) void {
         .uri = .init(data.uri),
         .us = data.us,
     };
-    stats.count += 1;
+    stats.count.inc(data.code);
     stats.mean.add(data.us);
 
     return;
@@ -163,11 +200,11 @@ pub const Endpoint = struct {
 
         var data: [60]S.VerseStatsHtml.VerseStatsList = undefined;
         const uptime: u64 = @intCast(server.stats.start_time.untilNow(f.io, .real).toSeconds());
-        const mean_time: u64 = server.stats.mean.mean(@truncate(server.stats.count));
-        const rows = data[0..@min(server.stats.count, data.len)];
+        const mean_time: u64 = server.stats.mean.mean(@truncate(server.stats.count.sum()));
+        const rows = data[0..@min(server.stats.count.sum(), data.len)];
 
         for (rows, 0..) |*row, i| {
-            const src_idx: usize = (server.stats.count - 1 - i) % server.stats.rows.len;
+            const src_idx: usize = (server.stats.count.sum() - 1 - i) % server.stats.rows.len;
             const src = &server.stats.rows[src_idx];
             const ua_str: []const u8, const ua_ver: ?usize = if (src.ua) |sua|
                 switch (sua.agent) {
@@ -220,7 +257,12 @@ pub const Endpoint = struct {
 
         const page = StatsPage.init(.{
             .uptime = @intCast(uptime),
-            .count = server.stats.count,
+            .count_total = server.stats.count.sum(),
+            .count_informational = server.stats.count.informational,
+            .count_success = server.stats.count.success,
+            .count_redirect = server.stats.count.redirect,
+            .count_client_err = server.stats.count.err_client,
+            .count_server_err = server.stats.count.err_server,
             .mean_resp_time = mean_time,
             .verse_stats_list = rows,
         });
