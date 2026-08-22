@@ -175,10 +175,7 @@ pub const FrameCtx = struct {
                 .auth_provider = .invalid,
                 .response_data = .init(a),
                 .headers = headers(),
-                .server = &Server{
-                    .interface = undefined,
-                    .stats = null,
-                },
+                .server = &.{ .interface = undefined, .stats = null },
             },
             .buffer = undefined,
         };

@@ -338,9 +338,9 @@ pub fn initZWSGI(
 
 pub fn initHttp(
     http: *std.http.Server.Request,
-    stream: *const Stream,
     data: Data,
     now: Timestamp,
+    addr: std.Io.net.IpAddress,
     a: Allocator,
 ) !Request {
     var headers: Headers = .empty;
@@ -379,7 +379,7 @@ pub fn initHttp(
 
     var remote_addr: RemoteAddr = undefined;
     var ipbuf: [48]u8 = undefined;
-    const ipport = try bufPrint(&ipbuf, "{f}", .{stream.socket.address});
+    const ipport = try bufPrint(&ipbuf, "{f}", .{addr});
     if (findScalarLast(u8, ipport, ':')) |i| {
         // TODO lower this to remove the a.dupe
         remote_addr = try a.dupe(u8, ipport[0..i]);
@@ -393,7 +393,7 @@ pub fn initHttp(
         host,
         ua_string,
         referer,
-        Accept{
+        .{
             .mime = accept_mime,
             .lang = language,
             .encoding = encoding,
@@ -412,6 +412,24 @@ test Request {
     std.testing.refAllDecls(Request);
     _ = &Host;
 }
+
+pub const dummy_request: Request = .{
+    .accept = .any,
+    .authorization = null,
+    .cookie_jar = undefined,
+    .data = undefined,
+    .headers = .empty,
+    .host = undefined,
+    .method = undefined,
+    .referer = undefined,
+    .remote_addr = undefined,
+    .target = "/",
+    .user_agent = undefined,
+    .protocol = undefined,
+    .secure = undefined,
+    .now = .zero,
+    .client_hints = undefined,
+};
 
 const Headers = @import("Headers.zig");
 const Cookies = @import("cookies.zig");

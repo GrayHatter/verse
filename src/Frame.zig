@@ -12,9 +12,9 @@ alloc: Allocator,
 io: Io,
 /// Base Request object from the client.
 request: *const Request,
-/// Connection to the downstream client/request
-downstream: *Downstream,
-/// Request URI; parsed & validated by Verse
+/// Connection to the downstream client/request.
+downstream: Downstream,
+/// Request URI
 uri: Uri,
 
 /// user is set to exactly what is provided directly by the active
@@ -38,10 +38,9 @@ response_headers: Headers,
 cookie_jar: Cookies.Jar,
 // TODO document content_type
 content_type: ?ContentType = ContentType.default,
-
-status: ?std.http.Status = null,
-
-headers_done: bool = false,
+/// Status returned as the response code to the client. IFF null, `.ok` will be
+/// sent instead.
+status: ?Status = null,
 
 /// Unstable API; may be altered or removed in the future
 server: *const Server,
@@ -49,14 +48,73 @@ server: *const Server,
 const Frame = @This();
 
 pub const Uri = @import("Uri.zig");
+
+pub const Phase = union(enum) {
+    request: Phase.Request,
+    routing: Routing,
+    responding: Responding,
+    err: Err,
+
+    pub const new: Phase = .{ .request = .new };
+    pub const routed: Phase = .{ .routing = .routed };
+    pub const done: Phase = .{ .responding = .closed };
+    pub const routing_err: Phase = .{ .err = .routing };
+
+    pub const Request = enum {
+        new,
+        /// Partial request sent, may be waiting for a Continue response.
+        headers,
+        /// Headers complete, client sent body not yet read into verse.
+        waiting,
+        body,
+        complete,
+    };
+
+    pub const Routing = enum {
+        new,
+        /// Routing phase has passed from Verse into a client router.
+        routing,
+        /// Routing has returned a callable fn.
+        routed,
+    };
+
+    pub const Responding = enum {
+        /// Request & Routing to target fn was successful. Endpoint ready to be called.
+        new,
+        /// Any data has been written towards downstream.
+        started,
+        /// Response headers (and closing "\r\n") has been written.
+        headers_done,
+        /// Response body has been written.
+        body_done,
+        waiting,
+        /// Response is considered closed, and to more data is expected. (Sending additional
+        /// data may be supported or undefined)
+        closed,
+        /// Setting `phase == .raw` disables any Phase progression within verse.
+        /// The caller/setter becomes responsible for any remaining housekeeping.
+        raw,
+    };
+
+    pub const Err = enum {
+        nos,
+        client,
+        routing,
+        server,
+    };
+};
+
 pub const Downstream = struct {
     gateway: Gateway,
     reader: Io.net.Stream.Reader,
     writer: Io.net.Stream.Writer,
 
+    phase: Phase,
+
     pub const Gateway = union(enum) {
         zwsgi: zWSGIRequest,
         http: std.http.Server,
+        none: void,
     };
 
     pub const Error = error{WriteFailed};
@@ -70,36 +128,19 @@ pub const Downstream = struct {
 
         errdefer comptime unreachable;
         return .{
-            .gateway = .{ .http = undefined },
+            .phase = .new,
+            .gateway = .none,
             .reader = s.reader(io, r_b),
             .writer = s.writer(io, w_b),
         };
     }
 
-    pub fn http(s: Io.net.Stream, a: Allocator, io: Io) Downstream {
-        const r_b: []u8 = try a.alloc(u8, 0x10000);
-        errdefer a.free(r_b);
-        const w_b: []u8 = try a.alloc(u8, 0x40000);
-
-        errdefer comptime unreachable;
-        return .{
-            .gateway = .{ .http = undefined },
-            .reader = s.reader(io, r_b),
-            .writer = s.writer(io, w_b),
-        };
+    pub fn http(ds: *Downstream) !void {
+        ds.gateway = .{ .http = .init(&ds.reader.interface, &ds.writer.interface) };
     }
 
-    pub fn zwsgi(s: Io.net.Stream, a: Allocator, io: Io) Downstream {
-        const r_b: []u8 = try a.alloc(u8, 0x10000);
-        errdefer a.free(r_b);
-        const w_b: []u8 = try a.alloc(u8, 0x40000);
-
-        errdefer comptime unreachable;
-        return .{
-            .gateway = .{ .http = undefined },
-            .reader = s.reader(io, r_b),
-            .writer = s.writer(io, w_b),
-        };
+    pub fn zwsgi(ds: *Downstream, a: Allocator) !void {
+        ds.gateway = .{ .zwsgi = try .init(&ds.reader.interface, a) };
     }
 };
 
@@ -107,8 +148,7 @@ pub const Downstream = struct {
 /// sendPage will flush headers to the client before sending Page data
 pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
     frame.status = frame.status orelse .ok;
-
-    try frame.sendHeaders(.close);
+    try frame.sendHeaders(.done);
     try frame.downstream.writer.interface.print("{f}", .{page});
     return;
 }
@@ -123,7 +163,7 @@ pub fn sendJSON(f: *Frame, comptime code: std.http.Status, json: anytype) Networ
     f.status = code;
     f.content_type = .json;
 
-    try f.sendHeaders(.close);
+    try f.sendHeaders(.done);
     try f.downstream.writer.interface.print("{f}", .{std.json.fmt(
         json,
         .{ .emit_null_optional_fields = false },
@@ -133,7 +173,7 @@ pub fn sendJSON(f: *Frame, comptime code: std.http.Status, json: anytype) Networ
 pub fn sendHTML(f: *Frame, comptime code: std.http.Status, html: []const u8) NetworkError!void {
     f.status = code;
     f.content_type = .html;
-    try f.sendHeaders(.close);
+    try f.sendHeaders(.done);
     try f.downstream.writer.interface.writeAll(html);
 }
 
@@ -159,62 +199,52 @@ pub fn acceptWebsocket(frame: *Frame) !Websocket {
     return Websocket.accept(frame);
 }
 
-pub fn init(
-    srv: *const Server,
-    downstream: *Downstream,
-    request: *const Request,
-    auth: *Auth,
-    a: Allocator,
-    io: Io,
-) !Frame {
+pub fn init(srv: *Server, ds: Downstream, request: *const Request, a: Allocator, io: Io) !Frame {
     return .{
         .alloc = a,
         .io = io,
         .request = request,
-        .downstream = downstream,
+        .downstream = ds,
         .uri = try .init(request.target),
         .response_headers = .empty,
-        .user = auth.authenticate(&request.headers, request.now) catch null,
+        .user = srv.auth.authenticate(&request.headers, request.now) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),
         .response_data = .{},
-        .server = @ptrCast(srv),
+        .server = srv,
     };
 }
 
-pub const SendHeadersEnd = enum {
-    close,
-    more,
-};
-
-pub fn sendHeaders(f: *Frame, comptime end: SendHeadersEnd) NetworkError!void {
-    std.debug.assert(!f.headers_done);
+pub const HeadersPhase = enum { more, done };
+pub fn sendHeaders(f: *Frame, comptime end: HeadersPhase) NetworkError!void {
+    std.debug.assert(f.downstream.phase == .responding and
+        (f.downstream.phase.responding == .new or f.downstream.phase.responding == .started));
+    const ds: *Writer = &f.downstream.writer.interface;
     // Verse headers
-    try f.downstream.writer.interface.writeAll(f.HttpHeader("HTTP/1.1"));
+    try ds.writeAll(f.HttpHeader("HTTP/1.1"));
     const s_name = "Server: verse/" ++ build_version ++ "\r\n";
-    try f.downstream.writer.interface.writeAll(s_name);
+    try ds.writeAll(s_name);
 
     if (f.content_type) |ct| {
-        try f.downstream.writer.interface.writeAll("Content-Type: ");
+        try ds.writeAll("Content-Type: ");
         switch (ct.base) {
             inline else => |tag, name| {
-                try f.downstream.writer.interface.print("{s}/{s}", .{ @tagName(name), @tagName(tag) });
+                try ds.print("{s}/{s}", .{ @tagName(name), @tagName(tag) });
             },
         }
-        if (ct.parameter) |param|
-            try f.downstream.writer.interface.print("; charset={s}", .{@tagName(param)});
-        try f.downstream.writer.interface.writeAll("\r\n");
+        if (ct.parameter) |param| try ds.print("; charset={s}", .{@tagName(param)});
+        try ds.writeAll("\r\n");
     }
     // Custom Headers
-    try f.downstream.writer.interface.print("{f}", .{std.fmt.alt(f.response_headers, .fmt)});
+    try ds.print("{f}", .{std.fmt.alt(f.response_headers, .fmt)});
     for (f.cookie_jar.cookies.items) |cookie| {
-        try f.downstream.writer.interface.print("{f}\r\n", .{std.fmt.alt(cookie, .header)});
+        try ds.print("{f}\r\n", .{std.fmt.alt(cookie, .header)});
     }
-    switch (end) {
-        .close => try f.downstream.writer.interface.writeAll("\r\n"),
-        .more => return,
+
+    if (end == .done) {
+        try ds.writeAll("\r\n");
+        f.downstream.phase.responding = .headers_done;
     }
-    f.headers_done = true;
 }
 
 /// Helper function to return a default error page for a given http status code.
@@ -224,8 +254,6 @@ pub fn sendDefaultErrorPage(f: *Frame, comptime code: std.http.Status) void {
         @panic("internal verse error");
     };
 }
-
-const HEADER_VEC_COUNT = 64; // 64 ought to be enough for anyone!
 
 fn HttpHeader(f: *Frame, comptime ver: []const u8) [:0]const u8 {
     if (f.status == null) f.status = .ok;
@@ -284,12 +312,23 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
                 std.debug.print("\tDumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
             }
         },
+        .none => {},
     }
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
-            std.debug.print("\tpost data => '''{s}'''\n", .{post_data.bytes});
+            std.debug.print("\tpost data => '''{s}'''\n", .{post_data.source});
         }
     }
+}
+
+test dumpDebugData {
+    var req: Request = undefined;
+    req.data.post = null;
+    var frame: Frame = undefined;
+    frame.downstream.gateway = .none;
+    frame.request = &req;
+
+    dumpDebugData(&frame, .{});
 }
 
 pub fn requireValidUser(frame: *Frame) !void {
@@ -335,6 +374,7 @@ const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
 const Writer = Io.Writer;
 const Reader = Io.Reader;
 const Io = std.Io;
+const Status = std.http.Status;
 
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;

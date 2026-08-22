@@ -106,20 +106,11 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn initRequest(
-    _: *const zWSGI,
-    stream: Io.net.Stream,
-    now: Io.Timestamp,
-    a: Allocator,
-    io: Io,
-) !struct { Frame.Downstream, Request } {
+pub fn initRequest(_: *const zWSGI, ds: *Frame.Downstream, now: Io.Timestamp, a: Allocator) !Request {
     log.debug("setting up request", .{});
-
-    var ds: Frame.Downstream = try .init(stream, a, io);
-    ds.gateway = .{ .zwsgi = try zWSGIRequest.init(a, &ds.reader.interface) };
+    try ds.zwsgi(a);
     const request_data = try requestData(a, &ds.gateway.zwsgi, &ds.reader.interface);
-    const request = try Request.initZWSGI(&ds.gateway.zwsgi, request_data, now, a);
-    return .{ ds, request };
+    return try .initZWSGI(&ds.gateway.zwsgi, request_data, now, a);
 }
 
 pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
@@ -131,12 +122,11 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
-    var downstream, const request = try z.initRequest(stream, now, a, io);
-
     const srv_interface: *const Server.Interface = @fieldParentPtr("zwsgi", z);
     const srvr: *Server = @alignCast(@constCast(@fieldParentPtr("interface", srv_interface)));
-
-    var frame: Frame = try .init(srvr, &downstream, &request, srvr.auth, a, io);
+    var ds: Frame.Downstream = try .init(stream, a, io);
+    const request: Request = try z.initRequest(&ds, now, a);
+    var frame: Frame = try .init(srvr, ds, &request, a, io);
 
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
@@ -165,7 +155,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
 
     const routed_endpoint = z.router.fallback(&frame, z.router.route);
     z.router.builder(&frame, routed_endpoint);
-    downstream.writer.interface.flush() catch {};
+    frame.downstream.writer.interface.flush() catch {};
 }
 
 pub const zWSGIParam = enum {
@@ -212,7 +202,7 @@ pub const zWSGIRequest = struct {
     known: std.EnumArray(zWSGIParam, ?[]const u8) = .initFill(null),
     vars: ArrayList(uWSGIVar) = .empty,
 
-    pub fn init(a: Allocator, r: *Reader) !zWSGIRequest {
+    pub fn init(r: *Reader, a: Allocator) !zWSGIRequest {
         const uwsgi_header: uProtoHeader = try .init(r);
         try r.fill(uwsgi_header.size);
 

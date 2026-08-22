@@ -282,6 +282,8 @@ fn default(frame: *Frame) Error!void {
 }
 
 pub fn targetRouter(frame: *Frame, comptime dest: []const u8, comptime routes: []const Match) RoutingError!BuildFn {
+    errdefer frame.downstream.phase = .routing_err;
+    defer frame.downstream.phase = .routed;
     var r_err: RoutingError = error.Unrouteable;
     inline for (routes) |ep| {
         if (comptime eql(u8, dest, ep.name)) {
@@ -304,7 +306,10 @@ pub fn targetRouter(frame: *Frame, comptime dest: []const u8, comptime routes: [
 }
 
 test targetRouter {
-    try std.testing.expectError(error.Unrouteable, targetRouter(undefined, "users", &.{}));
+    var f: Frame = undefined;
+    f.downstream = undefined;
+    f.downstream.phase = .new;
+    try std.testing.expectError(error.Unrouteable, targetRouter(&f, "users", &.{}));
 }
 
 /// Default routing function. This is likely the routing function you want to
@@ -312,6 +317,8 @@ test targetRouter {
 /// internally within custom routing functions, that provide additional page,
 /// data or routing support/validation, before continuing to build the route.
 pub fn defaultRouter(frame: *Frame, comptime routes: []const Match) RoutingError!BuildFn {
+    errdefer frame.downstream.phase = .routing_err;
+    defer frame.downstream.phase = .routed;
     const search = frame.uri.peek() orelse {
         if (routes.len > 0 and routes[0].name.len == 0) {
             return if (routes[0].methods.supports(frame.request.method)) switch (routes[0].target) {
@@ -357,8 +364,9 @@ pub fn defaultRouter(frame: *Frame, comptime routes: []const Match) RoutingError
 /// handle all errors, (and make a final decision where required). Ideally it
 /// should also be able to return a response to the user, but that
 /// implementation decision is left to the final builder.
-pub fn defaultBuilder(vrs: *Frame, build: BuildFn) void {
-    build(vrs) catch |err| {
+pub fn defaultBuilder(f: *Frame, build: BuildFn) void {
+    f.downstream.phase = .{ .responding = .new };
+    build(f) catch |err| {
         switch (err) {
             error.NoSpaceLeft,
             error.OutOfMemory,

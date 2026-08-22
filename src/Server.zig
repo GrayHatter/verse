@@ -147,20 +147,22 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
-    var downstream: Frame.Downstream, const request = try switch (srv.interface) {
-        .zwsgi => |z| z.initRequest(stream, now, a, io),
-        .http => |h| h.initRequest(stream, now, a, io),
+    var request: Request = undefined;
+
+    var ds: Frame.Downstream = try .init(stream, a, io);
+    request = try switch (srv.interface) {
+        .zwsgi => |z| z.initRequest(&ds, now, a),
+        .http => |h| h.initRequest(&ds, now, stream.socket.address, a),
         .other => unreachable,
     };
-
-    var frame: Frame = try .init(srv, &downstream, &request, srv.auth, a, io);
+    var frame: Frame = try .init(srv, ds, &request, a, io);
 
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
         log.err(
             "{s}: [{d:.3}] {s} - {s}:{} {f} -- \"{s}\"",
             .{
-                if (downstream.gateway == .zwsgi) "zWSGI" else "HTTP",
+                if (frame.downstream.gateway == .zwsgi) "zWSGI" else "HTTP",
                 @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
                 request.remote_addr,
                 @tagName(request.method),
@@ -183,7 +185,7 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
 
     const routed_endpoint = srv.router.fallback(&frame, srv.router.route);
     srv.router.builder(&frame, routed_endpoint);
-    downstream.writer.interface.flush() catch {};
+    frame.downstream.writer.interface.flush() catch {};
 }
 
 fn listen(srv: *Server, io: Io) !Io.net.Server {
@@ -288,6 +290,7 @@ const ns_per_ms = std.time.ns_per_ms;
 const log = std.log.scoped(.verse);
 
 const Auth = @import("Auth.zig");
+const Request = @import("Request.zig");
 const Router = @import("Router.zig");
 const Stats = @import("Stats.zig");
 const Frame = @import("Frame.zig");

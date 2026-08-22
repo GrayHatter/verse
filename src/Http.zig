@@ -49,20 +49,14 @@ pub fn listen(http: *HTTP, io: Io) !Io.net.Server {
     return try http.srv_address.listen(io, .{});
 }
 
-pub fn initRequest(
-    _: *const HTTP,
-    stream: Io.net.Stream,
-    now: Io.Timestamp,
-    a: Allocator,
-    io: Io,
-) !struct { Frame.Downstream, Request } {
-    var ds: Frame.Downstream = try .init(stream, a, io);
-    ds.gateway = .{ .http = .init(&ds.reader.interface, &ds.writer.interface) };
-    var hreq = try ds.gateway.http.receiveHead();
+pub fn initRequest(_: *const HTTP, ds: *Frame.Downstream, now: Io.Timestamp, addr: IpAddress, a: Allocator) !Request {
+    try ds.http();
+    var hreq: std.http.Server.Request = try ds.gateway.http.receiveHead();
     log.debug("http request uri: {s}", .{hreq.head.target});
+
     const reqdata = try requestData(a, &hreq);
-    const req = try Request.initHttp(&hreq, &stream, reqdata, now, a);
-    return .{ ds, req };
+    const request: Request = try .initHttp(&hreq, reqdata, now, addr, a);
+    return request;
 }
 
 pub fn serve(http: *HTTP, gpa: Allocator, io: Io) !void {
@@ -142,30 +136,23 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
-    var downstream, const request = try http.initRequest(stream, now, a, io);
-
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
     const srvr: *Server = @alignCast(@fieldParentPtr("interface", ifc));
 
-    var frame: Frame = try .init(
-        srvr,
-        &downstream,
-        &request,
-        srvr.auth,
-        a,
-        io,
-    );
+    var ds: Frame.Downstream = try .init(stream, a, io);
+    var request: Request = try http.initRequest(&ds, now, stream.socket.address, a);
+    var frame: Frame = try .init(srvr, ds, &request, a, io);
 
     errdefer comptime unreachable;
 
     const callable = http.router.fallback(&frame, http.router.route);
     http.router.builder(&frame, callable);
 
-    if (downstream.writer.err) |err| {
+    if (frame.downstream.writer.err) |err| {
         std.debug.print("stream writer error {}\n", .{err});
     }
 
-    downstream.writer.interface.flush() catch unreachable; // TODO
+    frame.downstream.writer.interface.flush() catch unreachable; // TODO
 
     const lap = timer.untilNow(io, .awake);
     srvr.stats.log(.{
@@ -267,6 +254,7 @@ const ArrayList = std.ArrayList;
 const Io = std.Io;
 const net = Io.net;
 const Stream = net.Stream;
+const IpAddress = net.IpAddress;
 const log = std.log.scoped(.Verse);
 const ns_per_ms = std.time.ns_per_ms;
 

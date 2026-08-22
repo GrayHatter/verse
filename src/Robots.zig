@@ -163,7 +163,7 @@ pub fn robotsTxt(
         fn respond(f: *Frame, text: []const u8) Router.Error!void {
             f.status = .ok;
             f.content_type = .@"text/plain";
-            try f.sendHeaders(.close);
+            try f.sendHeaders(.done);
             try f.downstream.writer.interface.writeAll(text);
         }
 
