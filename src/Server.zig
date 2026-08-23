@@ -5,6 +5,8 @@ router: *const Router,
 stats: Stats,
 /// secret user pointer that can be referenced from within request handlers.
 usrptr: ?*const anyopaque = null,
+/// General Allocator, can be used by requests, but memory allocated via `gpa` is unmanaged
+gpa: Allocator = undefined,
 
 const Server = @This();
 
@@ -68,6 +70,7 @@ pub fn init(router: *const Router, opts: Options) !Server {
 }
 
 pub fn serve(srv: *Server, gpa: Allocator) !void {
+    srv.gpa = gpa;
     system.installSignals();
 
     var threaded: std.Io.Threaded = .init(gpa, .{ .environ = undefined });

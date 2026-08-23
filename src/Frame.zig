@@ -1,16 +1,22 @@
-//! Instead of a basic Request/Response object; Verse provides a `*Frame`.
-//! The `*Frame` object is wrapper around the Request from the client, the
-//! response expected to be generated from a given build function, and also
+//! The default object for the life time of the request and response.
+//!
+//! The `*Frame` object is created after the original client request for a single page,
+//! that wraps all the Request and response helpers, and exposes the direct `Downstream`
+//! connection to the client response nerated from a given build function, and also
 //! exposes a number of other functions. e.g. Page/Template generation,
 //! Authentication and session management, a websocket connection API, etc.
 
-/// The Allocator provided by `alloc` is a per request Array Allocator that can
-/// be used by endpoints, where allocated memory will exist until after the
-/// build function returns to the server handling the request.
-alloc: Allocator,
+/// `Frame.alloc` is a per request Allocator, the exact implementation backing
+/// this Allocator isn't part of the public API (currently backed by
+/// `std.heap.ArenaAllocator`), but does make limited guarantees.
+///   * Allocations are tracked internally, and will be cleaned up after the
+///     responding endpoint returns to verse.
 ///
+/// see also: `Server.gpa`
+alloc: Allocator,
+/// Io (not guaranteed to be the same Io provided to `Server`).
 io: Io,
-/// Base Request object from the client.
+/// Request object received from client.
 request: *const Request,
 /// Connection to the downstream client/request.
 downstream: Downstream,
