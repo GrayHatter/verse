@@ -6,6 +6,7 @@ target: []const u8,
 host: ?Host,
 user_agent: ?UserAgent,
 referer: ?Referer,
+/// Includes all accept headers. `Accept`, `Accept-Encoding`, and `Accept-Language`
 accept: Accept,
 authorization: ?Authorization,
 protocol: Protocol,
