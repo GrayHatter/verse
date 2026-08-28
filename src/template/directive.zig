@@ -431,6 +431,8 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
     switch (T) {
         Abx.Html => try ctx.format(w),
         Abx => try ctx.format(w),
+        ?Abx.Html => if (ctx) |c| try c.format(w),
+        ?Abx => if (ctx) |c| try c.format(w),
         else => switch (d.verb) {
             .variable => {
                 if (d.html_type) |_| {

@@ -122,7 +122,10 @@ pub var global_tree: StrHashMap(*AbstTree) = .{};
 var enum_list: StrHashMap(*EnumLiteral) = .{};
 var switch_list: StrHashMap(*Switch) = .{};
 
-var default_str_type: []const u8 = if (verse_buildopts.@"abx-required") "Abx" else "[]const u8";
+const default_str_type: []const u8 = if (verse_buildopts.@"abx-required")
+    "Abx"
+else
+    "[]const u8";
 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
@@ -409,7 +412,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                         .delete => if (drct.html_type) |_|
                             try templateType(a, drct.html_type, s_name)
                         else
-                            try allocPrint(a, "?[]const u8 = null", .{}),
+                            try allocPrint(a, "?" ++ default_str_type ++ " = null", .{}),
                         .template => {
                             const rf_name = try allocFieldName(a, drct.noun[1 .. drct.noun.len - 5]);
                             try parent.append(.{

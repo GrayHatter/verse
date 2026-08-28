@@ -216,7 +216,7 @@ pub const Endpoint = struct {
             else
                 .{ "[No User Agent Provided]", 0 };
 
-            var is_bot: ?[]const u8 = null;
+            var is_bot: []const u8 = &.{};
             if (src.ua) |sua| {
                 if (sua.agent == .bot) is_bot = " verse-bot";
                 if (@TypeOf(sua.validation) != void) {
@@ -243,7 +243,7 @@ pub const Endpoint = struct {
                 .time = src.time,
                 .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
                 .code = @intFromEnum(src.code),
-                .code_string = codeString(src.code),
+                .code_string = if (comptime use_abx) .safe(codeString(src.code)) else codeString(src.code),
                 .status_class = status_class,
                 .rss = src.rss,
                 .page_size = src.page_size,
@@ -280,3 +280,5 @@ const Robots = @import("Robots.zig");
 const Timestamp = std.Io.Timestamp;
 const Io = std.Io;
 const Mutex = std.Io.Mutex;
+
+const use_abx = @import("verse_buildopts").@"abx-required";
