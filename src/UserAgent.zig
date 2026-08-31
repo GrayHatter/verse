@@ -9,10 +9,10 @@ validation: ?Robots = if (UA_VALIDATION) null else {},
 
 const UserAgent = @This();
 
-const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
-const Bot = if (UA_VALIDATION) Robots.Bot else void;
-const Browser = @import("Robots/Browser.zig");
-const Script = @import("Robots/Script.zig");
+pub const Robots = if (UA_VALIDATION) @import("Robots.zig") else void;
+pub const Bot = if (UA_VALIDATION) Robots.Bot else void;
+pub const Browser = @import("Robots/Browser.zig");
+pub const Script = @import("Robots/Script.zig");
 
 pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
     if (comptime !UA_VALIDATION) @compileError("Bot Detection is currently disabled");
