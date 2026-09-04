@@ -1,7 +1,7 @@
 //! Uri
 //! TODO write docs
 
-index: usize = 0,
+index: usize,
 path: []const u8,
 /// Non null when `?` is present in the URI. Does not include the first `?`
 query: ?[]const u8,
@@ -10,41 +10,43 @@ bytes: []const u8,
 const Uri = @This();
 
 pub fn init(target: []const u8) error{BadData}!Uri {
-    var i: usize = 0;
-    while (i < target.len) : (i += 1) {
-        if (target[i] != '/') break;
-    }
-    var path = target[i..];
-    var query: ?[]const u8 = null;
-    if (findScalarPos(u8, path, 0, '?')) |q| {
-        query = path[q + 1 ..];
-        path = path[0..q];
-    }
-
-    return .{
-        .path = path,
-        .query = query,
+    var uri: Uri = .{
+        .index = 0,
+        .path = target,
+        .query = null,
         .bytes = target,
     };
+    uri.path = target[uri.nextIndex()..];
+    if (findScalarPos(u8, uri.path, 0, '?')) |q| {
+        uri.query = uri.path[q + 1 ..];
+        uri.path = uri.path[uri.index..q];
+    }
+    return uri;
 }
 
 // when index == len uri ends with a trailing slash
 pub fn peek(uri: *const Uri) ?[]const u8 {
-    if (uri.index > uri.path.len)
+    if (uri.path.len < uri.index + 1)
         return null;
 
-    if (findScalarPos(u8, uri.path, uri.index, '/')) |idx| {
-        return uri.path[uri.index..idx];
+    if (findScalarPos(u8, uri.path, uri.index + 1, '/')) |idx| {
+        return uri.path[uri.index + 1 .. idx];
     }
-    return uri.path[uri.index..];
+    return uri.path[uri.index + 1 ..];
+}
+
+pub fn nextIndex(uri: *const Uri) usize {
+    var idx = uri.index;
+    while (idx + 1 < uri.path.len) : (idx += 1) {
+        if (uri.path[idx + 1] != '/') break;
+    }
+    return idx;
 }
 
 pub fn next(uri: *Uri) ?[]const u8 {
     const new = uri.peek() orelse return null;
     uri.index += new.len + 1;
-    while (uri.index < uri.path.len) : (uri.index += 1) {
-        if (uri.path[uri.index] != '/') break;
-    }
+    uri.index = uri.nextIndex();
     if (new.len == 0) uri.index += 1;
     return new;
 }
@@ -71,6 +73,11 @@ pub fn format(uri: Uri, w: *std.Io.Writer) error{WriteFailed}!void {
 
 test Uri {
     var uri: Uri = try .init("/repos/srctree");
+    try std.testing.expectEqualStrings("/repos/srctree", uri.path);
+    uri = try .init("//////repos/srctree");
+    try std.testing.expectEqualStrings("/repos/srctree", uri.path);
+
+    uri = try .init("/repos/srctree");
 
     try std.testing.expectEqualStrings("repos", uri.next().?);
     try std.testing.expectEqualStrings("srctree", uri.next().?);
