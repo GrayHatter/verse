@@ -22,7 +22,6 @@ pub fn build(b: *std.Build) !void {
     // root build options
     const abx_required: bool = b.option(bool, "abx-required", "templates will default to Abx instead of []const u8") orelse false;
     const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
-    const templates_enabled: bool = b.option(bool, "template-enabled", "enable comptime template generation") orelse true;
     const ua_validation = b.option(bool, "ua-validation", "[not-implemented] disable user agent validation") orelse
         true;
     const accept_lang_heat = b.option([]const u8, "accept-lang-heat", "[not-implemented] add bot detection heat to given language") orelse "";
@@ -51,16 +50,16 @@ pub fn build(b: *std.Build) !void {
 
     // Set up template compiler
     var compiler = Compiler.init(b);
-    if (templates_enabled) {
-        if (template_path) |path| {
-            compiler.addDir(path);
-        } else {
-            compiler.addDir(b.path("examples/templates/"));
-            compiler.addDir(b.path("src/builtin-html/"));
-        }
-        compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
-        compiler.collect(b.graph.io) catch @panic("unreachable");
+    if (template_path) |path| {
+        compiler.addDir(path);
+    } else {
+        compiler.addDir(b.path("examples/templates/"));
+        compiler.addDir(b.path("src/builtin-html/"));
     }
+    compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
+    compiler.collect(b.graph.io) catch {
+        if (template_path != null) @panic("unreachable");
+    };
     const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
 
     const structc = b.addExecutable(.{
@@ -230,7 +229,7 @@ const Compiler = struct {
 
     fn collectDir(comp: *Compiler, path: LazyPath, io: std.Io) !void {
         var idir = path.getPath3(comp.b, null).openDir(io, "", .{ .iterate = true }) catch |err| {
-            std.debug.print("template build error {} for srcdir {}\n", .{ err, path });
+            std.log.err("template build error {} for srcdir {}", .{ err, path });
             return err;
         };
         defer idir.close(comp.b.graph.io);
