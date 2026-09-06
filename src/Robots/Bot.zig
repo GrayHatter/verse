@@ -65,7 +65,7 @@ pub const Name = enum {
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
-            .reflectionbot => "ReflectionBot",
+            .reflectionbot => "Reflectionbot",
             .scrybot => "ScryBot",
             .youbot => "YouBot",
 
@@ -90,7 +90,7 @@ pub const Name = enum {
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
-            .reflectionbot => "ReflectionBot",
+            .reflectionbot => "Reflectionbot",
             .scrybot => "ScryBot",
             .youbot => "YouBot",
 
@@ -146,7 +146,7 @@ pub const Name = enum {
             .gptbot => endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)"),
             .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
-            .reflectionbot => eql(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)"),
+            .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
             .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
             .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
