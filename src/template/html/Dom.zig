@@ -85,15 +85,13 @@ pub fn format(d: Dom, w: *Writer) Writer.Error!void {
     }
 }
 
-pub fn render(d: *Dom, a: Allocator, comptime style: enum { full, compact }) ![]u8 {
+pub fn render(d: *Dom, comptime style: enum { full, compact }, w: *Writer) !void {
     if (d.child) |_| @panic("INVALID STATE DOM STILL HAS OPEN CHILDREN");
-    var html: Writer.Allocating = .init(a);
     if (comptime style == .full) {
-        try d.fmtFull(&html.writer);
+        try d.fmtFull(w);
     } else {
-        try d.format(&html.writer);
+        try d.format(w);
     }
-    return try html.toOwnedSlice();
 }
 
 test render {
@@ -110,7 +108,9 @@ test render {
     dom = dom.close();
     dom = dom.close();
 
-    const compact = try dom.render(a, .compact);
+    var html: Writer.Allocating = .init(a);
+    try dom.render(.compact, &html.writer);
+    const compact = try html.toOwnedSlice();
     dom.raze();
     defer a.free(compact);
     const expected_compact =
@@ -129,8 +129,9 @@ test render {
     dom.dupe(HTML.E.txt("create new"));
     dom = dom.close();
     dom = dom.close();
-
-    const full = try dom.render(a, .full);
+    html = .init(a);
+    try dom.render(.full, &html.writer);
+    const full = try html.toOwnedSlice();
     dom.raze();
     defer a.free(full);
     const expected_full =
