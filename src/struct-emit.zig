@@ -408,7 +408,10 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                     const kind: []u8 = switch (drct.otherwise) {
                         .required => try templateType(a, drct.html_type, s_name),
                         .exact => unreachable,
-                        .default => |default| try allocPrint(a, "[]const u8 = \"{s}\"", .{default}),
+                        .default => |default| try allocPrint(a, "{s} = \"{s}\"", .{
+                            try templateType(a, drct.html_type, s_name),
+                            default,
+                        }),
                         .delete => if (drct.html_type) |_|
                             try templateType(a, drct.html_type, s_name)
                         else

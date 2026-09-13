@@ -907,6 +907,32 @@ test "directive typed ?usize null" {
     try std.testing.expectEqualStrings(expected, p);
 }
 
+test "directive typed ?usize default" {
+    var a = std.testing.allocator;
+    const blob = "<Number type=\"?usize\" default=\"0\" />";
+    const expected: []const u8 = "0";
+
+    const d: Directive = Directive.init(blob) orelse unreachable;
+    try std.testing.expectEqualDeep(Directive{
+        .verb = .variable,
+        .noun = "Number",
+        .otherwise = .{ .default = "0" },
+        .tag_block = blob,
+        .html_type = .@"?usize",
+    }, d);
+
+    const FE = struct { number: ?usize };
+
+    const Temp = Template{ .name = "test", .blob = blob };
+    const page = Page(Temp, FE);
+
+    const slice = FE{ .number = null };
+    const pg = page.init(slice);
+    const p = try allocPrint(a, "{f}", .{pg});
+    defer a.free(p);
+    try std.testing.expectEqualStrings(expected, p);
+}
+
 test "directive typed isize" {
     var a = std.testing.allocator;
     const blob = "<Number type=\"isize\" />";

@@ -175,7 +175,11 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                     } else if (drct.otherwise == .default) {
                         try w.writeAll(drct.otherwise.default);
                     },
-                    ?usize => if (data) |us| return try drct.formatTyped(usize, us, w),
+                    ?usize => if (data) |us| {
+                        return try drct.formatTyped(usize, us, w);
+                    } else if (drct.otherwise == .default) {
+                        try w.writeAll(drct.otherwise.default);
+                    },
                     else => return try drct.formatTyped(T, data, w),
                 }
             }
