@@ -61,6 +61,25 @@ pub const TemplateType = enum {
     pub fn nullable(kt: TemplateType) bool {
         return @tagName(kt)[0] == '?';
     }
+
+    pub fn format(tt: TemplateType, w: *Writer) !void {
+        return tt.format2("[TODO enum]", w);
+    }
+
+    pub fn format2(tt: TemplateType, enm: []const u8, w: *Writer) !void {
+        return switch (tt) {
+            .@"enum" => try w.writeAll(enm),
+            .usize,
+            .isize,
+            .@"?usize",
+            => try w.writeAll(@tagName(tt)),
+            .humanize => try w.writeAll("i64"),
+            .abx, .antibiotic => try w.writeAll("Abx"),
+            .safe => try w.writeAll("[]const u8"),
+            .markdown => try w.writeAll("Markdown"),
+            .uri => try w.writeAll("Uri.Builder"),
+        };
+    }
 };
 
 pub const Scope = enum {
@@ -93,34 +112,34 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
     const h_type: ?TemplateType, const tag_name: ?[]const u8 = if (tag_map.get(.@"enum")) |ht|
         .{ .@"enum", ht }
     else if (tag_map.get(.type)) |ht|
-        .{
-            TemplateType.fromStr(ht) catch null, null,
-        }
+        .{ TemplateType.fromStr(ht) catch null, null }
     else
         .{ null, null };
 
-    return Directive{
+    const otherwise: Otherwise = if (default_str) |str|
+        .{ .default = str }
+    else if (findPos(u8, tag, 0, " ornull")) |_|
+        .delete
+    else if (h_type) |htype|
+        if (htype.nullable())
+            .delete
+        else if (htype == .@"enum")
+            .{ .literal = tag_name orelse b: {
+                if (!@inComptime()) {
+                    std.debug.print("Tag name not given for enum type\n", .{});
+                    unreachable;
+                }
+                break :b "blah";
+            } }
+        else
+            .required
+    else
+        .required;
+
+    return .{
         .verb = .variable,
         .noun = noun,
-        .otherwise = if (default_str) |str|
-            .{ .default = str }
-        else if (findPos(u8, tag, 0, " ornull")) |_|
-            .delete
-        else if (h_type) |htype|
-            if (htype.nullable())
-                .delete
-            else if (htype == .@"enum")
-                .{ .literal = tag_name orelse b: {
-                    if (!@inComptime()) {
-                        std.debug.print("Tag name not given for enum type\n", .{});
-                        unreachable;
-                    }
-                    break :b "blah";
-                } }
-            else
-                .required
-        else
-            .required,
+        .otherwise = otherwise,
         .html_type = h_type,
         .tag_block = tag,
     };
@@ -412,7 +431,7 @@ fn getBuiltin(name: []const u8) ?Template {
 fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
     if (@typeInfo(T) != .@"struct") return null;
     var local: [0xff]u8 = undefined;
-    const realname = local[0..makeFieldName(name, &local)];
+    const realname = nameFieldSlice(name, &local);
     inline for (std.meta.fields(T)) |field| {
         if (eql(u8, field.name, realname)) {
             switch (field.type) {
@@ -437,7 +456,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
             .variable => {
                 if (d.html_type) |_| {
                     var local: [0xff]u8 = undefined;
-                    const realname = local[0..makeFieldName(d.noun, &local)];
+                    const realname = d.nameField(&local);
                     switch (@typeInfo(T)) {
                         .@"struct" => inline for (std.meta.fields(T)) |field| {
                             if (comptime isStringish(field.type)) continue;
@@ -479,7 +498,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
                                 if (otype.child == []const u8) continue;
 
                                 var local: [0xff]u8 = undefined;
-                                const realname = local[0..makeFieldName(noun[1 .. noun.len - 5], &local)];
+                                const realname = nameFieldSlice(noun[1 .. noun.len - 5], &local);
                                 if (std.mem.eql(u8, field.name, realname)) {
                                     if (@field(ctx, field.name)) |subdata| {
                                         var subpage = template.pageOf(otype.child, subdata);
@@ -503,7 +522,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
             },
             else => {
                 var local: [0xff]u8 = undefined;
-                const realname = local[0..makeFieldName(d.noun, &local)];
+                const realname = d.nameField(&local);
                 switch (@typeInfo(T)) {
                     .int => try w.print("{d}", .{ctx}),
                     .@"struct" => inline for (std.meta.fields(T)) |field| {
@@ -531,9 +550,176 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
     }
 }
 
+fn intToWord(in: u8) []const u8 {
+    return switch (in) {
+        '0' => "Zero",
+        '1' => "One",
+        '2' => "Two",
+        '3' => "Three",
+        '4' => "Four",
+        '5' => "Five",
+        '6' => "Six",
+        '7' => "Seven",
+        '8' => "Eight",
+        '9' => "Nine",
+        else => unreachable,
+    };
+}
+
+pub fn nameStruct(d: Directive, buffer: []u8) ![]u8 {
+    var name = d.noun;
+    if (findLast(u8, d.noun, "/")) |i| {
+        name = name[i..];
+    }
+
+    var i: usize = 0;
+    var next_upper = true;
+    for (name) |chr| {
+        if (i >= buffer.len) return error.OutOfSpace;
+        switch (chr) {
+            'a'...'z', 'A'...'Z' => {
+                if (next_upper) {
+                    buffer[i] = std.ascii.toUpper(chr);
+                } else {
+                    buffer[i] = chr;
+                }
+                next_upper = false;
+                i += 1;
+            },
+            inline '0'...'9' => |x| {
+                for (intToWord(x)) |cchr| {
+                    buffer[i] = cchr;
+                    i += 1;
+                }
+            },
+            '-', '_', '.' => {
+                next_upper = true;
+            },
+            else => {},
+        }
+    }
+
+    return buffer[0..i];
+}
+
+pub fn nameStructAlloc(d: Directive, a: Allocator) ![]u8 {
+    var sn_b: [0x200]u8 = undefined;
+    const name = try d.nameStruct(&sn_b);
+    return try a.dupe(u8, name);
+}
+
+pub fn nameFieldAlloc(d: Directive, a: Allocator) ![]u8 {
+    var fn_b: [0x200]u8 = undefined;
+    const name = try d.nameField(&fn_b);
+    return try a.dupe(u8, name);
+}
+
+pub fn nameField(d: Directive, buffer: []u8) ![]u8 {
+    return nameFieldSlice(d.noun, buffer);
+}
+
+pub fn nameFieldSlice(in: []const u8, buffer: []u8) ![]u8 {
+    var i: usize = 0;
+    for (in) |chr| {
+        if (i >= buffer.len) return error.OutOfSpace;
+        switch (chr) {
+            'a'...'z' => {
+                buffer[i] = chr;
+                i += 1;
+            },
+            'A'...'Z' => {
+                if (i != 0) {
+                    buffer[i] = '_';
+                    i += 1;
+                }
+                buffer[i] = chr | 0b0010_0000;
+                i += 1;
+            },
+            inline '0'...'9' => |x| {
+                for (intToWord(x)) |cchr| {
+                    buffer[i] = cchr;
+                    i += 1;
+                }
+            },
+            '-', '_', '.' => {
+                buffer[i] = '_';
+                i += 1;
+            },
+            else => {},
+        }
+    }
+
+    return buffer[0..i];
+}
+
+pub fn fmtField(d: Directive, w: *Writer) !void {
+    var b: [0x200]u8 = undefined;
+    try w.print("{s}", .{d.nameField(&b) catch "[Name Too Long]"});
+}
+
+pub fn typeFmt(d: Directive, struct_name: []const u8, comptime default_str_type: []const u8) TypeFormatter {
+    return .{
+        .d = d,
+        .struct_name = struct_name,
+        .default_str = default_str_type,
+    };
+}
+
+pub const TypeFormatter = struct {
+    d: Directive,
+    struct_name: []const u8,
+    default_str: []const u8,
+
+    pub fn format(f: TypeFormatter, w: *Writer) !void {
+        const basic_type = f.default_str;
+        switch (f.d.otherwise) {
+            .required => if (f.d.html_type) |ht| try ht.format2(f.struct_name, w) else try w.writeAll(basic_type),
+            .exact => unreachable,
+            .template => try w.print("?{s}", .{f.struct_name}),
+            .default => |default| if (f.d.html_type) |ht|
+                try w.print("{f} = {s}", .{ ht, default })
+            else
+                try w.print("{f}", .{f.d.fmtWithDefault(verse_buildopts.@"abx-required")}),
+            .delete => if (f.d.html_type) |ht|
+                try w.print("{f}", .{ht})
+            else
+                try w.print("?{s} = null", .{basic_type}),
+            .literal => if (f.d.html_type) |ht| try ht.format2(f.struct_name, w) else try w.writeAll(f.struct_name),
+        }
+    }
+};
+
+pub fn fmtWithDefault(d: Directive, abx: bool) FormatDefault {
+    return .init(d, abx);
+}
+
+pub const FormatDefault = struct {
+    name: []const u8,
+    default: []const u8,
+    abx: bool,
+
+    pub fn init(d: Directive, abx: bool) FormatDefault {
+        return .{
+            .name = std.mem.cutSuffix(u8, d.noun, ".html") orelse d.noun,
+            .default = d.otherwise.default,
+            .abx = abx,
+        };
+    }
+
+    pub fn format(f: FormatDefault, w: *Writer) !void {
+        if (f.abx) {
+            try w.print("Abx = .safe(\"{s}\")", .{f.default});
+        } else {
+            try w.print("[]const u8 = \"{s}\"", .{f.default});
+        }
+    }
+};
+
 const Pages = @import("page.zig");
 const Template = @import("Template.zig");
 const Abx = @import("Antibiotic");
+const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 
 const std = @import("std");
 const eql = std.mem.eql;
@@ -541,6 +727,7 @@ const startsWith = std.mem.startsWith;
 const findPos = std.mem.findPos;
 const findPosLinear = std.mem.findPosLinear;
 const findAnyPos = std.mem.findAnyPos;
+const findLast = std.mem.findLast;
 const findScalarPos = std.mem.findScalarPos;
 const count = std.mem.count;
 const trim = std.mem.trim;
@@ -550,4 +737,4 @@ const isWhitespace = std.ascii.isWhitespace;
 
 const template_data = @import("builtins.zig");
 const builtin = template_data.builtin;
-const makeFieldName = template_data.makeFieldName;
+const verse_buildopts = @import("verse_buildopts");

@@ -40,9 +40,8 @@ pub const Offset = struct {
 fn getOffset(T: type, name: []const u8, base: usize) usize {
     switch (@typeInfo(T)) {
         .@"struct" => {
-            var local: [0xff]u8 = undefined;
-            const end = makeFieldName(name, &local);
-            const field = local[0..end];
+            var local: [0x200]u8 = undefined;
+            const field = Template.fieldSlice(name, &local);
             return @offsetOf(T, field) + base;
         },
         .@"union" => return 0,
@@ -98,7 +97,7 @@ test getOffset {
 
 fn baseType(T: type, name: []const u8) type {
     var local: [0xff]u8 = undefined;
-    const field = local[0..makeFieldName(name, &local)];
+    const field = local[0..Template.fieldSlice(name, &local).len];
     const field_type = @FieldType(T, field);
     switch (field_type) {
         []const u8 => unreachable,
@@ -121,7 +120,7 @@ fn baseType(T: type, name: []const u8) type {
 
 fn fieldType(T: type, name: []const u8) type {
     var local: [0xff]u8 = undefined;
-    const field = local[0..makeFieldName(name, &local)];
+    const field = local[0..Template.fieldSlice(name, &local).len];
     return @FieldType(T, field);
 }
 
@@ -349,11 +348,10 @@ pub fn validateBlock(comptime html: []const u8, BlockType: type, base_offset: us
     return found_offsets;
 }
 
-const makeFieldName = @import("builtins.zig").makeFieldName;
 fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
     if (@typeInfo(T) != .@"struct") return null;
     var local: [0xff]u8 = undefined;
-    const realname = local[0..makeFieldName(name, &local)];
+    const realname = local[0..Template.fieldSlice(name, &local).len];
     inline for (std.meta.fields(T)) |field| {
         if (eql(u8, field.name, realname)) {
             switch (field.type) {

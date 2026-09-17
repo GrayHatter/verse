@@ -13,8 +13,6 @@ const template_data = @import("template/builtins.zig");
 pub const builtin = template_data.builtin;
 pub var dynamic = &template_data.dynamic;
 
-const makeStructName = template_data.makeStructName;
-const makeFieldName = template_data.makeFieldName;
 pub const findTemplate = template_data.findTemplate;
 
 pub fn raze(a: Allocator) void {
@@ -53,11 +51,11 @@ pub fn PageData(comptime name: []const u8) type {
 
 pub fn findPageType(comptime name: []const u8) type {
     var local: [0xFF]u8 = undefined;
-    const llen = comptime makeStructName(name, &local);
+    const llen = comptime Template.nameSlice(name, &local).len;
     return @field(Structs, local[0..llen]);
 }
 
-// remove if https://github.com/ziglang/zig/pull/22366 is merged
+// https://github.com/ziglang/zig/pull/22366#issuecomment-3216037862
 fn testPrint(comptime fmt: []const u8, args: anytype) void {
     if (@inComptime()) {
         @compileError(std.fmt.comptimePrint(fmt, args));
@@ -101,9 +99,9 @@ fn comptimeFields(comptime count: usize, comptime text: []const u8) CTFields(cou
                     const ws = std.mem.indexOfAnyPos(u8, text, last, " />") orelse unreachable;
                     const name = text[last..ws];
                     var lower: [name.len + 8:0]u8 = @splat(0);
-                    const llen = makeFieldName(name, &lower);
-                    lower[llen] = 0;
-                    const lname: [:0]const u8 = @as([:0]u8, lower[0..llen :0]);
+                    const fs = Template.fieldSlice(name, &lower);
+                    lower[fs.len] = 0;
+                    const lname: [:0]const u8 = @as([:0]u8, lower[0..fs.len :0]);
 
                     fields.names[loop] = lname;
                     fields.ftypes[loop] = []const u8;
@@ -112,9 +110,9 @@ fn comptimeFields(comptime count: usize, comptime text: []const u8) CTFields(cou
                 },
                 .foreach => {
                     var lower: [drct.noun.len + 8:0]u8 = @splat(0);
-                    const llen = makeFieldName(drct.noun, &lower);
-                    lower[llen] = 0;
-                    const lname: [:0]const u8 = @as([:0]u8, lower[0..llen :0]);
+                    const fs = drct.nameField(&lower) catch "";
+                    lower[fs.len] = 0;
+                    const lname: [:0]const u8 = @as([:0]u8, lower[0..fs.len :0]);
 
                     const body_type = comptimeStruct(drct.tag_block_body.?);
 

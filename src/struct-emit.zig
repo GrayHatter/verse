@@ -190,8 +190,9 @@ pub fn main(init: std.process.Init) !void {
     );
 
     for (compiled.data) |tplt| {
+        _, const path = std.mem.cutScalarLast(u8, tplt.path, '/') orelse unreachable;
         var sn_b: [0xffff]u8 = undefined;
-        const name = makeStructName(tplt.path, &sn_b);
+        const name = Template.nameSlice(path, &sn_b);
         const this = try AbstTree.init(a, name);
         const gop = try global_tree.getOrPut(a, this.name);
         if (!gop.found_existing) {
@@ -373,25 +374,6 @@ fn createSwitch(a: Allocator, name: []const u8, text: []const u8) !void {
     try switch_list.put(a, sw.name, sw);
 }
 
-fn templateType(a: Allocator, html_type: ?Directive.TemplateType, struct_name: []const u8) ![]u8 {
-    if (html_type) |htype| {
-        return switch (htype) {
-            .@"enum" => try a.dupe(u8, struct_name),
-            .usize,
-            .isize,
-            .@"?usize",
-            => try a.dupe(u8, @tagName(htype)),
-            .humanize => try a.dupe(u8, "i64"),
-            .abx, .antibiotic => try a.dupe(u8, "Abx"),
-            .safe => try a.dupe(u8, "[]const u8"),
-            .markdown => try a.dupe(u8, "Markdown"),
-            .uri => try a.dupe(u8, "Uri.Builder"),
-        };
-    } else {
-        return try a.dupe(u8, default_str_type);
-    }
-}
-
 pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHashMap(*AbstTree)) !void {
     while (ir.bufferedLen() > 0) {
         _ = try ir.discardDelimiterExclusive('<');
@@ -400,37 +382,22 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
         if (Directive.init(ir.buffered())) |drct| {
             ir.toss(drct.tag_block.len);
             // TODO optimize
-            const s_name = try allocStructName(a, drct.noun);
-            const f_name = try allocFieldName(a, drct.noun);
+            const s_name = try drct.nameStructAlloc(a);
+            const f_name = try drct.nameFieldAlloc(a);
 
             switch (drct.verb) {
                 .variable => {
-                    const kind: []u8 = switch (drct.otherwise) {
-                        .required => try templateType(a, drct.html_type, s_name),
-                        .exact => unreachable,
-                        .default => |default| if (drct.html_type) |_|
-                            try allocPrint(a, "{s} = {s}", .{ try templateType(a, drct.html_type, s_name), default })
-                        else
-                            try allocPrint(a, "{s} = \"{s}\"", .{ try templateType(a, drct.html_type, s_name), default }),
-
-                        .delete => if (drct.html_type) |_|
-                            try templateType(a, drct.html_type, s_name)
-                        else
-                            try allocPrint(a, "?" ++ default_str_type ++ " = null", .{}),
-                        .template => {
-                            const rf_name = try allocFieldName(a, drct.noun[1 .. drct.noun.len - 5]);
-                            try parent.append(.{
-                                .name = rf_name,
-                                .kind = try allocPrint(a, "?{s}", .{s_name}),
-                            });
-                            continue;
-                        },
-                        .literal => |lit| kind: {
-                            try appendEnumLiteral(a, s_name, lit);
-                            break :kind try templateType(a, drct.html_type, s_name);
-                        },
-                    };
-
+                    const kind: []u8 = try allocPrint(a, "{f}", .{drct.typeFmt(s_name, default_str_type)});
+                    if (drct.otherwise == .literal) {
+                        try appendEnumLiteral(a, s_name, drct.otherwise.literal);
+                    } else if (drct.otherwise == .template) {
+                        const rf_name = try allocPrint(a, "{s}", .{drct.noun[1 .. drct.noun.len - 5]});
+                        try parent.append(.{
+                            .name = rf_name,
+                            .kind = try allocPrint(a, "?{s}", .{s_name}),
+                        });
+                        continue;
+                    }
                     try parent.append(.{ .name = f_name, .kind = kind });
                 },
                 .directive => try createEnumLiteral(a, s_name, drct.otherwise.literal),
@@ -491,7 +458,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                             try emitSourceVars(a, &body, this, tree);
                         },
                         .build => {
-                            const kind = try allocStructName(a, drct.otherwise.template.name);
+                            const kind = try drct.otherwise.template.nameStructAlloc(a);
                             try parent.append(.{ .name = f_name, .kind = kind });
                         },
                     }
@@ -507,103 +474,6 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
     return;
 }
 
-pub fn allocFieldName(a: Allocator, in: []const u8) ![]u8 {
-    var fn_b: [0xffff]u8 = undefined;
-    const name = makeFieldName(in, &fn_b);
-    return try a.dupe(u8, name);
-}
-
-pub fn makeFieldName(in: []const u8, buffer: []u8) []const u8 {
-    var i: usize = 0;
-    for (in) |chr| {
-        switch (chr) {
-            'a'...'z' => {
-                buffer[i] = chr;
-                i += 1;
-            },
-            'A'...'Z' => {
-                if (i != 0) {
-                    buffer[i] = '_';
-                    i += 1;
-                }
-                buffer[i] = std.ascii.toLower(chr);
-                i += 1;
-            },
-            '0'...'9' => {
-                for (intToWord(chr)) |cchr| {
-                    buffer[i] = cchr;
-                    i += 1;
-                }
-            },
-            '-', '_', '.' => {
-                buffer[i] = '_';
-                i += 1;
-            },
-            else => {},
-        }
-    }
-
-    return buffer[0..i];
-}
-
-pub fn allocStructName(a: Allocator, in: []const u8) ![]u8 {
-    var sn_b: [0xffff]u8 = undefined;
-    const name = makeStructName(in, &sn_b);
-    return try a.dupe(u8, name);
-}
-
-pub fn makeStructName(in: []const u8, buffer: []u8) []const u8 {
-    var tail = in;
-
-    if (std.mem.lastIndexOf(u8, in, "/")) |i| {
-        tail = tail[i..];
-    }
-
-    var i: usize = 0;
-    var next_upper = true;
-    for (tail) |chr| {
-        switch (chr) {
-            'a'...'z', 'A'...'Z' => {
-                if (next_upper) {
-                    buffer[i] = std.ascii.toUpper(chr);
-                } else {
-                    buffer[i] = chr;
-                }
-                next_upper = false;
-                i += 1;
-            },
-            '0'...'9' => {
-                for (intToWord(chr)) |cchr| {
-                    buffer[i] = cchr;
-                    i += 1;
-                }
-            },
-            '-', '_', '.' => {
-                next_upper = true;
-            },
-            else => {},
-        }
-    }
-
-    return buffer[0..i];
-}
-
-fn intToWord(in: u8) []const u8 {
-    return switch (in) {
-        '0' => "Zero",
-        '1' => "One",
-        '2' => "Two",
-        '3' => "Three",
-        '4' => "Four",
-        '5' => "Five",
-        '6' => "Six",
-        '7' => "Seven",
-        '8' => "Eight",
-        '9' => "Nine",
-        else => unreachable,
-    };
-}
-
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -617,6 +487,7 @@ const indexOf = std.mem.indexOf;
 const indexOfPos = std.mem.indexOfPos;
 const compiled = @import("comptime_templates");
 const Directive = @import("template/directive.zig");
+const Template = @import("template/Template.zig");
 const constructor = @import("template/constructor.zig");
 const verse_buildopts = @import("verse_buildopts");
 const log = std.log.scoped(.verse_struct_emit);
