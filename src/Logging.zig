@@ -40,6 +40,19 @@ pub fn getGlobal() *const Logging {
     return &global_logger;
 }
 
+pub const RequestData = struct {};
+
+pub fn req(l: Logging, comptime str: []const u8, args: anytype) void {
+    if (l.sout) |out| {
+        mutex.lock();
+        defer mutex.unlock();
+        out.print(str, args) catch @panic("Failed to write to logging sout fd");
+        if (l.serr) |stderr| {
+            stderr.print(str, args) catch @panic("Failed to write to logging serr fd");
+        }
+    }
+}
+
 pub fn log(l: Logging, comptime str: []const u8, args: anytype) void {
     if (l.sout) |out| {
         mutex.lock();

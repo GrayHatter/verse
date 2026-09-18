@@ -163,7 +163,7 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
         log.err(
-            "{s}: [{d:.3}] {s} - {s}:{} {f} -- \"{s}\"",
+            "{s}: [{d: >4.2}] {s: >15} | {s}:{} {f: <35} -- \"{s}\"",
             .{
                 if (frame.downstream.gateway == .zwsgi) "zWSGI" else "HTTP",
                 @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,

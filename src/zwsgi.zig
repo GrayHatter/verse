@@ -131,7 +131,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
         log.err(
-            "zWSGI: [{d:.3}] {s} - {s}:{} {s} -- \"{s}\"",
+            "zWSGI: [{d: >4.2}] {s: >15} | {s}:{} {f: <35} -- \"{s}\"",
             .{
                 @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
                 request.remote_addr,
