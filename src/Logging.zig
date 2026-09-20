@@ -10,17 +10,20 @@ serr: ?File = .stderr(),
 pub const default: Logging = .{
     .path = "/var/log/verse.log",
     .sout = null,
+    .serr = null,
 };
 
 /// Default when running in the foreground
 pub const stdout: Logging = .{
     .path = "/dev/stdout",
     .sout = .stdout(),
+    .serr = null,
 };
 
 pub const devnull: Logging = .{
     .path = "/dev/null",
     .sout = null,
+    .serr = null,
 };
 
 const Logging = @This();
@@ -66,25 +69,29 @@ pub fn req(l: Logging, data: LoggerData) void {
         defer wout.interface.flush() catch {};
 
         wout.interface.print(
-            "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} -- \"{s}\"\n",
+            "{s}: [{d: >7.2}] {s: >15} | {s}:{d} {f: <35} || \"{s}\"\n",
+            .{
+                data.prefix,
+                data.response_time,
+                data.address,
+                @tagName(data.method),
+                data.status,
+                data.uri,
+                data.user_agent,
+            },
+        ) catch @panic("Failed to write to logging sout fd");
+    }
+    if (l.serr) |serr| {
+        var err_buffer: [64]u8 = undefined;
+        var werr = serr.writer(io, &err_buffer);
+        defer werr.interface.flush() catch {};
+        werr.interface.print(
+            "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} || \"{s}\"\n",
             .{
                 data.prefix, data.response_time, data.address, data.method, data.status,
                 data.uri,    data.user_agent,
             },
-        ) catch @panic("Failed to write to logging sout fd");
-
-        if (l.serr) |serr| {
-            var err_buffer: [64]u8 = undefined;
-            var werr = serr.writer(io, &err_buffer);
-            defer werr.interface.flush() catch {};
-            werr.interface.print(
-                "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} -- \"{s}\"\n",
-                .{
-                    data.prefix, data.response_time, data.address, data.method, data.status,
-                    data.uri,    data.user_agent,
-                },
-            ) catch @panic("Failed to write to logging serr fd");
-        }
+        ) catch @panic("Failed to write to logging serr fd");
     }
 }
 
