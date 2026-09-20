@@ -66,7 +66,7 @@ pub fn req(l: Logging, data: LoggerData) void {
         defer wout.interface.flush() catch {};
 
         wout.interface.print(
-            "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} -- \"{s}\"",
+            "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} -- \"{s}\"\n",
             .{
                 data.prefix, data.response_time, data.address, data.method, data.status,
                 data.uri,    data.user_agent,
@@ -78,7 +78,7 @@ pub fn req(l: Logging, data: LoggerData) void {
             var werr = serr.writer(io, &err_buffer);
             defer werr.interface.flush() catch {};
             werr.interface.print(
-                "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} -- \"{s}\"",
+                "{s}: [{d: >4.2}] {s: >15} | {}:{d} {f: <35} -- \"{s}\"\n",
                 .{
                     data.prefix, data.response_time, data.address, data.method, data.status,
                     data.uri,    data.user_agent,
