@@ -162,18 +162,15 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
 
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
-        log.err(
-            "{s}: [{d: >4.2}] {s: >15} | {s}:{} {f: <35} -- \"{s}\"",
-            .{
-                if (frame.downstream.gateway == .zwsgi) "zWSGI" else "HTTP",
-                @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
-                request.remote_addr,
-                @tagName(request.method),
-                @intFromEnum(frame.status orelse .ok),
-                frame.uri,
-                if (request.user_agent) |ua| ua.string else "EMPTY",
-            },
-        );
+        srv.options.logging.req(.{
+            .prefix = if (frame.downstream.gateway == .zwsgi) "zWSGI" else "HTTP",
+            .response_time = @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
+            .address = request.remote_addr,
+            .method = request.method,
+            .status = frame.status orelse .ok,
+            .uri = frame.uri,
+            .user_agent = if (request.user_agent) |ua| ua.string else "EMPTY",
+        });
         srv.stats.log(.{
             .addr = request.remote_addr,
             .code = frame.status orelse .internal_server_error,
