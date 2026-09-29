@@ -673,7 +673,10 @@ pub const TypeFormatter = struct {
     pub fn format(f: TypeFormatter, w: *Writer) !void {
         const basic_type = f.default_str;
         switch (f.d.otherwise) {
-            .required => if (f.d.html_type) |ht| try ht.format2(f.struct_name, w) else try w.writeAll(basic_type),
+            .required => if (f.d.html_type) |ht|
+                try ht.format2(f.struct_name, w)
+            else
+                try w.writeAll(basic_type),
             .exact => unreachable,
             .template => try w.print("?{s}", .{f.struct_name}),
             .default => |default| if (f.d.html_type) |ht|
@@ -684,7 +687,10 @@ pub const TypeFormatter = struct {
                 try w.print("{f}", .{ht})
             else
                 try w.print("?{s} = null", .{basic_type}),
-            .literal => if (f.d.html_type) |ht| try ht.format2(f.struct_name, w) else try w.writeAll(f.struct_name),
+            .literal => if (f.d.html_type) |ht|
+                try ht.format2(f.struct_name, w)
+            else
+                try w.writeAll(f.struct_name),
         }
     }
 };
