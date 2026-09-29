@@ -52,7 +52,8 @@ test age {
     if (!UA_VALIDATION) return error.SkipZigTest;
     const browser = Browser{ .name = .chrome, .version = 134 };
     const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
-    try std.testing.expect((try browser.age(now)).toSeconds() < 86400 * 3650); // breaks in 10 years, good luck future me!
+    // breaks in 10 years, good luck future me!
+    try std.testing.expect((try browser.age(now)).toSeconds() < 86400 * 3650);
     try std.testing.expect((try browser.age(now)).toSeconds() > 3148551);
 }
 
