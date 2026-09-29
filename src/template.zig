@@ -1,6 +1,7 @@
 pub const Structs = @import("comptime_structs");
 pub const Directive = @import("template/directive.zig");
 pub const Template = @import("template/Template.zig");
+pub const StackedData = @import("template/StackedData.zig");
 
 pub const html = @import("template/html.zig");
 

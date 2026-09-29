@@ -282,7 +282,7 @@ fn initCommon(
 }
 
 pub fn initZWSGI(
-    zwsgi: *zWSGIRequest,
+    zwsgi: *zWSGI.Request,
     data: Data,
     now: Timestamp,
     a: Allocator,
@@ -310,7 +310,7 @@ pub fn initZWSGI(
         try headers.addCustom(a, v.key, v.val);
     }
     // TODO replace this hack with better header support
-    for ([_]zWSGIParam{ .MTLS_ENABLED, .MTLS_FINGERPRINT }) |key| {
+    for ([_]zWSGI.Param{ .MTLS_ENABLED, .MTLS_FINGERPRINT }) |key| {
         try headers.addCustom(a, @tagName(key), zwsgi.known.get(key) orelse continue);
     }
 
@@ -451,5 +451,4 @@ const allocPrint = std.fmt.allocPrint;
 const bufPrint = std.fmt.bufPrint;
 
 const IOVec = @import("iovec.zig").IOVec;
-const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
-const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
+const zWSGI = @import("zwsgi.zig");

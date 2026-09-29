@@ -106,7 +106,7 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn initRequest(_: *const zWSGI, ds: *Frame.Downstream, now: Io.Timestamp, a: Allocator) !Request {
+pub fn initRequest(_: *const zWSGI, ds: *Frame.Downstream, now: Io.Timestamp, a: Allocator) !Frame.Request {
     log.debug("setting up request", .{});
     try ds.zwsgi(a);
     const request_data = try requestData(a, &ds.gateway.zwsgi, &ds.reader.interface);
@@ -125,7 +125,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     const srv_interface: *const Server.Interface = @fieldParentPtr("zwsgi", z);
     const srvr: *Server = @alignCast(@constCast(@fieldParentPtr("interface", srv_interface)));
     var ds: Frame.Downstream = try .init(stream, a, io);
-    const request: Request = try z.initRequest(&ds, now, a);
+    const request: Frame.Request = try z.initRequest(&ds, now, a);
     var frame: Frame = try .init(srvr, ds, &request, a, io);
 
     defer {
@@ -158,7 +158,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
     frame.downstream.writer.interface.flush() catch {};
 }
 
-pub const zWSGIParam = enum {
+pub const Param = enum {
     // These are minimum expected values
     REMOTE_ADDR,
     REMOTE_PORT,
@@ -188,36 +188,36 @@ pub const zWSGIParam = enum {
     HTTP_FROM,
     HTTP_VIA,
 
-    pub const fields = @typeInfo(zWSGIParam).@"enum".fields;
+    pub const fields = @typeInfo(Param).@"enum".fields;
 
-    pub fn fromStr(str: []const u8) ?zWSGIParam {
+    pub fn fromStr(str: []const u8) ?Param {
         inline for (fields) |f| {
             if (eqlIgnoreCase(f.name, str)) return @enumFromInt(f.value);
         } else return null;
     }
 };
 
-pub const zWSGIRequest = struct {
+pub const Request = struct {
     header: uProtoHeader = uProtoHeader{},
-    known: std.EnumArray(zWSGIParam, ?[]const u8) = .initFill(null),
+    known: std.EnumArray(Param, ?[]const u8) = .initFill(null),
     vars: ArrayList(uWSGIVar) = .empty,
 
-    pub fn init(r: *Reader, a: Allocator) !zWSGIRequest {
+    pub fn init(r: *Reader, a: Allocator) !Request {
         const uwsgi_header: uProtoHeader = try .init(r);
         try r.fill(uwsgi_header.size);
 
         var subr: Reader = .fixed(try r.take(uwsgi_header.size));
-        var zr: zWSGIRequest = .{ .header = uwsgi_header };
+        var zr: Request = .{ .header = uwsgi_header };
         try zr.readVars(a, &subr);
         return zr;
     }
 
-    fn readVars(zr: *zWSGIRequest, a: Allocator, r: *Reader) !void {
+    fn readVars(zr: *Request, a: Allocator, r: *Reader) !void {
         try zr.vars.ensureTotalCapacity(a, 10);
         while (r.seek < zr.header.size) {
             const key_len = try r.takeInt(u16, system.endian);
             const key_str = try r.take(key_len);
-            const expected = zWSGIParam.fromStr(key_str);
+            const expected: ?Param = .fromStr(key_str);
 
             const val_len = try r.takeInt(u16, system.endian);
             if (val_len > 0) {
@@ -265,8 +265,8 @@ const uWSGIVar = struct {
     }
 };
 
-fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
-    var post_data: ?Request.Data.Post = null;
+fn requestData(a: Allocator, zreq: *Request, r: *Reader) !Frame.Request.Data {
+    var post_data: ?Frame.Request.Data.Post = null;
 
     if (zreq.known.get(.CONTENT_LENGTH)) |h_len| {
         const h_type = zreq.known.get(.CONTENT_TYPE) orelse "text/plain";
@@ -287,7 +287,7 @@ fn requestData(a: Allocator, zreq: *zWSGIRequest, r: *Reader) !Request.Data {
 
     return .{
         .post = post_data,
-        .query = try Request.Data.readQuery(a, zreq.known.get(.QUERY_STRING) orelse ""),
+        .query = try Frame.Request.Data.readQuery(a, zreq.known.get(.QUERY_STRING) orelse ""),
     };
 }
 
@@ -310,5 +310,4 @@ const pollfd = system.pollfd;
 
 const Server = @import("Server.zig");
 const Frame = @import("Frame.zig");
-const Request = @import("Request.zig");
 const Router = @import("Router.zig");

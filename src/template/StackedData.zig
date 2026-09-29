@@ -1,6 +1,10 @@
-map: HashMap = .{},
+map: HashMap,
 
-const ResponseData = @This();
+const StackedData = @This();
+
+pub const empty: StackedData = .{
+    .map = .empty,
+};
 
 fn name(comptime T: type) []const u8 {
     return comptime switch (@typeInfo(T)) {
@@ -11,31 +15,31 @@ fn name(comptime T: type) []const u8 {
     };
 }
 
-pub fn add(rd: *ResponseData, T: type, a: Allocator, data: *T) !void {
+pub fn add(rd: *StackedData, T: type, a: Allocator, data: *T) !void {
     try rd.map.put(a, name(T), data);
 }
 
-pub fn clone(rd: *ResponseData, T: type, a: Allocator, data: T) !void {
+pub fn clone(rd: *StackedData, T: type, a: Allocator, data: T) !void {
     const copy = try a.create(@TypeOf(data));
     copy.* = data;
     try rd.add(T, a, copy);
 }
 
-pub fn get(rd: ResponseData, T: type) ?*T {
+pub fn get(rd: StackedData, T: type) ?*T {
     if (rd.map.get(@typeName(T))) |data| {
         return @as(*T, @ptrCast(@alignCast(data)));
     }
     return null;
 }
 
-pub fn raze(rd: *ResponseData, a: Allocator) void {
+pub fn raze(rd: *StackedData, a: Allocator) void {
     rd.map.deinit(a);
 }
 
-test ResponseData {
+test StackedData {
     const a = std.testing.allocator;
 
-    var rd: ResponseData = .{};
+    var rd: StackedData = .empty;
     defer rd.raze(a);
 
     const Type = struct {

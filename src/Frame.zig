@@ -31,12 +31,12 @@ uri: Uri,
 /// than public access.
 user: ?Auth.User = null,
 
-/// The ResponseData API is currently unstable, and may change in the future.
-/// response_data saving any type to be fetched at any time later in the
+/// The StackedData API is currently unstable, and may change in the future.
+/// template_data saving any type to be fetched at any time later in the
 /// request. An example use case is when it makes more sense to generate some
 /// page data at a different phase, e.g. when constructing the route, and then
-/// reading it later. Use with caution, as may leak if misused.
-response_data: ResponseData,
+/// reading it later.
+template_data: template.StackedData,
 
 /// Response Headers: `frame.response_headers.addCustom("Name", "Value");`
 response_headers: Headers,
@@ -118,7 +118,7 @@ pub const Downstream = struct {
     phase: Phase,
 
     pub const Gateway = union(enum) {
-        zwsgi: zWSGIRequest,
+        zwsgi: zWSGI.Request,
         http: std.http.Server,
         none: void,
     };
@@ -216,7 +216,7 @@ pub fn init(srv: *Server, ds: Downstream, request: *const Request, a: Allocator,
         .user = srv.auth.authenticate(&request.headers, request.now) catch null,
         // Request.now is used to validate the session from the time the request was received by the server
         .cookie_jar = .init(a),
-        .response_data = .{},
+        .template_data = .empty,
         .server = srv,
     };
 }
@@ -351,36 +351,43 @@ pub fn requireValidUser(frame: *Frame) !void {
 }
 
 pub fn raze(f: *Frame) void {
-    f.response_data.raze(f.alloc);
+    f.template_data.raze(f.alloc);
 }
 
 test {
     _ = std.testing.refAllDecls(@This());
     _ = &dumpDebugData;
-    _ = &ResponseData;
+    _ = &Auth;
+    _ = &ContentType;
+    _ = &Headers;
+    _ = &Request;
+    _ = &template;
+    _ = &template.StackedData;
+    _ = &Router;
+    _ = &Server;
+    _ = &Websocket;
 }
 
-const Allocator = std.mem.Allocator;
 const Auth = @import("Auth.zig");
 const ContentType = @import("content-type.zig");
 const Cookies = @import("cookies.zig");
-const Error = errors.Error;
 const Headers = @import("Headers.zig");
-const NetworkError = errors.NetworkError;
-const Request = @import("Request.zig");
-const ResponseData = @import("response-data.zig");
+pub const Request = @import("Request.zig");
+const template = @import("template.zig");
 const Router = @import("Router.zig");
 const Server = @import("Server.zig");
 const Websocket = @import("websocket.zig");
 const errors = @import("errors.zig");
-const log = std.log.scoped(.Verse);
-const std = @import("std");
-const zWSGIParam = @import("zwsgi.zig").zWSGIParam;
-const zWSGIRequest = @import("zwsgi.zig").zWSGIRequest;
-const Writer = Io.Writer;
-const Reader = Io.Reader;
-const Io = std.Io;
-const Status = std.http.Status;
-
+const Error = errors.Error;
+const NetworkError = errors.NetworkError;
+const zWSGI = @import("zwsgi.zig");
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;
+
+const std = @import("std");
+const log = std.log.scoped(.Verse);
+const Io = std.Io;
+const Status = std.http.Status;
+const Writer = Io.Writer;
+const Reader = Io.Reader;
+const Allocator = std.mem.Allocator;
