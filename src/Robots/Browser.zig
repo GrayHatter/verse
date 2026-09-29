@@ -16,7 +16,6 @@ pub const Name = enum {
     edge,
     firefox,
     hastur,
-    ladybird,
     opera,
     safari,
     unknown,
@@ -30,7 +29,6 @@ pub const Name = enum {
             .edge => Edge.rules,
             .firefox => Firefox.rules,
             .hastur => Hastur.rules,
-            .ladybird => Ladybird.rules,
             .opera => Opera.rules,
             .safari => Safari.rules,
             .msie => Msie.rules,
@@ -86,7 +84,7 @@ pub const Brave = struct {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{.{ 0, 0 }};
+        pub const VerDates = Chrome.Version.VerDates;
     };
 };
 
@@ -234,29 +232,27 @@ pub const Hastur = struct {
     };
 };
 
-pub const Ladybird = struct {
+pub const Safari = struct {
     pub const rules: []const Robots.RuleFn = &.{};
 
     pub const Version = enum(u16) {
         _,
 
         pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{.{ 0, 0 }};
+        // https://developer.apple.com/documentation/safari-release-notes
+        pub const VerDates = [_]VerDate{
+            .{ 0, 0 },           .{ 1, 0 },           .{ 2, 0 },           .{ 3, 0 },
+            .{ 4, 0 },           .{ 5, 0 },           .{ 6, 0 },           .{ 7, 0 },
+            .{ 8, 0 },           .{ 9, 0 },           .{ 10, 0 },          .{ 11, 0 },
+            .{ 12, 0 },          .{ 13, 0 },          .{ 14, 1600239600 }, .{ 15, 1632121200 },
+            .{ 16, 1662966000 }, .{ 17, 1695020400 }, .{ 18, 1726470000 }, .{ 19, 0 },
+            .{ 20, 0 },          .{ 21, 0 },          .{ 22, 0 },          .{ 23, 0 },
+            .{ 24, 0 },          .{ 25, 0 },          .{ 26, 1757919600 }, .{ 27, 1757919600 },
+        };
     };
 };
 
 pub const Opera = struct {
-    pub const rules: []const Robots.RuleFn = &.{};
-
-    pub const Version = enum(u16) {
-        _,
-
-        pub const Dates = compileDates(&VerDates);
-        pub const VerDates = [_]VerDate{.{ 0, 0 }};
-    };
-};
-
-pub const Safari = struct {
     pub const rules: []const Robots.RuleFn = &.{};
 
     pub const Version = enum(u16) {
@@ -362,7 +358,6 @@ pub const Rules = struct {
             .brave,
             .firefox,
             .hastur,
-            .ladybird,
             .msie,
             .opera,
             .safari,
@@ -415,9 +410,7 @@ pub const Rules = struct {
 
     pub fn protocolVer(_: UserAgent, r: *const Request, score: *f16) !void {
         if (!r.secure) return;
-
         // TODO To actually be correct, this should do a browser version check as well
-
         switch (r.protocol) {
             .http => |http| switch (http) {
                 .@"1.0" => score.* += 1.0,
