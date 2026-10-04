@@ -61,18 +61,31 @@ pub fn authenticate(ptr: *Auth, headers: *const Headers, _: Timestamp) Error!Use
 }
 
 test MTLS {
+    const TestingS = struct {
+        pub fn lookupUser(_: *const Auth, _: []const u8) Error!User {
+            return .invalid_user;
+        }
+    };
     const a = std.testing.allocator;
     const now: Timestamp = Clock.real.now(std.testing.io);
     var mtls = MTLS{};
+    mtls.auth.vtable = &.{
+        .authenticate = authenticate,
+        .lookupUser = TestingS.lookupUser,
+        .valid = null,
+        .createSession = null,
+        .getUserToken = null,
+        .getUserCookie = null,
+    };
 
     var headers: Headers = .empty;
     defer headers.raze(a);
     try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
     try headers.addCustom(a, "MTLS_FINGERPRINT", "LOLTOTALLYVALID");
 
-    const user = mtls.auth.authenticate(&headers, now) catch undefined;
+    const user = mtls.auth.authenticate(&headers, now) catch unreachable;
 
-    try std.testing.expectEqual(null, user.user_ptr);
+    try std.testing.expectEqual(@as(?*anyopaque, null), user.user_ptr);
     try std.testing.expectEqual(false, mtls.auth.valid(&user));
 
     try headers.addCustom(a, "MTLS_ENABLED", "SUCCESS");
@@ -91,7 +104,7 @@ test MTLS {
         try std.testing.expectEqual(false, iv_user.authenticated);
         try std.testing.expectEqual(false, mtls.auth.valid(&iv_user));
 
-        if (comptime @import("builtin").mode != .Debug) {
+        if (comptime @import("builtin").mode != .debug) {
             try std.testing.expectEqual(false, iv_user.valid());
         }
 

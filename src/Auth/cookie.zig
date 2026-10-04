@@ -37,7 +37,7 @@ pub fn CookieAuth(HMAC: type) type {
         cookie_name: []const u8,
 
         /// this session buffer API is unstable and may be replaced
-        session_buffer: [ibuf_size]u8 = [_]u8{0} ** ibuf_size,
+        session_buffer: [ibuf_size]u8 = @splat(0),
         alloc: ?Allocator,
         const ibuf_size = b64_enc.calcSize(HMAC.mac_length * 8);
 
@@ -178,7 +178,7 @@ pub fn CookieAuth(HMAC: type) type {
         }
 
         pub fn mkToken(hm: *HMAC, token: []u8, user: *const User, now: Timestamp) Error![]const u8 {
-            var buffer: [Self.ibuf_size]u8 = [_]u8{0} ** Self.ibuf_size;
+            var buffer: [Self.ibuf_size]u8 = @splat(0);
             buffer[0] = Token.Version;
             var b: []u8 = buffer[1..];
             const time = toBytes(nativeToLittle(i64, @intCast(@divTrunc(now.nanoseconds, std.time.ns_per_s))));

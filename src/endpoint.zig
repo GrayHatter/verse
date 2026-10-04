@@ -188,7 +188,7 @@ test routeCount {
         try std.testing.expectEqual(1, routeCount(.{
             struct {
                 const verse_name = .testing;
-                const verse_endpoints = Endpoints(.{
+                pub const verse_endpoints = Endpoints(.{
                     struct {
                         pub const verse_name = .sub_testing;
                         pub fn index() void {}
@@ -200,7 +200,7 @@ test routeCount {
             struct {
                 const verse_name = .root;
                 pub fn index(_: *Frame) Router.Error!void {}
-                const verse_routes = .{
+                pub const verse_routes = .{
                     Router.ROUTE("first", index),
                     Router.ROUTE("second", index),
                     Router.ROUTE("third", index),
@@ -209,11 +209,11 @@ test routeCount {
             struct {
                 pub const verse_name = .sub_root;
                 pub fn empty(_: *Frame) Router.Error!void {}
-                const verse_routes = .{
+                pub const verse_routes = .{
                     Router.ROUTE("first", empty),
                     Router.ROUTE("second", empty),
                 };
-                const verse_endpoints = Endpoints(.{
+                pub const verse_endpoints = Endpoints(.{
                     struct {
                         pub const verse_name = .sub_sub_root;
                         pub fn index(_: *Frame) Router.Error!void {}
@@ -223,8 +223,8 @@ test routeCount {
         }));
         try std.testing.expectEqual(3, routeCount(.{
             struct {
-                const verse_name = .root;
-                const verse_routes = .{
+                pub const verse_name = .root;
+                pub const verse_routes = .{
                     Router.ROUTE("first", empty),
                     Router.ROUTE("second", empty),
                     Router.ROUTE("third", empty),
@@ -234,8 +234,8 @@ test routeCount {
         }));
         try std.testing.expectEqual(1, routeCount(.{
             struct {
-                const verse_name = .testing;
-                const verse_routes = .{
+                pub const verse_name = .testing;
+                pub const verse_routes = .{
                     Router.ROUTE("first", empty),
                     Router.ROUTE("second", empty),
                     Router.ROUTE("third", empty),
@@ -243,20 +243,20 @@ test routeCount {
                 pub fn empty(_: *Frame) Router.Error!void {}
             },
             struct {
-                const verse_name = .dummy;
+                pub const verse_name = .dummy;
             },
         }));
         try std.testing.expectEqual(1, routeCount(.{
             struct {
-                const verse_name = .testing;
-                const verse_router = &router;
+                pub const verse_name = .testing;
+                pub const verse_router = &router;
                 pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
             },
         }));
         try std.testing.expectEqual(1, routeCount(.{
             struct {
-                const verse_name = .testing;
-                const verse_router = &router;
+                pub const verse_name = .testing;
+                pub const verse_router = &router;
                 pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
                 pub fn index() void {}
             },
@@ -265,8 +265,8 @@ test routeCount {
         try std.testing.expectEqual(2, routeCount(.{
             // TODO expand this test in include a root struct
             struct {
-                const verse_name = .testing;
-                const verse_aliases = .{
+                pub const verse_name = .testing;
+                pub const verse_aliases = .{
                     // everyone has testing infra, we're not lucky enough to
                     // have dedicated infra reserved for prod
                     .prod,
@@ -278,52 +278,52 @@ test routeCount {
         try std.testing.expectEqual(3, routeCount(.{
             // TODO expand this test in include a root struct
             struct {
-                const verse_name = .first;
+                pub const verse_name = .first;
                 pub fn index() void {}
             },
             struct {
-                const verse_name = .second;
-                const verse_aliases = .{.prod};
+                pub const verse_name = .second;
+                pub const verse_aliases = .{.prod};
                 pub fn index() void {}
             },
         }));
         try std.testing.expectEqual(1, routeCount(.{
             // TODO expand this test in include a root struct
             struct {
-                const verse_name = .first;
+                pub const verse_name = .first;
                 pub fn index() void {}
             },
             struct {
-                const verse_name = .second;
-                const verse_aliases = .{.prod};
-                const verse_endpoint_disabled: bool = true;
+                pub const verse_name = .second;
+                pub const verse_aliases = .{.prod};
+                pub const verse_endpoint_disabled: bool = true;
                 pub fn index() void {}
             },
         }));
         try std.testing.expectEqual(3, routeCount(.{
             struct {
-                const verse_name = .first;
+                pub const verse_name = .first;
                 pub fn index() void {}
             },
             struct {
-                const verse_name = .second;
-                const verse_aliases = .{.prod};
-                const verse_endpoint_disabled: bool = false;
+                pub const verse_name = .second;
+                pub const verse_aliases = .{.prod};
+                pub const verse_endpoint_disabled: bool = false;
                 pub fn index() void {}
             },
         }));
         try std.testing.expectEqual(10, routeCount(.{
             struct {
-                const verse_name = .first;
+                pub const verse_name = .first;
                 pub fn index() void {}
             },
             struct {
-                const verse_name = .second;
-                const verse_aliases = .{
+                pub const verse_name = .second;
+                pub const verse_aliases = .{
                     .prod,     .devel,   .devel2, .not_devel,
                     .not_prod, .testing, .admin,  .secret,
                 };
-                const verse_endpoint_disabled: bool = false;
+                pub const verse_endpoint_disabled: bool = false;
                 pub fn index() void {}
             },
         }));

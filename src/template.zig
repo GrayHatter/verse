@@ -84,7 +84,7 @@ pub fn CTFields(count: usize) type {
     return struct {
         names: [count][]const u8,
         ftypes: [count]type,
-        attrs: [count]std.builtin.Type.StructField.Attributes,
+        attrs: [count]std.builtin.Type.Struct.FieldAttributes,
     };
 }
 
@@ -94,10 +94,10 @@ fn comptimeFields(comptime count: usize, comptime text: []const u8) CTFields(cou
     for (0..count) |loop| {
         while (std.mem.indexOfScalarPos(u8, text, last, '<')) |idx| {
             last = idx + 1;
-            if (last >= text.len) unreachable;
+            if (last >= text.len) @panic("impossible size");
             if (Directive.init(text[last - 1 ..])) |drct| switch (drct.verb) {
                 .variable => {
-                    const ws = std.mem.indexOfAnyPos(u8, text, last, " />") orelse unreachable;
+                    const ws = findAnyPos(u8, text, last, " />") orelse @panic("tag doesn't close");
                     const name = text[last..ws];
                     var lower: [name.len + 8:0]u8 = @splat(0);
                     const fs = Template.fieldSlice(name, &lower);
@@ -125,7 +125,7 @@ fn comptimeFields(comptime count: usize, comptime text: []const u8) CTFields(cou
                     fields.attrs[loop] = .{};
                     break;
                 },
-                else => unreachable,
+                else => comptime unreachable,
             };
         }
     }
@@ -911,7 +911,7 @@ test "directive typed ?usize default" {
     const blob = "<Number type=\"?usize\" default=\"0\" />";
     const expected: []const u8 = "0";
 
-    const d: Directive = Directive.init(blob) orelse unreachable;
+    const d: Directive = Directive.init(blob).?;
     try std.testing.expectEqualDeep(Directive{
         .verb = .variable,
         .noun = "Number",
@@ -1219,6 +1219,7 @@ const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const endsWith = std.mem.endsWith;
 const indexOfScalar = std.mem.indexOfScalar;
+const findAnyPos = std.mem.findAnyPos;
 const allocPrint = std.fmt.allocPrint;
 const log = std.log.scoped(.Verse);
 

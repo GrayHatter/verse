@@ -94,10 +94,11 @@ pub const Encoding = struct {
 
     pub fn fromStr(str: []const u8) Encoding {
         var e: Encoding = .none;
-        inline for (@typeInfo(Encoding).@"struct".fields) |f| {
-            if (comptime eql(u8, f.name, "bytes")) continue;
-            if (find(u8, str, f.name)) |_| {
-                @field(e, f.name) = true;
+        const S = @typeInfo(Encoding).@"struct";
+        inline for (S.field_names) |name| {
+            if (comptime eql(u8, name, "bytes")) continue;
+            if (find(u8, str, name)) |_| {
+                @field(e, name) = true;
             }
         }
         e.bytes = str;
@@ -126,16 +127,17 @@ pub const Language = struct {
             .zh = 0.0,
             .bytes = str,
         };
-        inline for (@typeInfo(Language).@"struct".fields) |f| {
-            if (comptime eql(u8, f.name, "bytes")) continue;
-            if (find(u8, str, f.name)) |idx| {
-                if (str.len == idx + f.name.len or
-                    str[idx + f.name.len] == '-' or
-                    str[idx + f.name.len] == ';' or
-                    str[idx + f.name.len] == ',')
+        const S = @typeInfo(Language).@"struct";
+        inline for (S.field_names) |name| {
+            if (comptime eql(u8, name, "bytes")) continue;
+            if (find(u8, str, name)) |idx| {
+                if (str.len == idx + name.len or
+                    str[idx + name.len] == '-' or
+                    str[idx + name.len] == ';' or
+                    str[idx + name.len] == ',')
                 {
                     // TODO parse q value
-                    @field(l, f.name) = 1.0;
+                    @field(l, name) = 1.0;
                 }
             }
         }
@@ -184,9 +186,10 @@ pub const Methods = enum(u10) {
     PROPFIND = 512,
 
     pub fn fromStr(s: []const u8) !Methods {
-        inline for (std.meta.fields(Methods)) |field| {
-            if (std.mem.startsWith(u8, s, field.name)) {
-                return @enumFromInt(field.value);
+        const E = @typeInfo(Methods).@"enum";
+        inline for (E.field_names, E.field_values) |name, value| {
+            if (std.mem.startsWith(u8, s, name)) {
+                return @fromBackingInt(@intCast(value));
             }
         }
         return error.UnknownMethod;
@@ -221,20 +224,15 @@ pub const Protocol = union(enum) {
 
     pub fn parse(str: []const u8) Protocol {
         if (startsWith(u8, str, "HTTP/")) {
-            inline for (Http.fields) |f| {
-                if (eql(u8, str[5..], f.name)) return .{ .http = @as(Http, @enumFromInt(f.value)) };
+            const E = @typeInfo(Http).@"enum";
+            inline for (E.field_names, E.field_values) |name, value| {
+                if (eql(u8, str[5..], name)) return .{ .http = @as(Http, @fromBackingInt(@intCast(value))) };
             }
         }
         return .{ .malformed = str };
     }
 
-    pub const Http = enum {
-        @"1.0",
-        @"1.1",
-        @"2.0",
-
-        pub const fields = @typeInfo(Http).@"enum".fields;
-    };
+    pub const Http = enum { @"1.0", @"1.1", @"2.0" };
 
     pub const default: Protocol = .{ .http = .@"1.1" };
 };

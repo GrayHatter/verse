@@ -221,14 +221,14 @@ test Message {
         try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 8 }, &bytes);
     }
     {
-        const msg = Message.init("Hi, Mom!" ** 15, .text);
+        const msg = Message.init("Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!", .text);
         var bytes: [2]u8 = undefined;
         var w: Writer = .fixed(&bytes);
         try w.writeStruct(msg.header, .big);
         try std.testing.expectEqualSlices(u8, &[2]u8{ 0x81, 120 }, &bytes);
     }
     {
-        const msg = Message.init("Hi, Mom!" ** 16, .text);
+        const msg = Message.init("Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!Hi, Mom!", .text);
         var bytes: [2]u8 = undefined;
         var w: Writer = .fixed(&bytes);
         try w.writeStruct(msg.header, .big);

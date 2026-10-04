@@ -344,7 +344,7 @@ test Page {
 
     const PUT = Templates.PageData("templates/example.html");
 
-    var vecbuf = [_]IOVec{undefined} ** 128;
+    var vecbuf: [128]IOVec = @splat(undefined);
     var varr: IOVArray = .initBuffer(&vecbuf);
 
     const page = PUT.init(.{

@@ -50,7 +50,7 @@ pub const invalid_user: User = .{
 
 pub fn valid(u: *const User) bool {
     if (u.unique_id == null) return false;
-    if (u.auth_ptr == null and comptime builtin.mode == .Debug) {
+    if (u.auth_ptr == null and comptime builtin.mode == .debug) {
         @panic("It is IB to call user.valid() without an origin_auth");
     }
     return u.auth_ptr.?.valid(u);

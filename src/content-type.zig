@@ -162,9 +162,10 @@ pub const MultiPart = union(enum) {
     @"form-data": FormData,
 
     pub fn fromStr(str: []const u8) !MultiPart {
-        inline for (@typeInfo(MultiPart).@"union".fields) |f| {
-            if (startsWith(u8, str, f.name)) {
-                return try f.type.fromStr(str);
+        const U = @typeInfo(MultiPart).@"union";
+        inline for (U.field_names, U.field_types) |name, typ| {
+            if (startsWith(u8, str, name)) {
+                return try typ.fromStr(str);
             }
         } else {
             return error.InvalidMultiPart;
@@ -264,9 +265,10 @@ test string {
 }
 
 pub fn fromStr(str: []const u8) !ContentType {
-    inline for (std.meta.fields(ContentBase)) |field| {
-        if (startsWith(u8, str, field.name)) {
-            return wrapBase(field.type, str[field.name.len + 1 ..]);
+    const U = @typeInfo(ContentBase).@"union";
+    inline for (U.field_names, U.field_types) |name, typ| {
+        if (startsWith(u8, str, name)) {
+            return wrapBase(typ, str[name.len + 1 ..]);
         }
     }
     log.warn("unable to process content type {s}", .{str});
@@ -274,9 +276,14 @@ pub fn fromStr(str: []const u8) !ContentType {
 }
 
 fn wrapField(comptime Kind: type, str: []const u8) !Kind {
-    inline for (std.meta.fields(Kind)) |field| {
-        if (startsWith(u8, str, field.name)) {
-            return @enumFromInt(field.value);
+    const U = switch (@typeInfo(Kind)) {
+        .@"union" => |u| u,
+        .@"enum" => |e| e,
+        else => comptime unreachable,
+    };
+    inline for (U.field_names, U.field_values) |name, value| {
+        if (startsWith(u8, str, name)) {
+            return @fromBackingInt(@intCast(value));
         }
     }
     log.warn("unable to process content type {s} {s}", .{ @typeName(Kind), str });

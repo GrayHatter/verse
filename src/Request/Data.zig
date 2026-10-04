@@ -11,17 +11,18 @@ pub fn validate(data: Data, comptime T: type) !T {
 pub fn Validate(comptime T: type) type {
     return struct {
         pub fn init(data: Data) !T {
+            const S = @typeInfo(T).@"struct";
             var request: T = undefined;
             var query: From(Query) = .init(&data.query);
             if (data.post) |data_post| {
                 const post: From(Post) = .init(&data_post);
-                inline for (@typeInfo(T).@"struct".fields) |field| {
-                    @field(request, field.name) = post.get(field.type, field.name, field.defaultValue()) catch
-                        try query.get(field.type, field.name, field.defaultValue());
+                inline for (S.field_names, S.field_types, S.field_attrs) |name, typ, attr| {
+                    @field(request, name) = post.get(typ, name, attr.defaultValue(typ)) catch
+                        try query.get(typ, name, attr.defaultValue(typ));
                 }
             } else {
-                inline for (@typeInfo(T).@"struct".fields) |field| {
-                    @field(request, field.name) = try query.get(field.type, field.name, field.defaultValue());
+                inline for (S.field_names, S.field_types, S.field_attrs) |name, typ, attr| {
+                    @field(request, name) = try query.get(typ, name, attr.defaultValue(typ));
                 }
             }
             return request;
@@ -48,8 +49,9 @@ pub fn Validate(comptime T: type) type {
         fn initPost(post: Post) !T {
             var p: From(Post) = .init(&post);
             var req: T = undefined;
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                @field(req, field.name) = try p.get(field.type, field.name, field.defaultValue());
+            const S = @typeInfo(T).@"struct";
+            inline for (S.field_names, S.field_types, S.field_attrs) |name, typ, attr| {
+                @field(req, name) = try p.get(typ, name, attr.defaultValue(typ));
             }
             return req;
         }
@@ -444,7 +446,7 @@ const Header = enum {
     pub fn fromStr(str: []const u8) ?Header {
         inline for (std.meta.fields(Header)) |field| {
             if (std.mem.startsWith(u8, str, field.name)) {
-                return @enumFromInt(field.value);
+                return @fromBackingInt(@intCast(field.value));
             }
         }
         std.log.info("'{s}'", .{str});

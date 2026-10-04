@@ -50,9 +50,6 @@ pub const Name = enum {
     malicious,
     unknown,
 
-    pub const fields = @typeInfo(Name).@"enum".fields;
-    pub const len = fields.len;
-
     pub fn robotsTxtName(n: Name) [:0]const u8 {
         return switch (n) {
             .amzn_searchbot => "Amzn-SearchBot",
@@ -293,7 +290,7 @@ pub const Identity = struct {
 };
 
 pub const bots: std.EnumArray(Name, Identity) = .{
-    .values = [Name.len]Identity{
+    .values = [@typeInfo(Name).@"enum".field_names.len]Identity{
         .{ .bot = .amzn_searchbot, .network = null },
         .{ .bot = .applebot, .network = null },
         .{ .bot = .archiveorgbot, .network = null },
@@ -320,8 +317,9 @@ test {
 }
 
 test "bot ident order" {
-    inline for (Bot.Name.fields) |bot| {
-        const bot_: Bot.Name = @enumFromInt(bot.value);
+    const E = @typeInfo(Bot.Name).@"enum";
+    inline for (E.field_values) |value| {
+        const bot_: Bot.Name = @fromBackingInt(@intCast(value));
         try std.testing.expectEqual(bot_, bots.get(bot_).bot);
     }
 }

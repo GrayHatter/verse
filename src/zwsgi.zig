@@ -136,7 +136,7 @@ pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {
                 @as(f64, @floatFromInt(lap.toNanoseconds())) / 1000_000.0,
                 request.remote_addr,
                 @tagName(request.method),
-                @intFromEnum(frame.status orelse .ok),
+                @backingInt(frame.status orelse .ok),
                 request.uri,
                 if (request.user_agent) |ua| ua.string else "EMPTY",
             },
@@ -188,11 +188,11 @@ pub const Param = enum {
     HTTP_FROM,
     HTTP_VIA,
 
-    pub const fields = @typeInfo(Param).@"enum".fields;
-
     pub fn fromStr(str: []const u8) ?Param {
-        inline for (fields) |f| {
-            if (eqlIgnoreCase(f.name, str)) return @enumFromInt(f.value);
+        const names = @typeInfo(Param).@"enum".field_names;
+        const values = @typeInfo(Param).@"enum".field_values;
+        inline for (names, values) |n, v| {
+            if (eqlIgnoreCase(n, str)) return @fromBackingInt(@intCast(v));
         } else return null;
     }
 };

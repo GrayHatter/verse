@@ -12,19 +12,23 @@ const zon: struct {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const use_llvm = true;
+    const use_llvm = false;
 
     const default_step = b.getInstallStep();
 
-    //if (b.args) |args| for (args) |arg| std.debug.print("arg {s}\n", .{arg});
-    //std.debug.print("default: {s}\n", .{b.default_step.name});
-
     // root build options
-    const abx_required: bool = b.option(bool, "abx-required", "templates will default to Abx instead of []const u8") orelse false;
-    const template_path: ?LazyPath = b.option(LazyPath, "template-path", "path for the templates generated at comptime");
-    const ua_validation = b.option(bool, "ua-validation", "[not-implemented] disable user agent validation") orelse
-        true;
-    const accept_lang_heat = b.option([]const u8, "accept-lang-heat", "[not-implemented] add bot detection heat to given language") orelse "";
+    const abx_required: bool = b.option(bool, "abx-required",
+        \\templates will default to Abx instead of []const u8
+    ) orelse false;
+    const template_path: ?LazyPath = b.option(LazyPath, "template-path",
+        \\path for the templates generated at comptime
+    );
+    const ua_validation = b.option(bool, "ua-validation",
+        \\[not-implemented] disable user agent validation
+    ) orelse true;
+    const accept_lang_heat = b.option([]const u8, "accept-lang-heat",
+        \\[not-implemented] add bot detection heat to given language
+    ) orelse "";
 
     const options = b.addOptions();
 
@@ -57,10 +61,8 @@ pub fn build(b: *std.Build) !void {
         compiler.addDir(b.path("src/builtin-html/"));
     }
     compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
-    compiler.collect(b.graph.io) catch {
-        if (template_path != null) @panic("unreachable");
-    };
-    const comptime_templates = compiler.buildTemplates() catch @panic("unreachable");
+    compiler.collect();
+    const comptime_templates = compiler.moduleTemplate();
 
     const structc = b.addExecutable(.{
         .name = "structc",
@@ -74,7 +76,7 @@ pub fn build(b: *std.Build) !void {
     structc.root_module.addOptions("verse_buildopts", options);
     default_step.dependOn(&structc.step);
 
-    const comptime_structs = compiler.buildStructs(structc) catch @panic("unreachable");
+    const comptime_structs = compiler.moduleStruct(structc);
     comptime_structs.addImport("Antibiotic", abx);
 
     verse_lib.addImport("comptime_structs", comptime_structs);
@@ -135,9 +137,7 @@ pub fn build(b: *std.Build) !void {
 
         const run_example = b.addRunArtifact(example_exe);
         run_example.step.dependOn(b.getInstallStep());
-        if (b.args) |args| {
-            run_example.addArgs(args);
-        }
+        run_example.addPassthruArgs();
         const run_name = "run-" ++ example;
         const run_description = "Run example: " ++ example;
         const run_step = b.step(run_name, run_description);
@@ -186,8 +186,9 @@ const Compiler = struct {
         comp.structs = null;
     }
 
-    pub fn buildTemplates(comp: *Compiler) !*Module {
+    pub fn moduleTemplate(comp: *Compiler) *Module {
         if (comp.templates) |t| return t;
+
         const compiled = comp.b.createModule(.{
             .root_source_file = comp.depPath("src/template/comptime.zig"),
         });
@@ -196,7 +197,7 @@ const Compiler = struct {
         const names: [][]const u8 = comp.b.allocator.alloc([]const u8, comp.collected.items.len) catch @panic("OOM");
 
         for (comp.collected.items, names) |lpath, *name| {
-            name.* = lpath.getPath3(comp.b, null).sub_path;
+            name.* = comp.b.fmt("{f}", .{lpath});
             _ = compiled.addAnonymousImport(name.*, .{ .root_source_file = lpath });
         }
 
@@ -206,41 +207,48 @@ const Compiler = struct {
         return compiled;
     }
 
-    pub fn buildStructs(comp: *Compiler, step: *std.Build.Step.Compile) !*Module {
+    pub fn moduleStruct(comp: *Compiler, step: *std.Build.Step.Compile) *Module {
         if (comp.structs) |s| return s;
 
         if (comp.debugging) std.debug.print("building structs for {}\n", .{comp.collected.items.len});
+
         const tc_build_run = comp.b.addRunArtifact(step);
         const tc_structs = tc_build_run.addOutputFileArg("compiled-structs.zig");
-        const module = comp.b.createModule(.{ .root_source_file = tc_structs });
+        const s_module = comp.b.createModule(.{ .root_source_file = tc_structs });
 
-        comp.structs = module;
-        return module;
+        comp.structs = s_module;
+        return s_module;
     }
 
-    pub fn collect(comp: *Compiler, io: std.Io) !void {
-        for (comp.dirs.items) |srcdir| {
-            try comp.collectDir(srcdir, io);
-        }
+    pub fn collect(comp: *Compiler) void {
+        for (comp.dirs.items) |srcdir|
+            comp.collectDir(srcdir);
         for (comp.files.items) |file| {
-            try comp.collected.append(comp.b.allocator, file);
+            comp.b.dependOnFileContents(file);
+            comp.collected.append(comp.b.allocator, file) catch @panic("OOM");
         }
     }
 
-    fn collectDir(comp: *Compiler, path: LazyPath, io: std.Io) !void {
-        var idir = path.getPath3(comp.b, null).openDir(io, "", .{ .iterate = true }) catch |err| {
-            std.log.err("template build error {} for srcdir {}", .{ err, path });
-            return err;
-        };
-        defer idir.close(comp.b.graph.io);
+    fn collectDir(comp: *Compiler, path: LazyPath) void {
+        comp.b.dependOnDirectoryContents(path);
 
-        var itr = try idir.walk(comp.b.allocator);
-        while (try itr.next(comp.b.graph.io)) |file| {
+        const a = comp.b.allocator;
+        const io = comp.b.graph.io;
+        const filename = comp.b.fmt("{f}", .{path});
+        //std.debug.print("filename {s}\n", .{filename});
+        const dir = comp.b.root.openDir(io, filename, .{ .iterate = true }) catch |err| switch (err) {
+            else => @panic("unable to open dir"),
+        };
+        defer dir.close(io);
+
+        var itr = dir.walk(a) catch @panic("OOM");
+        while (itr.next(io) catch @panic("IO")) |file| {
             switch (file.kind) {
-                .file => {
-                    if (!std.mem.endsWith(u8, file.basename, ".html")) continue;
-                    //const name = try std.mem.join(comp.b.allocator, "/", &[2][]const u8{ file.path, file.basename });
-                    try comp.collected.append(comp.b.allocator, path.path(comp.b, file.path));
+                .file => if (std.mem.endsWith(u8, file.basename, ".html")) {
+                    //std.debug.print("basename {s}\n", .{file.basename});
+                    const new = path.path(comp.b, a.dupe(u8, file.path) catch @panic("OOM"));
+                    comp.collected.append(a, new) catch @panic("OOM");
+                    comp.b.dependOnFileContents(new);
                 },
                 .directory => {},
                 else => {},
@@ -253,20 +261,17 @@ fn version(b: *std.Build) []const u8 {
     if (!std.process.can_spawn) {
         return zon.version;
     }
+    b.dependOnFileMetadata(b.path(".git/logs/HEAD"));
 
-    var code: u8 = undefined;
-    const git_wide = b.runAllowFail(
-        &[_][]const u8{
-            "git",
-            "-C",
-            b.build_root.path orelse ".",
-            "describe",
-            "--dirty",
-            "--always",
-        },
-        &code,
-        .ignore,
-    ) catch zon.version;
+    const git_wide: []const u8 = switch (b.runFallible(&[_][]const u8{
+        "git",
+        "-C",       b.fmt("{f}", .{b.root}), //
+        "describe", "--dirty",
+        "--always",
+    }, .{})) {
+        .success => |out| out,
+        else => zon.version,
+    };
 
     var git = std.mem.trim(u8, git_wide, " \r\n");
     if (git[0] == 'v') git = git[1..];

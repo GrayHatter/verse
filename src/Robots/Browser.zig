@@ -43,7 +43,7 @@ pub fn agentRules(_: Browser) !void {
 
 pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
     if (comptime !UA_VALIDATION) @compileError("User Agent Validation is disabled");
-    const versions = Versions[@intFromEnum(b.name)];
+    const versions = Versions[@backingInt(b.name)];
     if (b.version >= versions.len) return error.UnknownVersion;
     return std.Io.Timestamp.fromNanoseconds(versions[b.version] * std.time.ns_per_s).durationTo(now);
 }
@@ -60,17 +60,18 @@ test age {
 const Date = i96;
 const VerDate = struct { u16, Date };
 
-const browser_count = @typeInfo(Name).@"enum".fields.len;
+const browser_count = @typeInfo(Name).@"enum".field_names.len;
 
 pub const Versions: [browser_count][]const Date = makeVersions();
 
 fn makeVersions() [browser_count][]const Date {
     var v: [browser_count][]const Date = undefined;
-    for (@typeInfo(Name).@"enum".fields) |field| {
-        var name: [field.name.len]u8 = field.name[0..].*;
-        name[0] ^= 0b100000;
-        v[field.value] = if (@hasDecl(@This(), &name))
-            &@field(@This(), &name).Version.Dates
+    const E = @typeInfo(Name).@"enum";
+    for (E.field_names, E.field_values) |name, value| {
+        var dup: [name.len]u8 = name[0..].*;
+        dup[0] ^= 0b100000;
+        v[value] = if (@hasDecl(@This(), &dup))
+            &@field(@This(), &dup).Version.Dates
         else
             &.{};
     }

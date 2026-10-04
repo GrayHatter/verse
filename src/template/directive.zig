@@ -50,9 +50,10 @@ pub const TemplateType = enum {
     uri,
 
     pub fn fromStr(s: []const u8) !TemplateType {
-        inline for (std.meta.fields(TemplateType)) |ht| {
-            if (eql(u8, ht.name, s)) {
-                return @enumFromInt(ht.value);
+        const T = @typeInfo(TemplateType).@"enum";
+        inline for (T.field_names, T.field_values) |n, v| {
+            if (eql(u8, n, s)) {
+                return @fromBackingInt(@intCast(v));
             }
         }
         return error.InvalidHtmlType;
@@ -330,9 +331,10 @@ fn findAttrs(src_tag: []const u8) !TagAttrMap {
         }
         tag = tag[end..];
 
-        inline for (@typeInfo(TagAttribute).@"enum".fields) |f| {
-            if (eql(u8, f.name, name)) {
-                map.put(@enumFromInt(f.value), value);
+        const tag_attrs = @typeInfo(TagAttribute).@"enum";
+        inline for (tag_attrs.field_names, tag_attrs.field_values) |n, v| {
+            if (eql(u8, n, name)) {
+                map.put(@fromBackingInt(@intCast(v)), value);
                 break;
             }
         } else @panic("unreachable name");

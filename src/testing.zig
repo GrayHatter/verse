@@ -34,9 +34,10 @@ pub fn smokeTest(
 ) !void {
     inline for (routes) |route| {
         const name = root_name ++ "/" ++ route.name;
-        inline for (@typeInfo(Request.Methods).@"enum".fields) |field| {
-            if (comptime !Request.Methods.readOnly(@enumFromInt(field.value))) continue;
-            if (comptime route.methods.supports(@enumFromInt(field.value))) {
+        const E = @typeInfo(Request.Methods).@"enum";
+        inline for (E.field_values) |value| {
+            if (comptime !Request.Methods.readOnly(@fromBackingInt(@intCast(value)))) continue;
+            if (comptime route.methods.supports(@fromBackingInt(@intCast(value)))) {
                 switch (route.target) {
                     .build => |func| {
                         var fc: FrameCtx = try .init(a);
