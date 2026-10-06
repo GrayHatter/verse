@@ -39,9 +39,10 @@ pub fn Validate(comptime T: type) type {
         fn initQuery(query: Query) !T {
             var req: T = undefined;
             var q: From(Query) = .init(&query);
-            inline for (@typeInfo(T).@"struct".fields) |field| {
+            const S = @typeInfo(T).@"struct";
+            inline for (S.field_names, S.field_types, S.field_attrs) |fname, ftype, fattr| {
                 // TODO this has no test
-                @field(req, field.name) = try q.get(field.type, field.name, field.defaultValue());
+                @field(req, fname) = try q.get(ftype, fname, fattr.defaultValue(ftype));
             }
             return req;
         }
@@ -59,16 +60,17 @@ pub fn Validate(comptime T: type) type {
         fn initPostAlloc(a: Allocator, post: Post) !T {
             var p: From(Post) = .init(&post);
             var req: T = undefined;
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                @field(req, field.name) = switch (@typeInfo(field.type)) {
-                    .optional => if (p.optionalItem(field.name)) |o| o.value else null,
+            const S = @typeInfo(T).@"struct";
+            inline for (S.field_names, S.field_types) |fname, ftype| {
+                @field(req, fname) = switch (@typeInfo(ftype)) {
+                    .optional => if (p.optionalItem(fname)) |o| o.value else null,
                     .pointer => |fptr| switch (fptr.child) {
-                        u8 => (try p.require(field.name)).value,
+                        u8 => (try p.require(fname)).value,
                         []const u8 => arr: {
-                            const count = p.count(field.name);
+                            const count = p.count(fname);
                             var map = try a.alloc([]const u8, count);
                             for (0..count) |i| {
-                                map[i] = (try p.requirePos(field.name, i)).value;
+                                map[i] = (try p.requirePos(fname, i)).value;
                             }
                             break :arr map;
                         },

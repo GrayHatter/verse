@@ -47,7 +47,7 @@ pub const Count = struct {
     };
 
     pub fn inc(c: *Count, s: std.http.Status) void {
-        const int: u10 = @intFromEnum(s);
+        const int: u10 = @backingInt(s);
         switch (int) {
             100...199 => c.informational +|= 1,
             200...299 => c.success +|= 1,
@@ -242,7 +242,7 @@ pub const Endpoint = struct {
                 .number = src.number,
                 .time = src.time,
                 .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
-                .code = @intFromEnum(src.code),
+                .code = @backingInt(src.code),
                 .code_string = if (comptime use_abx) .safe(codeString(src.code)) else codeString(src.code),
                 .status_class = status_class,
                 .rss = src.rss,

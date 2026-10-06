@@ -227,12 +227,12 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                 const start: usize, const end: usize = comptime brk: {
                                     var start: usize = 0;
                                     switch (tagT) {
-                                        void => name: for (@typeInfo(T).@"union".fields) |fld| {
+                                        void => name: for (@typeInfo(T).@"union".field_names) |fname| {
                                             for (ofs[start..]) |of| switch (of.kind) {
                                                 .component => |cmp| {
                                                     start += 1;
                                                     if (cmp.kind == tagT) {
-                                                        if (eql(u8, fld.name, @tagName(tag))) {
+                                                        if (eql(u8, fname, @tagName(tag))) {
                                                             break :brk .{ start, start + cmp.len };
                                                         } else continue :name;
                                                     }

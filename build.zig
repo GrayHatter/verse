@@ -20,12 +20,15 @@ pub fn build(b: *std.Build) !void {
     const abx_required: bool = b.option(bool, "abx-required",
         \\templates will default to Abx instead of []const u8
     ) orelse false;
-    const template_path: ?LazyPath = b.option(LazyPath, "template-path",
+
+    const templates: []const LazyPath = b.option([]const LazyPath, "templates",
         \\path for the templates generated at comptime
-    );
+    ) orelse &.{};
+
     const ua_validation = b.option(bool, "ua-validation",
         \\[not-implemented] disable user agent validation
     ) orelse true;
+
     const accept_lang_heat = b.option([]const u8, "accept-lang-heat",
         \\[not-implemented] add bot detection heat to given language
     ) orelse "";
@@ -54,14 +57,17 @@ pub fn build(b: *std.Build) !void {
 
     // Set up template compiler
     var compiler = Compiler.init(b);
-    if (template_path) |path| {
-        compiler.addDir(path);
-    } else {
+    for (templates) |path| {
+        compiler.addFile(path);
+    }
+
+    if (templates.len == 0) {
         compiler.addDir(b.path("examples/templates/"));
         compiler.addDir(b.path("src/builtin-html/"));
     }
     compiler.addFile(b.path("src/builtin-html/verse-stats.html"));
     compiler.collect();
+
     const comptime_templates = compiler.moduleTemplate();
 
     const structc = b.addExecutable(.{
@@ -155,7 +161,12 @@ const Compiler = struct {
     debugging: bool = false,
 
     pub fn init(b: *std.Build) Compiler {
-        return .{ .b = b, .dirs = .empty, .files = .empty, .collected = .empty };
+        return .{
+            .b = b,
+            .dirs = .empty,
+            .files = .empty,
+            .collected = .empty,
+        };
     }
 
     pub fn raze(comp: Compiler) void {
@@ -261,7 +272,6 @@ fn version(b: *std.Build) []const u8 {
     if (!std.process.can_spawn) {
         return zon.version;
     }
-    b.dependOnFileMetadata(b.path(".git/logs/HEAD"));
 
     const git_wide: []const u8 = switch (b.runFallible(&[_][]const u8{
         "git",
