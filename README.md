@@ -161,3 +161,13 @@ started quickly. `zig build run-[example name]` If you want to try out the demo.
   * SSE API
   * Userspace defined data validation
   * `verse.Frame.unreachable()`
+
+
+### Finally, BOTS
+
+Verse has bot detection builtin, it works well enough for my own uses. Still,p I
+believe that the open internet is worth fighting for! So if you're using Verse,
+and you're trying to do the same, but are having issues with bots; I would like
+to help! It doesn't matter what kind of project it is, huge, or even a fun toy
+site, you're more than welcome to reach out to me (grayhatter) and I'll try to
+help if I'm able! :)
