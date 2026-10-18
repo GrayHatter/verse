@@ -8,7 +8,11 @@ pub const AbstTree = struct {
         kind: []u8,
 
         pub fn format(m: Member, w: *Writer) !void {
-            try w.print("    {s}: {s},\n", .{ m.name, m.kind });
+            if (m.name.len == 1 and m.name[0] == '_') {
+                try w.print("    _: bool = true,\n", .{});
+            } else {
+                try w.print("    {s}: {s},\n", .{ m.name, m.kind });
+            }
         }
     };
 
