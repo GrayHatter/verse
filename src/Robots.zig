@@ -3,21 +3,17 @@
 //! It does something, what that something is? who know, but it's big!
 
 automated: bool,
-/// True when >= the anomaly score
-malicious: bool,
 score: f16,
 
 const Robots = @This();
 
 const default: Robots = .{
     .automated = false,
-    .malicious = false,
     .score = 0.0,
 };
 
 const default_malicious: Robots = .{
     .automated = true,
-    .malicious = true,
     .score = 1.0,
 };
 
@@ -35,13 +31,15 @@ pub fn init(r: *const Request) Robots {
     switch (ua.agent) {
         .bot => |bot| {
             robot.automated = true;
-            inline for (rules.bot) |rule|
-                rule(ua, r, &robot.score);
+            if (!bot.name.isMalicious()) {
+                inline for (rules.bot) |rule|
+                    rule(ua, r, &robot.score);
+            }
 
             // the score of something actively identifying itself as a bot
             // is only related to it's malfeasance
-            robot.malicious = robot.score >= BOT_DEVIANCE;
-            robot.malicious = robot.malicious or bot.malicious;
+            //robot.malicious = robot.score >= BOT_DEVIANCE;
+            //robot.malicious = robot.malicious or bot.malicious;
         },
         .browser => |browser| {
             inline for (rules.browser) |rule|
@@ -50,7 +48,6 @@ pub fn init(r: *const Request) Robots {
             // Any bot that masqurades as a browser is by definition malign
             if (robot.score >= ANOMALY_MAX) {
                 robot.automated = true;
-                robot.malicious = true;
             }
 
             switch (browser.name) {
@@ -63,9 +60,13 @@ pub fn init(r: *const Request) Robots {
         },
         .script => robot.automated = true,
         // Not a browser, but pretending to be one.
-        .unknown => robot.malicious = startsWith(u8, ua.string, "Mozilla/"),
+        .unknown => robot.score = robot.score + if (startsWith(u8, ua.string, "Mozilla/")) 1.0 else @as(f16, 0.0),
     }
     return robot;
+}
+
+pub fn isMalicious(r: *const Robots) bool {
+    return r.score >= BOT_DEVIANCE;
 }
 
 pub const Label = enum {

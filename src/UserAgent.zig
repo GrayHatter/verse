@@ -33,6 +33,15 @@ pub const Agent = union(enum) {
     script: Script,
     unknown: void,
 
+    pub fn isMalicious(a: Agent) bool {
+        return switch (a) {
+            .bot => |b| b.name.isMalicious(),
+            .browser => false,
+            .script => false,
+            .unknown => false,
+        };
+    }
+
     pub const malicious: Agent = .{ .bot = .malicious };
 
     pub fn init(str: []const u8) Agent {
@@ -183,67 +192,79 @@ test Agent {
         Agent{ .browser = .{ .name = .firefox, .version = 134, .version_string = "134.0" } },
         Agent.init(lin_ff),
     );
+    try std.testing.expectEqual(Agent.init(lin_ff).isMalicious(), false);
 
     const msie = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0; Trident/5.0)";
     try std.testing.expectEqualDeep(
         Agent{ .browser = .{ .name = .msie, .version = 9, .version_string = "9.0;" } },
         Agent.init(msie),
     );
+    try std.testing.expectEqual(Agent.init(msie).isMalicious(), false);
 
     const git = "git/2.49.0";
     try std.testing.expectEqualDeep(
         Agent{ .script = .{ .name = .git, .version = 2 } },
         Agent.init(git),
     );
+    try std.testing.expectEqual(Agent.init(git).isMalicious(), false);
 
     const gptbot = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)";
     try std.testing.expectEqualDeep(
         Agent{ .bot = .{ .name = .gptbot, .version = 1 } },
         Agent.init(gptbot),
     );
+    try std.testing.expectEqual(Agent.init(gptbot).isMalicious(), false);
 
     const lounge = "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0";
     try std.testing.expectEqualDeep(
         Agent{ .bot = .{ .name = .lounge_irc_client, .version = 0 } },
         Agent.init(lounge),
     );
+    try std.testing.expectEqual(Agent.init(lounge).isMalicious(), false);
 
     const apple = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)";
     try std.testing.expectEqualDeep(
         Agent{ .bot = .{ .name = .applebot, .version = 0 } },
         Agent.init(apple),
     );
-
-    const amzn = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/119.0.6045.214 Safari/537.36";
-    try std.testing.expectEqualDeep(
-        Agent{ .bot = .{ .name = .amzn_searchbot, .version = 0, .malicious = true } },
-        Agent.init(amzn),
-    );
-
-    const scry = "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)";
-    try std.testing.expectEqualDeep(
-        Agent{ .bot = .{ .name = .scrybot, .version = 1, .malicious = true } },
-        Agent.init(scry),
-    );
-
-    const reflect = "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)";
-    try std.testing.expectEqualDeep(
-        Agent{ .bot = .{ .name = .reflectionbot, .version = 1, .malicious = true } },
-        Agent.init(reflect),
-    );
+    try std.testing.expectEqual(Agent.init(apple).isMalicious(), false);
 
     const disc = "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)";
     try std.testing.expectEqualDeep(
-        Agent{ .bot = .{ .name = .discordbot, .version = 2, .malicious = false } },
+        Agent{ .bot = .{ .name = .discordbot, .version = 2 } },
         Agent.init(disc),
     );
+    try std.testing.expectEqual(Agent.init(disc).isMalicious(), false);
 
     // TODO write test (deferred until testing harness)
     const internet_archive = .{
         "Mozilla/5.0 (compatible; archive-spam-check)",
         "spam-janitor-url-resolver/1.0 (+https://archive.org/community-search/about)",
     };
-    _ = internet_archive;
+    try std.testing.expectEqual(Agent.init(internet_archive[1]).isMalicious(), false);
+
+    // Malicious cases
+
+    const amzn = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/119.0.6045.214 Safari/537.36";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .amzn_searchbot, .version = 0 } },
+        Agent.init(amzn),
+    );
+    try std.testing.expectEqual(Agent.init(amzn).isMalicious(), true);
+
+    const scry = "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .scrybot, .version = 1 } },
+        Agent.init(scry),
+    );
+    try std.testing.expectEqual(Agent.init(scry).isMalicious(), true);
+
+    const reflect = "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)";
+    try std.testing.expectEqualDeep(
+        Agent{ .bot = .{ .name = .reflectionbot, .version = 1 } },
+        Agent.init(reflect),
+    );
+    try std.testing.expectEqual(Agent.init(reflect).isMalicious(), true);
 }
 
 pub fn init(ua_str: []const u8) UserAgent {

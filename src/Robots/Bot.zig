@@ -2,8 +2,6 @@ name: Name,
 version: u32,
 /// Many bots will announce as compatible with, this is that with.
 requesting: ?Browser = null,
-/// Anything that announces itself as a bot is assumed to be benign
-malicious: bool = false,
 
 pub const unknown: Bot = .{
     .name = .unknown,
@@ -11,33 +9,40 @@ pub const unknown: Bot = .{
     .requesting = .unknown,
 };
 pub const malicious_bot: Bot = .{
-    .name = .malicious,
+    .name = .other_malicious,
     .version = 0,
-    .malicious = true,
 };
 
 const Bot = @This();
 
 pub const Name = enum {
     /// Ignores robots.txt
+    abliterantbot,
+    /// Ignores robots.txt
     amzn_searchbot,
+    /// Very agressive
     applebot,
     /// Ignores robots.txt, but isn't considered malicious here because
     /// Archive.org has a reputation for going out of their way to be extremely
     /// ethical, and a good web citizen.
     archiveorgbot,
+    /// Currently obviously unmaintained
     bingbot,
     /// AI bot
     claude_searchbot,
     /// AI bot
     claudebot,
-    discordbot,
     /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
+    discordbot,
+    /// https://elevenlabs.io/docs/bots
+    /// buys/sells data, or crawls unidentified.
+    elevenlabscrawler,
     googlebot,
     /// AI bot
     gptbot,
     /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     lounge_irc_client,
+    /// repeatedly breaks in ways harmful to sites.
     metaexternalagent,
     /// AI bot (link/contact doesn't resolve)
     reflectionbot,
@@ -47,17 +52,46 @@ pub const Name = enum {
     /// Ignores robots.txt
     youbot,
 
-    malicious,
+    /// Implementation when unable to ID a bot with suspicious traffic.
+    other_malicious,
     unknown,
+
+    pub fn isMalicious(n: Name) bool {
+        return switch (n) {
+            .abliterantbot => true, // ignores robots.txt
+            .amzn_searchbot => true, // ignores robots.txt
+            .applebot => false,
+            .archiveorgbot => false,
+            .bingbot => false,
+            .claude_searchbot => true,
+            .claudebot => true,
+            .elevenlabscrawler => true, // buys data, or fails to ident
+            .googlebot => false,
+            .gptbot => false,
+            .metaexternalagent => true, // buggy crawler that can't behave
+            .techspybot => true, // non-responsive to contact
+            .reflectionbot => true, // sends broken data
+            .scrybot => true, // non-responsive to contact
+            .youbot => true, // non-responsive to contact
+
+            // robots.txt doesn't apply so returns a friendly name
+            .discordbot => false,
+            .lounge_irc_client => false,
+            .other_malicious => true,
+            .unknown => false, // assume good faith :/
+        };
+    }
 
     pub fn robotsTxtName(n: Name) [:0]const u8 {
         return switch (n) {
+            .abliterantbot => "AbliterantBot",
             .amzn_searchbot => "Amzn-SearchBot",
             .applebot => "Applebot",
             .archiveorgbot => "archive.org_bot",
             .bingbot => "Bingbot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
+            .elevenlabscrawler => "ElevenlabsCrawler",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
@@ -69,13 +103,14 @@ pub const Name = enum {
             // robots.txt doesn't apply so returns a friendly name
             .discordbot => "DiscordBot",
             .lounge_irc_client => "Lounge (IRC helper)",
-            .malicious => "Malicious Bot",
+            .other_malicious => "Malicious Bot",
             .unknown => "Other Unknown Bot",
         };
     }
 
     pub fn rules(comptime name: Name) []const Robots.RuleFn {
         return switch (name) {
+            .abliterantbot => "AbliterantBot",
             .amzn_searchbot => "Amzn-SearchBot",
             .applebot => "Applebot",
             .archiveorgbot => "archive.org_bot",
@@ -83,6 +118,7 @@ pub const Name = enum {
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
             .discordbot => "DiscordBot",
+            .elevenlabscrawler => "ElevenlabsCrawler",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
             .metaexternalagent => "meta-externalagent",
@@ -92,13 +128,15 @@ pub const Name = enum {
             .youbot => "YouBot",
 
             .lounge_irc_client => "",
-            .malicious => "",
+            .other_malicious => "",
             .unknown => "",
         };
     }
 
     pub fn obeysCrawlDelay(comptime name: Name) bool {
         return switch (name) {
+            // ignores robots
+            .abliterantbot => false,
             // Unverified
             .amzn_searchbot => false,
             // Unverified
@@ -127,29 +165,31 @@ pub const Name = enum {
             .youbot => false,
 
             .lounge_irc_client => false,
-            .malicious => false,
+            .other_malicious => false,
             .unknown => false,
         };
     }
 
     pub fn ident(comptime name: Name, str: []const u8) bool {
         return switch (name) {
+            .abliterantbot => find(u8, str, "AbliterantBot/0.1 (+https://abliterant.ai)") != null,
             .amzn_searchbot => find(u8, str, "Amzn-SearchBot/") != null,
             .applebot => endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)"),
-            .googlebot => endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)"),
-            .claudebot => endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)"),
-            .claude_searchbot => endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)"),
             .bingbot => find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)") != null,
+            .claude_searchbot => endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)"),
+            .claudebot => endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)"),
+            .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
+            .elevenlabscrawler => find(u8, str, "ElevenlabsCrawler") != null,
+            .googlebot => endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)"),
             .gptbot => endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)"),
-            .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
+            .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
             .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
-            .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
-            .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
+            .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
             .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
             .techspybot => false,
             .archiveorgbot => false,
-            .malicious => false,
+            .other_malicious => false,
             .unknown => false,
         };
     }
@@ -160,8 +200,10 @@ pub const Name = enum {
 };
 
 pub fn resolve(str: []const u8) ?Bot {
-    if (Name.amzn_searchbot.ident(str)) {
-        return .{ .name = .amzn_searchbot, .version = parseVersion(str, "Amzn-SearchBot/") catch 0, .malicious = true };
+    if (Name.abliterantbot.ident(str)) {
+        return .{ .name = .abliterantbot, .version = parseVersion(str, "AbliterantBot/") catch 0 };
+    } else if (Name.amzn_searchbot.ident(str)) {
+        return .{ .name = .amzn_searchbot, .version = parseVersion(str, "Amzn-SearchBot/") catch 0 };
     } else if (Name.applebot.ident(str)) {
         return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
     } else if (Name.googlebot.ident(str)) {
@@ -172,20 +214,22 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .claude_searchbot, .version = parseVersion(str, "Claude-SearchBot/") catch 0 };
     } else if (Name.bingbot.ident(str)) {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
+    } else if (Name.elevenlabscrawler.ident(str)) {
+        return .{ .name = .elevenlabscrawler, .version = parseVersion(str, "ElevenlabsCrawler/") catch 0 };
     } else if (Name.gptbot.ident(str)) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
     } else if (Name.scrybot.ident(str)) {
-        return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0, .malicious = true };
+        return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0 };
     } else if (Name.metaexternalagent.ident(str)) {
         return .{ .name = .metaexternalagent, .version = 1 };
     } else if (Name.reflectionbot.ident(str)) {
-        return .{ .name = .reflectionbot, .version = 1, .malicious = true };
+        return .{ .name = .reflectionbot, .version = 1 };
     } else if (Name.discordbot.ident(str)) {
         return .{ .name = .discordbot, .version = 2 };
     } else if (Name.lounge_irc_client.ident(str)) {
         return .{ .name = .lounge_irc_client, .version = 0 };
     } else if (Name.youbot.ident(str)) {
-        return .{ .name = .youbot, .version = parseVersion(str, "YouBot/") catch 0, .malicious = true };
+        return .{ .name = .youbot, .version = parseVersion(str, "YouBot/") catch 0 };
     }
     return null;
 }
@@ -301,6 +345,7 @@ pub const Identity = struct {
 
 pub const bots: std.EnumArray(Name, Identity) = .{
     .values = [@typeInfo(Name).@"enum".field_names.len]Identity{
+        .{ .bot = .abliterantbot, .network = null },
         .{ .bot = .amzn_searchbot, .network = null },
         .{ .bot = .applebot, .network = null },
         .{ .bot = .archiveorgbot, .network = null },
@@ -308,6 +353,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .claude_searchbot, .network = null },
         .{ .bot = .claudebot, .network = null },
         .{ .bot = .discordbot, .network = .cloud_gcp },
+        .{ .bot = .elevenlabscrawler, .network = null },
         .{ .bot = .googlebot, .network = .{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .gptbot, .network = .{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .lounge_irc_client, .network = null },
@@ -317,7 +363,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = .{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
         // Split ordering
-        .{ .bot = .malicious, .network = null },
+        .{ .bot = .other_malicious, .network = null },
         .{ .bot = .unknown, .network = null },
     },
 };
