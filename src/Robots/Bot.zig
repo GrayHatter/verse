@@ -200,7 +200,13 @@ fn parseVersion(str: []const u8, comptime target: []const u8) error{Invalid}!u32
     } else return error.Invalid;
 }
 
-pub const Rules = struct {
+pub const rules = struct {
+    pub const all: []const Robots.RuleFn = &.{
+        rules.knownSubnet,
+        rules.expectedLanguages,
+        rules.expectedParamDepth,
+    };
+
     pub fn rfc9110_10_1_2(ua: UserAgent, r: *const Request, score: *f16) !void {
         // https://www.rfc-editor.org/rfc/rfc9110#section-10.1.2
 
@@ -222,6 +228,9 @@ pub const Rules = struct {
         }
     }
 
+    /// Experimental rule that has high strength as a heuristic. Currently
+    /// unimplemented as without a feedback mechanism it's specificity is too
+    /// low, and introduces unwelcome bias & noise.
     pub fn expectedLanguages(ua: UserAgent, r: *const Request, score: *f16) !void {
         _ = ua;
         _ = r;
@@ -232,6 +241,7 @@ pub const Rules = struct {
         try acceptEncodingDepth(ua, r, score);
     }
 
+    /// All browsers accept all 4 (order is high signal as well)
     fn acceptEncodingDepth(_: UserAgent, r: *const Request, score: *f16) !void {
         var add: f16 = 0.3;
 

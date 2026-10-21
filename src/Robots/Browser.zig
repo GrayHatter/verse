@@ -93,7 +93,7 @@ pub const Brave = struct {
 pub const Chrome = struct {
     pub const rules: []const Robots.RuleFn = &.{
         Chrome.Rules.obviousBot,
-        Browser.Rules.acceptEncodingFormatting,
+        Browser.rules.acceptEncodingFormatting,
     };
 
     pub const Version = enum(u16) {
@@ -267,7 +267,7 @@ pub const Opera = struct {
 
 pub const Msie = struct {
     pub const rules: []const Robots.RuleFn = &.{
-        Rules.assertMalicious,
+        Browser.rules.assertMalicious,
     };
 
     pub const Version = enum(u16) {
@@ -291,7 +291,14 @@ fn compileDates(comptime vd: []const VerDate) [vd.len]Date {
     return list;
 }
 
-pub const Rules = struct {
+pub const rules = struct {
+    pub const all: []const Robots.RuleFn = &.{
+        rules.protocolVer,
+        rules.acceptStr,
+        rules.acceptLang,
+        rules.checkAge,
+    };
+
     const DAY: i64 = 86400;
     pub const AGE_STEP: usize = DAY * 45;
 

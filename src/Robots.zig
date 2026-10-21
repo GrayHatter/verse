@@ -29,7 +29,7 @@ pub fn init(r: *const Request) Robots {
 
     var robot: Robots = .default;
 
-    inline for (rules.age) |rule| {
+    inline for (rules.all) |rule| {
         rule(ua, r, &robot.score) catch @panic("not implemented");
     }
 
@@ -86,18 +86,20 @@ const RuleError = error{
 pub const RuleFn = *const fn (UA, *const Request, *f16) RuleError!void;
 
 const rules = struct {
-    const age = [_]RuleFn{
-        Browser.Rules.checkAge,
+    const all: []const RuleFn = &.{
+        global.exampleCom,
     };
-    const browser = [_]RuleFn{
-        Browser.Rules.protocolVer,
-        Browser.Rules.acceptStr,
-        Browser.Rules.acceptLang,
-    };
-    const bot = [_]RuleFn{
-        Bot.Rules.knownSubnet,
-        Bot.Rules.expectedLanguages,
-        Bot.Rules.expectedParamDepth,
+
+    const browser = Browser.rules.all;
+    const bot = Bot.rules.all;
+
+    const global = struct {
+        pub fn exampleCom(ua: UA, _: *const Request, score: *f16) !void {
+            if (findPos(u8, ua.string, 0, "example.com")) |_| {
+                // I need a shovel
+                score.* = score.* + 1.0;
+            }
+        }
     };
 };
 
@@ -198,3 +200,4 @@ const Request = @import("Request.zig");
 const std = @import("std");
 const startsWith = std.mem.startsWith;
 const Timestamp = std.Io.Timestamp;
+const findPos = std.mem.findPos;
