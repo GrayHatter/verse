@@ -476,7 +476,7 @@ test "magic" {
 }
 
 const std = @import("std");
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse_router);
 const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 

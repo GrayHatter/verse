@@ -70,6 +70,10 @@ fn reduced(self: Humanize) i16 {
     }));
 }
 
+pub fn fmtSpan(self: Humanize, w: *std.Io.Writer) !void {
+    try w.print("<span title=\"{f}\">{f}</span>", .{ "span TODO", self });
+}
+
 pub fn format(self: Humanize, w: *std.Io.Writer) !void {
     if (self.seconds <= 0) {
         try w.print("{} {s} ago", .{ self.reduced(), @tagName(self.width()) });
