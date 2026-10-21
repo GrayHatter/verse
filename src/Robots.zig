@@ -29,35 +29,35 @@ pub fn init(r: *const Request) Robots {
 
     var robot: Robots = .default;
 
-    inline for (rules.all) |rule| {
-        rule(ua, r, &robot.score) catch @panic("not implemented");
-    }
+    inline for (rules.all) |rule|
+        rule(ua, r, &robot.score);
 
     switch (ua.agent) {
         .bot => |bot| {
             robot.automated = true;
-            inline for (rules.bot) |rule| {
-                rule(ua, r, &robot.score) catch @panic("not implemented");
-            }
+            inline for (rules.bot) |rule|
+                rule(ua, r, &robot.score);
+
             // the score of something actively identifying itself as a bot
             // is only related to it's malfeasance
             robot.malicious = robot.score >= BOT_DEVIANCE;
             robot.malicious = robot.malicious or bot.malicious;
         },
         .browser => |browser| {
-            inline for (rules.browser) |rule| {
-                rule(ua, r, &robot.score) catch @panic("not implemented");
-            }
+            inline for (rules.browser) |rule|
+                rule(ua, r, &robot.score);
+
             // Any bot that masqurades as a browser is by definition malign
             if (robot.score >= ANOMALY_MAX) {
                 robot.automated = true;
                 robot.malicious = true;
             }
+
             switch (browser.name) {
                 inline else => |bwsr| {
                     const B = @TypeOf(bwsr);
                     inline for (comptime B.rules(bwsr)) |rule|
-                        rule(ua, r, &robot.score) catch @panic("not implemented");
+                        rule(ua, r, &robot.score);
                 },
             }
         },
@@ -78,12 +78,7 @@ pub const Label = enum {
     protocol_mismatch,
 };
 
-const RuleError = error{
-    Generic,
-    NotABot,
-};
-
-pub const RuleFn = *const fn (UA, *const Request, *f16) RuleError!void;
+pub const RuleFn = *const fn (UA, *const Request, *f16) void;
 
 const rules = struct {
     const all: []const RuleFn = &.{
@@ -94,7 +89,7 @@ const rules = struct {
     const bot = Bot.rules.all;
 
     const global = struct {
-        pub fn exampleCom(ua: UA, _: *const Request, score: *f16) !void {
+        pub fn exampleCom(ua: UA, _: *const Request, score: *f16) void {
             if (findPos(u8, ua.string, 0, "example.com")) |_| {
                 // I need a shovel
                 score.* = score.* + 1.0;

@@ -207,7 +207,7 @@ pub const rules = struct {
         rules.expectedParamDepth,
     };
 
-    pub fn rfc9110_10_1_2(ua: UserAgent, r: *const Request, score: *f16) !void {
+    pub fn rfc9110_10_1_2(ua: UserAgent, r: *const Request, score: *f16) void {
         // https://www.rfc-editor.org/rfc/rfc9110#section-10.1.2
 
         _ = ua;
@@ -216,8 +216,8 @@ pub const rules = struct {
         if (false) {}
     }
 
-    pub fn knownSubnet(ua: UserAgent, r: *const Request, score: *f16) !void {
-        if (ua.agent != .bot) return error.NotABot;
+    pub fn knownSubnet(ua: UserAgent, r: *const Request, score: *f16) void {
+        if (ua.agent != .bot) return;
 
         if (bots.get(ua.agent.bot.name).network) |nw| {
             for (nw.nets) |net| {
@@ -231,18 +231,18 @@ pub const rules = struct {
     /// Experimental rule that has high strength as a heuristic. Currently
     /// unimplemented as without a feedback mechanism it's specificity is too
     /// low, and introduces unwelcome bias & noise.
-    pub fn expectedLanguages(ua: UserAgent, r: *const Request, score: *f16) !void {
+    pub fn expectedLanguages(ua: UserAgent, r: *const Request, score: *f16) void {
         _ = ua;
         _ = r;
         _ = score;
     }
 
-    pub fn expectedParamDepth(ua: UserAgent, r: *const Request, score: *f16) !void {
-        try acceptEncodingDepth(ua, r, score);
+    pub fn expectedParamDepth(ua: UserAgent, r: *const Request, score: *f16) void {
+        acceptEncodingDepth(ua, r, score);
     }
 
     /// All browsers accept all 4 (order is high signal as well)
-    fn acceptEncodingDepth(_: UserAgent, r: *const Request, score: *f16) !void {
+    fn acceptEncodingDepth(_: UserAgent, r: *const Request, score: *f16) void {
         var add: f16 = 0.3;
 
         if (r.accept.encoding) |encode| {
@@ -255,11 +255,11 @@ pub const rules = struct {
         score.* = score.* + add;
     }
 
-    fn secClientHints(ua: UserAgent, r: *const Request, score: *f16) !void {
-        try secClientHintsUA(ua, r, score);
+    fn secClientHints(ua: UserAgent, r: *const Request, score: *f16) void {
+        secClientHintsUA(ua, r, score);
     }
 
-    fn secClientHintsUA(_: UserAgent, r: *const Request, score: *f16) !void {
+    fn secClientHintsUA(_: UserAgent, r: *const Request, score: *f16) void {
         if (r.headers.getCustom("HTTP_SEC_CH_UA")) |list| {
             if (list.list.items.len > 1) {
                 score.* +|= 0.5;

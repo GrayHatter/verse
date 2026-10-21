@@ -148,7 +148,7 @@ pub const Chrome = struct {
     };
 
     pub const Rules = struct {
-        pub fn obviousBot(_: UserAgent, r: *const Request, score: *f16) !void {
+        pub fn obviousBot(_: UserAgent, r: *const Request, score: *f16) void {
             if (r.accept.encoding) |enc| if (eql(u8, enc.bytes, "zstd,gzip,deflate,br")) {
                 score.* += 100.0;
             };
@@ -302,7 +302,7 @@ pub const rules = struct {
     const DAY: i64 = 86400;
     pub const AGE_STEP: usize = DAY * 45;
 
-    pub fn acceptEncodingFormatting(_: UserAgent, r: *const Request, score: *f16) !void {
+    pub fn acceptEncodingFormatting(_: UserAgent, r: *const Request, score: *f16) void {
         if (r.accept.encoding) |enc| if (find(u8, enc.bytes, ",")) |i| {
             if (i == enc.bytes.len - 1 or enc.bytes[i + 1] != ' ') {
                 score.* += 0.5;
@@ -310,10 +310,10 @@ pub const rules = struct {
         };
     }
 
-    pub fn checkAge(ua: UserAgent, r: *const Request, score: *f16) !void {
+    pub fn checkAge(ua: UserAgent, r: *const Request, score: *f16) void {
         if (ua.agent != .browser) return;
         if (ua.agent.browser.name == .unknown) return;
-        const delta: Duration = ua.agent.browser.age(r.now) catch return;
+        const delta: Duration = ua.agent.browser.age(r.now) catch .zero;
 
         const YEAR: i64 = 86400 * 365;
         // These are all just made up based on feeling, TODO real data analysis
@@ -334,12 +334,12 @@ pub const rules = struct {
         var req: Request = undefined;
         req.now = Clock.real.now(std.testing.io);
         var score: f16 = 0.0;
-        try checkAge(.{ .string = "", .agent = .{
+        checkAge(.{ .string = "", .agent = .{
             .browser = .{ .name = .chrome, .version = 0 },
         } }, &req, &score);
         try std.testing.expectEqual(score, 0.9);
         score = 0;
-        try checkAge(.{ .string = "", .agent = .{
+        checkAge(.{ .string = "", .agent = .{
             .browser = .{
                 .name = .chrome,
                 .version = Chrome.Version.VerDates[Chrome.Version.VerDates.len - 1][0],
@@ -354,13 +354,13 @@ pub const rules = struct {
         };
 
         score = 0.0;
-        try checkAge(.{ .string = "", .agent = .{
+        checkAge(.{ .string = "", .agent = .{
             .browser = .{ .name = .unknown, .version = 0 },
         } }, &req, &score);
         try std.testing.expectEqual(score, 0.0);
     }
 
-    pub fn acceptStr(ua: UserAgent, r: *const Request, score: *f16) !void {
+    pub fn acceptStr(ua: UserAgent, r: *const Request, score: *f16) void {
         std.debug.assert(ua.agent == .browser);
         switch (ua.agent.browser.name) {
             .chrome, .edge => {},
@@ -393,8 +393,9 @@ pub const rules = struct {
         }
     }
 
-    pub fn acceptLang(_: UserAgent, r: *const Request, score: *f16) !void {
-        if (std.mem.eql(u8, (r.accept.lang orelse Request.Language.default).bytes, "en")) score.* = @max(score.*, 1.0);
+    pub fn acceptLang(_: UserAgent, r: *const Request, score: *f16) void {
+        if (std.mem.eql(u8, (r.accept.lang orelse Request.Language.default).bytes, "en"))
+            score.* = @max(score.*, 1.0);
     }
 
     test acceptLang {
@@ -403,21 +404,21 @@ pub const rules = struct {
 
         score = 0.0;
         req.accept.lang = .fromStr("en");
-        try acceptLang(undefined, &req, &score);
+        acceptLang(undefined, &req, &score);
         try std.testing.expectEqual(1.0, score);
 
         score = 0.0;
         req.accept.lang = .fromStr("en-US,en;q=0.9");
-        try acceptLang(undefined, &req, &score);
+        acceptLang(undefined, &req, &score);
         try std.testing.expectEqual(0.0, score);
 
         score = 0.0;
         req.accept.lang = .fromStr("zh-CN,zh;q=0.9,en;q=0.8");
-        try acceptLang(undefined, &req, &score);
+        acceptLang(undefined, &req, &score);
         try std.testing.expectEqual(0.0, score);
     }
 
-    pub fn protocolVer(_: UserAgent, r: *const Request, score: *f16) !void {
+    pub fn protocolVer(_: UserAgent, r: *const Request, score: *f16) void {
         if (!r.secure) return;
         // TODO To actually be correct, this should do a browser version check as well
         switch (r.protocol) {
@@ -430,7 +431,7 @@ pub const rules = struct {
         }
     }
 
-    pub fn assertMalicious(_: UserAgent, _: *const Request, score: *f16) !void {
+    pub fn assertMalicious(_: UserAgent, _: *const Request, score: *f16) void {
         score.* += 100.0;
     }
 };
