@@ -73,7 +73,7 @@ pub fn serve(srv: *Server, gpa: Allocator) !void {
     srv.gpa = gpa;
     system.installSignals();
 
-    var threaded: std.Io.Threaded = .init(gpa, .{ .environ = undefined });
+    var threaded: std.Io.Threaded = .init(gpa, .{ .environ = .empty });
     defer threaded.deinit();
     threaded.async_limit = Io.Limit.limited(@max(2, srv.options.threads));
     const io: Io = switch (srv.options.io) {
