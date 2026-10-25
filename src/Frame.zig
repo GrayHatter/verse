@@ -356,6 +356,7 @@ pub fn requireValidUser(frame: *Frame) !void {
 }
 
 pub fn raze(f: *Frame) void {
+    f.session.raze();
     f.template_data.raze(f.alloc);
 }
 

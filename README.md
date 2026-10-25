@@ -67,6 +67,7 @@ Because your code deserves to look as good as your site does.
   * uWSGI Protocol Support
   * Standalone HTTP server
   * Web Application API  ( supports any custom `Type` )
+  * In memory Session Store
   * Antibiotic ( data/html sanitation, optional, and enforced )
   * Input Data Validation
   * User Authentication

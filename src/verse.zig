@@ -12,6 +12,7 @@ pub const Request = @import("Request.zig");
 pub const Router = @import("Router.zig");
 pub const Server = @import("Server.zig");
 pub const Uri = @import("Uri.zig");
+pub const Session = @import("Session.zig");
 
 const cookies = @import("cookies.zig");
 pub const Cookie = cookies.Cookie;
@@ -43,6 +44,7 @@ test {
     _ = &testing;
     _ = &Frame;
     _ = &Uri;
+    _ = &Session;
 }
 
 const std = @import("std");
