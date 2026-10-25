@@ -112,7 +112,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         .optional => |opt| {
                             if (opt.child == []const u8) unreachable;
                             switch (@typeInfo(opt.child)) {
-                                .int => std.debug.print("skipped int\n", .{}),
+                                .int => log.err("skipped int\n", .{}),
                                 .@"struct" => if (data) |d|
                                     return try core(opt.child, d, ofs, varr, a),
                                 .bool => if (data != null and data.?)
@@ -123,7 +123,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         .array => |arr| for (data) |each|
                             try core(arr.child, each, ofs, varr, a),
                         else => comptime unreachable,
-                        //std.debug.print("unexpected type {s}\n", .{@typeName(T)});
+                        log.err("unexpected type {s}\n", .{@typeName(T)});
                     },
                 }
             }
@@ -153,7 +153,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                     else => try directive(drct.kind, child_data.*, drct.d, varr, a),
                                 }
                             },
-                            else => std.debug.print("directive skipped {} {}\n", .{ drct.d.verb, ofs.len }),
+                            else => log.err("directive skipped {} {}\n", .{ drct.d.verb, ofs.len }),
                         },
                         .template => |tmpl| {
                             const child_data = os.getData(tmpl.kind, @ptrCast(&data));
@@ -306,7 +306,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                                 }
                             },
                             else => {
-                                std.debug.print("directive skipped {} {}\n", .{ drct.d.verb, ofs.len });
+                                log.err("directive skipped {} {}\n", .{ drct.d.verb, ofs.len });
                             },
                         },
                         .template => |tmpl| {
@@ -327,7 +327,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         }
 
         pub fn format(self: Self, w: *Writer) error{WriteFailed}!void {
-            //std.debug.print("offs {any}\n", .{Self.DataOffsets});
+            if (@inComptime()) log.debug("offs {any}\n", .{Self.DataOffsets});
             const blob = Self.PageTemplate.blob;
             if (Self.DataOffsets.len == 0)
                 return try w.writeAll(blob);

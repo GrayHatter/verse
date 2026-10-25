@@ -150,8 +150,8 @@ pub const Message = struct {
         try r.fill(4 + length.len());
         const mask: [4]u8 align(4) = if (header.mask) (try r.takeArray(4)).* else @splat(0);
         if (r.bufferedLen() < length.len()) {
-            std.debug.print("read error: {} vs {}\n", .{ r.bufferedLen(), length });
-            std.debug.print("read error: {} \n", .{header});
+            log.err("read error: {} vs {}\n", .{ r.bufferedLen(), length });
+            log.err("read error: {} \n", .{header});
             return error.InvalidRead;
         }
 

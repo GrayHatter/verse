@@ -37,14 +37,9 @@ pub const AbstTree = struct {
         for (self.children.items) |child| {
             if (eql(u8, child.name, new.name)) {
                 if (!eql(u8, child.kind, new.kind)) {
-                    std.debug.print("Error: kind mismatch while building ", .{});
-                    //var par = self.parent;
-                    //while (par != null) {
-                    //    par = par.?.parent;
-                    //    std.debug.print("{s}.", .{par.?.name});
-                    //}
+                    log.err("Error: kind mismatch while building ", .{});
 
-                    std.debug.print(
+                    log.err(
                         "{s}.{s}\n  {s} != {s}\n",
                         .{ self.name, new.name, child.kind, new.kind },
                     );
@@ -217,7 +212,7 @@ pub fn main(init: std.process.Init) !void {
     {
         var itr = global_tree.iterator();
         while (itr.next()) |each| {
-            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            log.debug("tree: {}\n", .{each.value_ptr.*});
             try wout.print("{f}\n", .{each.value_ptr.*});
         }
     }
@@ -225,7 +220,7 @@ pub fn main(init: std.process.Init) !void {
     {
         var itr = enum_list.iterator();
         while (itr.next()) |each| {
-            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            log.debug("tree: {}\n", .{each.value_ptr.*});
             try wout.print("{f}\n", .{each.value_ptr.*});
         }
     }
@@ -233,7 +228,7 @@ pub fn main(init: std.process.Init) !void {
     {
         var itr = switch_list.iterator();
         while (itr.next()) |each| {
-            //std.debug.print("tree: {}\n", .{each.value_ptr.*});
+            log.debug("tree: {}\n", .{each.value_ptr.*});
             try wout.print("{f}\n", .{each.value_ptr.*});
         }
     }

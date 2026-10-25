@@ -149,7 +149,7 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     http.router.builder(&frame, callable);
 
     if (frame.downstream.writer.err) |err| {
-        std.debug.print("stream writer error {}\n", .{err});
+        log.err("stream writer error {}\n", .{err});
     }
 
     frame.downstream.writer.interface.flush() catch unreachable; // TODO

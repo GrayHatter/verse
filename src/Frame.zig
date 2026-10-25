@@ -297,32 +297,33 @@ pub const DumpDebugOptions = struct {
 };
 
 pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
+    const dlog = std.log.scoped(.DumpDebug);
     switch (frame.downstream.gateway) {
         .zwsgi => |zw| {
             var knowns = zw.known;
             var itr = knowns.iterator();
             while (itr.next()) |entry| {
                 if (entry.value.*) |value| {
-                    std.debug.print("\tDumpDebug '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
+                    dlog.err("    '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
                 } else if (comptime opt.print_empty) {
-                    std.debug.print("\tDumpDebug '{s}' => '[empty]\n", .{@tagName(entry.key)});
+                    dlog.err("    '{s}' => '[empty]\n", .{@tagName(entry.key)});
                 }
             }
             for (zw.vars.items) |varr| {
-                std.debug.print("\tDumpDebug '{s}' => '{s}'\n", .{ varr.key, varr.val });
+                dlog.err("    '{s}' => '{s}'\n", .{ varr.key, varr.val });
             }
         },
         .http => {
             var itr_headers = @constCast(frame.request).headers.iterator();
             while (itr_headers.next()) |header| {
-                std.debug.print("\tDumpDebug request header => {s} -> {s}\n", .{ header.name, header.value });
+                dlog.err("    request header => {s} -> {s}\n", .{ header.name, header.value });
             }
         },
         .none => {},
     }
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
-            std.debug.print("\tpost data => '''{s}'''\n", .{post_data.source});
+            dlog.err("    post data => '''{s}'''\n", .{post_data.source});
         }
     }
 }

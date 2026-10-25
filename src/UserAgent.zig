@@ -18,7 +18,7 @@ pub fn dumpValidation(ua: UserAgent, r: *const Request) void {
     if (comptime !UA_VALIDATION) @compileError("Bot Detection is currently disabled");
 
     const bd: Robots = ua.validation orelse .init(r);
-    //std.debug.print("ua detection: {s} \n", .{ua.string});
+    log.debug("ua detection: {s} \n", .{ua.string});
     log.err("ua detection: {}", .{ua.agent});
     log.err("bot detection: {}", .{bd});
     if (ua.agent == .browser) {

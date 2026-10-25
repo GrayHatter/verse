@@ -347,7 +347,7 @@ pub const rules = struct {
         } }, &req, &score);
         std.testing.expectEqual(0.0, score) catch |err| {
             if (Chrome.Version.revision_date < req.now.toSeconds() - AGE_STEP) {
-                std.debug.print("bot-detection.browsers.version is out of date\n", .{});
+                std.log.scoped(.browser_tests).warn("bot-detection.browsers.version is out of date\n", .{});
                 return error.SkipZigTest;
             }
             return err;

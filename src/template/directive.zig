@@ -127,7 +127,7 @@ fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
         else if (htype == .@"enum")
             .{ .literal = tag_name orelse b: {
                 if (!@inComptime()) {
-                    std.debug.print("Tag name not given for enum type\n", .{});
+                    log.err("Tag name not given for enum type\n", .{});
                     unreachable;
                 }
                 break :b "blah";
@@ -505,7 +505,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
                                     if (@field(ctx, field.name)) |subdata| {
                                         var subpage = template.pageOf(otype.child, subdata);
                                         try subpage.format("{}", .{}, w);
-                                    } else std.debug.print(
+                                    } else log.err(
                                         "sub template data was null for {s}\n",
                                         .{field.name},
                                     );
@@ -746,3 +746,4 @@ const isWhitespace = std.ascii.isWhitespace;
 const template_data = @import("builtins.zig");
 const builtin = template_data.builtin;
 const verse_buildopts = @import("verse_buildopts");
+const log = std.log.scoped(.verse_directive);

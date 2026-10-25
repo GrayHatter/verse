@@ -61,7 +61,7 @@ fn testPrint(comptime fmt: []const u8, args: anytype) void {
     if (@inComptime()) {
         @compileError(std.fmt.comptimePrint(fmt, args));
     } else if (std.testing.backend_can_print) {
-        std.debug.print(fmt, args);
+        log.err(fmt, args);
     }
 }
 
@@ -570,17 +570,6 @@ test "directive for with for for" {
         \\  </For>
         \\</div>
     ;
-
-    {
-        //const emit = @import("template/struct-emit.zig");
-        //const this = try emit.AbstTree.init(a, "Testing", null);
-        //const gop = try emit.root_tree.getOrPut(a, this.name);
-        //if (!gop.found_existing) {
-        //    gop.value_ptr.* = this;
-        //}
-        //try emit.emitSourceVars(a, blob, this);
-        //std.debug.print("this {}", .{this});
-    }
 
     const FTF = struct {
         const Loop = struct {
