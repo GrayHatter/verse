@@ -106,7 +106,7 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn initRequest(_: *const zWSGI, ds: *Frame.Downstream, now: Io.Timestamp, a: Allocator) !Frame.Request {
+pub fn initRequest(_: *const zWSGI, ds: *Frame.Downstream, now: Io.Timestamp, a: Allocator) !verseRequest {
     log.debug("setting up request", .{});
     try ds.zwsgi(a);
     const request_data = try requestData(a, &ds.gateway.zwsgi, &ds.reader.interface);
@@ -265,8 +265,8 @@ const uWSGIVar = struct {
     }
 };
 
-fn requestData(a: Allocator, zreq: *Request, r: *Reader) !Frame.Request.Data {
-    var post_data: ?Frame.Request.Data.Post = null;
+fn requestData(a: Allocator, zreq: *Request, r: *Reader) !verseRequest.Data {
+    var post_data: ?verseRequest.Data.Post = null;
 
     if (zreq.known.get(.CONTENT_LENGTH)) |h_len| {
         const h_type = zreq.known.get(.CONTENT_TYPE) orelse "text/plain";
@@ -287,7 +287,7 @@ fn requestData(a: Allocator, zreq: *Request, r: *Reader) !Frame.Request.Data {
 
     return .{
         .post = post_data,
-        .query = try Frame.Request.Data.readQuery(a, zreq.known.get(.QUERY_STRING) orelse ""),
+        .query = try verseRequest.Data.readQuery(a, zreq.known.get(.QUERY_STRING) orelse ""),
     };
 }
 
@@ -311,3 +311,4 @@ const pollfd = system.pollfd;
 const Server = @import("Server.zig");
 const Frame = @import("Frame.zig");
 const Router = @import("Router.zig");
+const verseRequest = @import("Request.zig");

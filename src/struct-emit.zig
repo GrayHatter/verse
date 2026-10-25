@@ -119,7 +119,7 @@ pub var global_tree: StrHashMap(*AbstTree) = .{};
 var enum_list: StrHashMap(*EnumLiteral) = .{};
 var switch_list: StrHashMap(*Switch) = .{};
 
-const default_str_type: []const u8 = if (verse_buildopts.@"abx-required")
+const default_str_type: []const u8 = if (verse_buildopts.abx_required)
     "Abx"
 else
     "[]const u8";
@@ -470,6 +470,10 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
     }
     return;
 }
+
+pub const std_options: std.Options = .{
+    .log_level = .info,
+};
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

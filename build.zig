@@ -16,30 +16,37 @@ pub fn build(b: *std.Build) !void {
 
     const default_step = b.getInstallStep();
 
-    // root build options
-    const abx_required: bool = b.option(bool, "abx-required",
-        \\templates will default to Abx instead of []const u8
-    ) orelse false;
-
+    // Template Paths
     const templates: []const LazyPath = b.option([]const LazyPath, "templates",
         \\path for the templates generated at comptime
     ) orelse &.{};
 
-    const ua_validation = b.option(bool, "ua-validation",
-        \\[not-implemented] disable user agent validation
+    // Default all Template variables to
+    const abx_required: bool = b.option(bool, "abx_required",
+        \\Use Antibiotic as the default template variable type (replacing []const u8)
+    ) orelse false;
+
+    // Enable Extended UA valdation
+    const ua_validation = b.option(bool, "ua_validation",
+        \\Disable user agent validation [not-implemented]
     ) orelse true;
 
-    const accept_lang_heat = b.option([]const u8, "accept-lang-heat",
-        \\[not-implemented] add bot detection heat to given language
-    ) orelse "";
+    // Bot detection configuration options
+    //const accept_lang_heat = b.option([]const u8, "accept-lang-heat",
+    //    \\[not-implemented] add bot detection heat to given language
+    //) orelse "";
 
-    const options = b.addOptions();
+    const sessions_enabled: bool = b.option(bool, "sessions_enabled",
+        \\Enable expermental Session API
+    ) orelse false;
 
     const ver = version(b);
+    const options = b.addOptions();
     options.addOption([]const u8, "version", ver);
-    options.addOption(bool, "abx-required", abx_required);
-    options.addOption(bool, "ua-validation", ua_validation);
-    options.addOption([]const u8, "accept-lang-heat", accept_lang_heat);
+    options.addOption(bool, "abx_required", abx_required);
+    options.addOption(bool, "ua_validation", ua_validation);
+    //options.addOption([]const u8, "accept-lang-heat", accept_lang_heat);
+    options.addOption(bool, "sessions_enabled", sessions_enabled);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),

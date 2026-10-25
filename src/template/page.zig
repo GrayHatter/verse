@@ -123,7 +123,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
                         .array => |arr| for (data) |each|
                             try core(arr.child, each, ofs, varr, a),
                         else => comptime unreachable,
-                        log.err("unexpected type {s}\n", .{@typeName(T)});
+                        //log.err("unexpected type {s}\n", .{@typeName(T)});
                     },
                 }
             }

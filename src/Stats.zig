@@ -281,4 +281,4 @@ const Timestamp = std.Io.Timestamp;
 const Io = std.Io;
 const Mutex = std.Io.Mutex;
 
-const use_abx = @import("verse_buildopts").@"abx-required";
+const use_abx = @import("verse_buildopts").abx_required;

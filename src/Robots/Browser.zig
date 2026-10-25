@@ -42,14 +42,14 @@ pub fn agentRules(_: Browser) !void {
 }
 
 pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
-    if (comptime !UA_VALIDATION) @compileError("User Agent Validation is disabled");
+    if (comptime !ua_extended_enabled) @compileError("User Agent Validation is disabled");
     const versions = Versions[@backingInt(b.name)];
     if (b.version >= versions.len) return error.UnknownVersion;
     return std.Io.Timestamp.fromNanoseconds(versions[b.version] * std.time.ns_per_s).durationTo(now);
 }
 
 test age {
-    if (!UA_VALIDATION) return error.SkipZigTest;
+    if (!ua_extended_enabled) return error.SkipZigTest;
     const browser = Browser{ .name = .chrome, .version = 134 };
     const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
     // breaks in 10 years, good luck future me!
@@ -453,4 +453,4 @@ const Clock = std.Io.Clock;
 
 const verse_buildopts = @import("verse_buildopts");
 const builtin = @import("builtin");
-const UA_VALIDATION: bool = verse_buildopts.@"ua-validation" or builtin.is_test;
+const ua_extended_enabled: bool = verse_buildopts.ua_validation or builtin.is_test;

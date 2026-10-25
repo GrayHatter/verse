@@ -41,7 +41,7 @@ template_data: template.StackedData,
 /// Response Headers: `frame.response_headers.addCustom("Name", "Value");`
 response_headers: Headers,
 /// Response Cookies
-cookie_jar: Cookies.Jar,
+cookie_jar: cookies.Jar,
 // TODO document content_type
 content_type: ?ContentType = ContentType.default,
 /// Status returned as the response code to the client. IFF null, `.ok` will be
@@ -50,6 +50,10 @@ status: ?Status = null,
 
 /// Unstable API; may be altered or removed in the future
 server: *const Server,
+
+/// Experimental API (may be removed or changed, open an issue/feature request
+/// if you find it useful)
+session: Session = undefined,
 
 const Frame = @This();
 
@@ -371,9 +375,9 @@ test {
 
 const Auth = @import("Auth.zig");
 const ContentType = @import("content-type.zig");
-const Cookies = @import("cookies.zig");
+const cookies = @import("cookies.zig");
 const Headers = @import("Headers.zig");
-pub const Request = @import("Request.zig");
+const Request = @import("Request.zig");
 const template = @import("template.zig");
 const Router = @import("Router.zig");
 const Server = @import("Server.zig");
@@ -382,8 +386,12 @@ const errors = @import("errors.zig");
 const Error = errors.Error;
 const NetworkError = errors.NetworkError;
 const zWSGI = @import("zwsgi.zig");
+const builtin = @import("builtin");
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;
+
+// Experimental
+const Session = if (verse_buildopts.sessions_enabled or builtin.is_test) @import("Session.zig") else void;
 
 const std = @import("std");
 const log = std.log.scoped(.Verse);

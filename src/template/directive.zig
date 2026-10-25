@@ -684,7 +684,7 @@ pub const TypeFormatter = struct {
             .default => |default| if (f.d.html_type) |ht|
                 try w.print("{f} = {s}", .{ ht, default })
             else
-                try w.print("{f}", .{f.d.fmtWithDefault(verse_buildopts.@"abx-required")}),
+                try w.print("{f}", .{f.d.fmtWithDefault(verse_buildopts.abx_required)}),
             .delete => if (f.d.html_type) |ht|
                 try w.print("{f}", .{ht})
             else
