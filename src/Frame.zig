@@ -22,7 +22,7 @@ downstream: Downstream,
 /// Request object received from client.
 request: *const Request,
 /// Target URI May be different from the Request.URI
-/// (i.e. canonization, e.g. `//route/` -> `/route/q
+/// (i.e. canonization, e.g. `//route/` -> `/route/`
 uri: Uri,
 /// user is set to exactly what is provided directly by the active
 /// Auth.Provider. It's possible for an Auth.Provider to return a User that is
