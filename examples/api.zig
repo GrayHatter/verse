@@ -34,14 +34,14 @@ var alloc: std.mem.Allocator = undefined;
 
 /// Returns the list of users.
 fn users(frame: *verse.Frame) !void {
-    try frame.sendJSON(.ok, user_list.items);
+    try frame.sendJson(.ok, user_list.items);
 }
 
 /// Adds a new user to the list.
 fn addUser(frame: *verse.Frame) !void {
     // validate that the post data is in the expected format
     const request = verse.Request.Data.Validate(CreateUserRequest).init(frame.request.data) catch {
-        try frame.sendJSON(.bad_request, .{ .message = "bad request data" });
+        try frame.sendJson(.bad_request, .{ .message = "bad request data" });
         return;
     };
 
@@ -60,7 +60,7 @@ fn addUser(frame: *verse.Frame) !void {
 
     try user_list.append(alloc, user);
 
-    try frame.sendJSON(.created, user);
+    try frame.sendJson(.created, user);
 }
 
 /// Deletes a user from the list.
@@ -69,12 +69,12 @@ fn deleteUser(frame: *verse.Frame) !void {
 
     const id_str = frame.uri.next(); // get the id from the url, if null then the caller didn't provide one
     if (id_str == null) {
-        try frame.sendJSON(.bad_request, .{ .message = "missing id" });
+        try frame.sendJson(.bad_request, .{ .message = "missing id" });
         return;
     }
 
     const id = std.fmt.parseInt(u32, id_str.?, 10) catch {
-        try frame.sendJSON(.bad_request, .{ .message = "invalid id" });
+        try frame.sendJson(.bad_request, .{ .message = "invalid id" });
         return;
     };
 
@@ -89,11 +89,11 @@ fn deleteUser(frame: *verse.Frame) !void {
     }
 
     if (!found) {
-        try frame.sendJSON(.not_found, .{ .message = "user not found" });
+        try frame.sendJson(.not_found, .{ .message = "user not found" });
         return;
     }
 
-    try frame.sendJSON(.ok, .{ .message = "success" });
+    try frame.sendJson(.ok, .{ .message = "success" });
 }
 
 pub fn main(init: std.process.Init) !void {

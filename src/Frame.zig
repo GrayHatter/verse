@@ -124,7 +124,7 @@ pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
 
 /// Takes a any object, that can be represented by json, converts it into a
 /// json string, and sends to the client.
-pub fn sendJSON(f: *Frame, comptime code: std.http.Status, json: anytype) NetworkError!void {
+pub fn sendJson(f: *Frame, comptime code: std.http.Status, json_data: anytype) NetworkError!void {
     if (code == .no_content) {
         @compileError("Sending JSON is not supported with status code no content");
     }
@@ -133,8 +133,8 @@ pub fn sendJSON(f: *Frame, comptime code: std.http.Status, json: anytype) Networ
     f.content_type = .json;
 
     try f.sendHeaders(.done);
-    try f.downstream.writer.interface.print("{f}", .{std.json.fmt(
-        json,
+    try f.downstream.writer.interface.print("{f}", .{json.fmt(
+        json_data,
         .{ .emit_null_optional_fields = false },
     )});
 }
@@ -345,10 +345,11 @@ const Request = @import("Request.zig");
 const Router = @import("Router.zig");
 const Server = @import("Server.zig");
 const Websocket = @import("websocket.zig");
+const builtin = @import("builtin");
 const cookies = @import("cookies.zig");
 const errors = @import("errors.zig");
+const json = @import("json.zig");
 const template = @import("template.zig");
-const builtin = @import("builtin");
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;
 

@@ -659,13 +659,13 @@ test json {
 
 const std = @import("std");
 const ContentType = @import("../ContentType.zig");
+const json = @import("../json.zig");
 const Allocator = std.mem.Allocator;
 const Reader = std.Io.Reader;
 const countScalar = std.mem.countScalar;
 const eql = std.mem.eql;
 const find = std.mem.find;
 const findPos = std.mem.findPos;
-const json = std.json;
 const log = std.log.scoped(.verse_request_data);
 const parseFloat = std.fmt.parseFloat;
 const parseInt = std.fmt.parseInt;
