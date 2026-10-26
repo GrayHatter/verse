@@ -1,4 +1,5 @@
 //! Reading and validating user input
+//!
 //! Uses the verse endpoint API creating the struct inline instead of importing
 //! this as external endpoint.zig file
 
@@ -8,10 +9,9 @@ const Root = struct {
     pub const verse_routes = .{
         // Using verse.Endpoints will include index() for you
         verse.Router.POST("post", post),
-        // The verse router will drop GET requests.
-        // Uncommenting the following `GET` line will allow the page to resolve,
-        // but the Request data demonstrated is method specific.
-        // verse.Router.GET("post", post),
+        // The verse router will drop GET requests. Uncommenting the following
+        // `GET` line will allow the page to resolve, but the Request data
+        // demonstrated is method specific. verse.Router.GET("post", post),
     };
 
     /// This struct matches the example form below. But many other types are
@@ -22,67 +22,63 @@ const Root = struct {
     };
 
     fn post(frame: *verse.Frame) verse.Router.Error!void {
-        var buffer: [0xffffff]u8 = undefined;
+        var buffer: [0xffff]u8 = undefined;
         var page = try print(&buffer, page_html, .{"page never generated"});
 
-        if (frame.request.data.post) |post_data| {
-            const required_data = post_data.validate(RequiredData) catch {
-                // If post_data.validate is unable to translate the received
-                // user data into the given type, it will return an error.
-                page = try print(&buffer, page_html, .{"Invalid data submitted!"});
-                return try frame.sendHTML(.ok, page);
-            };
+        // Router.POST will only deliver POST
+        const post_data = frame.request.data.post orelse unreachable;
+        const required_data = post_data.validate(RequiredData) catch {
+            // If post_data.validate is unable to translate the received
+            // user data into the given type, it will return an error.
+            page = try print(&buffer, page_html, .{"Invalid data submitted!"});
+            return try frame.sendHTML(.ok, page);
+        };
 
-            // Because neither fields in RequiredData is optional; they
-            // both are required. Most browsers will include empty input
-            // fields as an empty string. So normal input validation is
-            // still required.
-            if (required_data.username.len == 0) {
-                page = try print(&buffer, page_html, .{"Username must not be empty!"});
-                return try frame.sendHTML(.ok, page);
-            } else if (required_data.email.len == 0) {
-                page = try print(&buffer, page_html, .{"email must not be empty!"});
-                return try frame.sendHTML(.ok, page);
-            }
-
-            // As with all user data, you must be **extremely** careful using
-            // unsanitized user input! This example has both a buffer overflow,
-            // (try submitting a very long username, or email), as well as a
-            // script injection bug, (try injecting some html or another example
-            // script e.g. `<script>alert("hi mom");</script>`.)
-            //
-            // Preventing script injection can be complicated and is covered
-            // more completely in the bleach.zig example.
-            //
-            // Fortunately the buffer overflow is prevented multiple ways here.
-            // First using Zig's runtime safety, even an egregious example like
-            // `@memcpy(userbuffer[0..request_data.username.len], request_data.username);`
-            // Would be caught and prevented. But also using safe stdlib
-            // functions. If you uncomment the above @memcpy and notice the
-            // panic(), but with or without memory safety enabled
-            // std.fmt.bufPrint will still refuse to overrun the given buffer.
-            // Uncomment the next line to disable runtime memory safety, and
-            // notice Verse will still catch the error safely.
-            // @setRuntimeSafety(false);
-            var userbuffer: [0x80]u8 = undefined;
-            page = try print(&buffer, page_html, .{
-                try print(
-                    &userbuffer,
-                    "Your username is {s}<br/>Your email is {s}",
-                    .{ required_data.username, required_data.email },
-                ),
-            });
-        } else {
-            page = try print(&buffer, page_html, .{
-                "No POST data received! Did you use a GET request by mistake?",
-            });
+        // Because neither fields in RequiredData is optional; they both are
+        // required. Most browsers will include empty input fields as an empty
+        // string. So normal input validation is still required.
+        if (required_data.username.len == 0) {
+            page = try print(&buffer, page_html, .{"Username must not be empty!"});
+            return try frame.sendHTML(.ok, page);
         }
+
+        if (required_data.email.len == 0) {
+            page = try print(&buffer, page_html, .{"email must not be empty!"});
+            return try frame.sendHTML(.ok, page);
+        }
+
+        // As with all user data, it's prudent to be **extremely** careful with
+        // unsanitized user input! This example intentionally has both a buffer
+        // overflow, (try submitting a very long username, or email), as well as
+        // a script injection bug, (try injecting some html or another example
+        // script e.g. `<script>alert("hi mom");</script>`.)
+        //
+        // Preventing script injection can be complicated and is covered in some
+        // detail in the antibiotic.zig example.
+        //
+        // Fortunately the buffer overflow is prevented multiple ways here.
+        // First using Zig's runtime safety, even an egregious example like
+        // `@memcpy(userbuffer[0..request_data.username.len], request_data.username);`
+        // Would trigger a safer runtime panic. If you uncomment the above
+        // @memcpy and notice the panic(), but with or without memory safety
+        // enabled std.fmt.bufPrint will still refuse to overrun the given
+        // buffer. Uncomment the next line to disable runtime memory safety, and
+        // notice Verse will still catch the error safely.
+        // @setRuntimeSafety(false);
+        var userbuffer: [0x80]u8 = undefined;
+        page = try print(&buffer, page_html, .{
+            try print(
+                &userbuffer,
+                "Your username is {s}<br/>Your email is {s}",
+                .{ required_data.username, required_data.email },
+            ),
+        });
 
         try frame.sendHTML(.ok, page);
     }
 
     pub fn index(frame: *verse.Frame) !void {
-        var buffer: [0xffffff]u8 = undefined;
+        var buffer: [0xffff]u8 = undefined;
         const form =
             \\<form action="/post" method="POST">
             \\  <label for="username">Username: </label><input id="username" name="username" />
@@ -118,10 +114,12 @@ const Root = struct {
     ;
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    const a = init.arena.allocator();
     const Endpoints = verse.Endpoints(.{Root});
 
-    Endpoints.serve(std.heap.page_allocator, .{
+    std.debug.print("Starting server on http://127.0.0.1:8084/\n", .{});
+    Endpoints.serve(a, .{
         .mode = .{ .http = .localPort(8084) },
         .auth = .disabled,
     }) catch |err| {
