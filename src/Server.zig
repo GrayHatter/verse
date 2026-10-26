@@ -171,16 +171,7 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
             .uri = frame.uri,
             .user_agent = if (request.user_agent) |ua| ua.string else "EMPTY",
         });
-        srv.stats.log(.{
-            .addr = request.remote_addr,
-            .code = frame.status orelse .internal_server_error,
-            .page_size = 0,
-            .time = request.now.toSeconds(),
-            .rss = arena.queryCapacity(),
-            .ua = request.user_agent,
-            .uri = frame.uri.path,
-            .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
-        }, io);
+        srv.stats.log(.fromFrame(&frame, &arena, lap.toNanoseconds()), io);
     }
 
     const routed_endpoint = srv.router.fallback(&frame, srv.router.route);

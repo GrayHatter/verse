@@ -31,12 +31,6 @@ uri: Uri,
 /// possible to identify a banned, or other user that should have less than
 /// public access.
 user: ?Auth.User = null,
-/// The StackedData API is currently unstable, and may change in the future.
-/// template_data saving any type to be fetched at any time later in the
-/// request. An example use case is when it makes more sense to generate some
-/// page data at a different phase, e.g. when constructing the route, and then
-/// reading it later.
-template_data: template.StackedData,
 /// Response Headers: `frame.response_headers.addCustom("Name", "Value");`
 response_headers: Headers,
 /// Response Cookies
@@ -46,6 +40,17 @@ content_type: ?ContentType = ContentType.default,
 /// Status returned as the response code to the client. IFF null, `.ok` will be
 /// sent instead.
 status: ?Status = null,
+
+/// Mark data within frame as 'sensitive', which can help inform verse some of
+/// the data should not flow in to some companion APIs
+sensitive: bool = false,
+
+/// The StackedData API is currently unstable, and may change in the future.
+/// template_data saving any type to be fetched at any time later in the
+/// request. An example use case is when it makes more sense to generate some
+/// page data at a different phase, e.g. when constructing the route, and then
+/// reading it later.
+template_data: template.StackedData,
 
 /// Experimental API (may be removed or changed, open an issue/feature request
 /// if you find it useful)
@@ -200,6 +205,15 @@ pub const HeadersPhase = enum {
     done,
 };
 
+/// Mark data within frame to be possibly 'sensitive', which will prevent verse
+/// from logging, or otherwise retaining the data. This API is currently a work
+/// in progress and there may still be ways sensitive data may leak into other
+/// sources. Extra care should be taken, i.e. do not rely on this feature
+/// exclusively with data of a sensitive or private nature.
+pub fn markSensitive(f: *Frame) void {
+    f.sensitive = true;
+}
+
 pub fn sendHeaders(f: *Frame, comptime end: HeadersPhase) NetworkError!void {
     std.debug.assert(f.downstream.phase == .responding and
         (f.downstream.phase.responding == .new or f.downstream.phase.responding == .started));
@@ -270,12 +284,35 @@ fn httpHeader(f: *Frame, comptime ver: []const u8) [:0]const u8 {
 }
 
 pub const DumpDebugOptions = struct {
-    print_empty: bool = false,
-    print_post_data: bool = true,
+    print_empty: bool,
+    print_post_data: bool,
+
+    /// When set to true, this function will print data `Frame` even when marked
+    /// as sensitive. The safest option is to set this to false.
+    redact_sensitive_frames: bool,
+
+    /// Use with caution, may print secrets.
+    pub const verbose: DumpDebugOptions = .{
+        .print_empty = true,
+        .print_post_data = true,
+        .redact_sensitive_frames = true,
+    };
+
+    pub const safe: DumpDebugOptions = .{
+        .print_empty = false,
+        .print_post_data = false,
+        .redact_sensitive_frames = false,
+    };
 };
 
+/// Use with caution, will likely dump sensitive data into log sinks without
+/// redacting secrets.
 pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     const dlog = std.log.scoped(.DumpDebug);
+    if (comptime opt.redact_sensitive_frames) if (frame.sensitive) {
+        dlog.err("Skipping frame marked sensitive", .{});
+    };
+
     switch (frame.downstream.gateway) {
         .zwsgi => |zw| {
             var knowns = zw.known;
@@ -284,21 +321,20 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
                 if (entry.value.*) |value| {
                     dlog.err("    '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
                 } else if (comptime opt.print_empty) {
-                    dlog.err("    '{s}' => '[empty]\n", .{@tagName(entry.key)});
+                    dlog.err("    '{s}' => [empty]\n", .{@tagName(entry.key)});
                 }
             }
-            for (zw.vars.items) |varr| {
+            for (zw.vars.items) |varr|
                 dlog.err("    '{s}' => '{s}'\n", .{ varr.key, varr.val });
-            }
         },
         .http => {
             var itr_headers = @constCast(frame.request).headers.iterator();
-            while (itr_headers.next()) |header| {
+            while (itr_headers.next()) |header|
                 dlog.err("    request header => {s} -> {s}\n", .{ header.name, header.value });
-            }
         },
         .none => {},
     }
+
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
             dlog.err("    post data => '''{s}'''\n", .{post_data.source});
@@ -306,7 +342,7 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     }
 }
 
-pub fn requireValidUser(frame: *Frame) !void {
+pub fn requireValidUser(frame: *Frame) error{ Unauthorized, Unauthenticated }!void {
     if (frame.user) |user| {
         if (user.valid()) {
             return;
@@ -345,7 +381,7 @@ test dumpDebugData {
     frame.downstream.gateway = .none;
     frame.request = &req;
 
-    dumpDebugData(&frame, .{});
+    dumpDebugData(&frame, .verbose);
 }
 
 const Auth = @import("Auth.zig");

@@ -120,6 +120,20 @@ pub const Line = struct {
         .uri = .{},
         .us = 0,
     };
+
+    pub fn init(line: *Line, data: *const Data, sum: usize) void {
+        line.* = .{
+            .addr = .init(data.addr),
+            .code = data.code,
+            .number = sum,
+            .page_size = data.page_size,
+            .rss = data.rss,
+            .time = @intCast(data.time), // TODO FIXME
+            .ua = data.ua,
+            .uri = .init(data.uri),
+            .us = data.us,
+        };
+    }
 };
 
 pub const Data = struct {
@@ -131,6 +145,23 @@ pub const Data = struct {
     ua: ?UserAgent,
     uri: []const u8,
     us: u64,
+
+    /// currently experimental
+    sensitive: bool,
+
+    pub fn fromFrame(frame: *const Frame, arena: *const std.heap.ArenaAllocator, ns: i96) Data {
+        return .{
+            .addr = frame.request.remote_addr,
+            .code = frame.status orelse .internal_server_error,
+            .page_size = 0,
+            .time = frame.request.now.toSeconds(),
+            .rss = arena.queryCapacity(),
+            .ua = frame.request.user_agent,
+            .uri = if (frame.sensitive) "[Sensitive Data Redacted]" else frame.uri.path,
+            .us = @intCast(@divTrunc(ns, 1000)),
+            .sensitive = frame.sensitive,
+        };
+    }
 };
 
 pub fn init(rows: []Line, start: Timestamp, opts: Options) Stats {
@@ -146,20 +177,12 @@ pub fn init(rows: []Line, start: Timestamp, opts: Options) Stats {
 
 pub fn log(stats: *Stats, data: Data, io: Io) void {
     if (stats.options.auth_mode == .stats_disabled) return;
-    stats.mutex.lock(io) catch return;
+    stats.mutex.lock(io) catch |err| switch (err) {
+        error.Canceled => return,
+    };
     defer stats.mutex.unlock(io);
     const row: *Line = &stats.rows[stats.count.sum() % stats.rows.len];
-    row.* = .{
-        .addr = .init(data.addr),
-        .code = data.code,
-        .number = stats.count.sum(),
-        .page_size = data.page_size,
-        .rss = data.rss,
-        .time = @intCast(data.time), // TODO FIXME
-        .ua = data.ua,
-        .uri = .init(data.uri),
-        .us = data.us,
-    };
+    row.init(&data, stats.count.sum());
     stats.count.inc(data.code);
     stats.mean.add(data.us);
 
@@ -173,6 +196,7 @@ pub const Endpoint = struct {
     pub const verse_name = .stats;
 
     const StatsPage = PageData("builtin-html/verse-stats.html");
+    const StatsList = S.VerseStatsHtml.VerseStatsList;
 
     pub const stats = index;
 
@@ -198,10 +222,10 @@ pub const Endpoint = struct {
             .open => true,
         };
 
-        var data: [60]S.VerseStatsHtml.VerseStatsList = undefined;
+        var stats_list_buffer: [60]StatsList = undefined;
         const uptime: u64 = @intCast(server.stats.start_time.untilNow(f.io, .real).toSeconds());
         const mean_time: u64 = server.stats.mean.mean(@truncate(server.stats.count.sum()));
-        const rows = data[0..@min(server.stats.count.sum(), data.len)];
+        const rows: []StatsList = stats_list_buffer[0..@min(server.stats.count.sum(), stats_list_buffer.len)];
 
         for (rows, 0..) |*row, i| {
             const src_idx: usize = (server.stats.count.sum() - 1 - i) % server.stats.rows.len;
@@ -243,7 +267,10 @@ pub const Endpoint = struct {
                 .time = src.time,
                 .ip_address = if (include_ip) src.addr.slice() else "[redacted]",
                 .code = @backingInt(src.code),
-                .code_string = if (comptime use_abx) .safe(codeString(src.code)) else codeString(src.code),
+                .code_string = if (comptime use_abx)
+                    .safe(codeString(src.code))
+                else
+                    codeString(src.code),
                 .status_class = status_class,
                 .rss = src.rss,
                 .page_size = src.page_size,

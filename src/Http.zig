@@ -155,16 +155,7 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     frame.downstream.writer.interface.flush() catch unreachable; // TODO
 
     const lap = timer.untilNow(io, .awake);
-    srvr.stats.log(.{
-        .addr = request.remote_addr,
-        .code = frame.status orelse .internal_server_error,
-        .page_size = 0,
-        .time = request.now.toSeconds(),
-        .rss = arena.queryCapacity(),
-        .ua = request.user_agent,
-        .uri = frame.uri.path,
-        .us = @intCast(@divTrunc(lap.toNanoseconds(), 1000)),
-    }, io);
+    srvr.stats.log(.fromFrame(&frame, &arena, lap.toNanoseconds()), io);
 }
 
 fn requestData(a: Allocator, req: *std.http.Server.Request) !Request.Data {
