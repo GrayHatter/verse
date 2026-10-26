@@ -17,18 +17,19 @@
 alloc: Allocator,
 /// Io (not guaranteed to be the same Io provided to `Server`).
 io: Io,
-/// Request object received from client.
-request: *const Request,
 /// Connection to the downstream client/request.
 downstream: Downstream,
-/// Request URI
+/// Request object received from client.
+request: *const Request,
+/// Target URI May be different from the Request.URI
+/// (i.e. canonization, e.g. `//route/` -> `/route/q
 uri: Uri,
 /// user is set to exactly what is provided directly by the active
 /// Auth.Provider. It's possible for an Auth.Provider to return a User that is
 /// invalid. Depending on the need for any given use, users should always verify
-/// the validity in addition to the existence of this user field.
-/// e.g. it's possible to identify a banned, or other user that should have less
-/// than public access.
+/// the validity in addition to the existence of this user field. e.g. it's
+/// possible to identify a banned, or other user that should have less than
+/// public access.
 user: ?Auth.User = null,
 /// The StackedData API is currently unstable, and may change in the future.
 /// template_data saving any type to be fetched at any time later in the
@@ -59,8 +60,13 @@ pub const Uri = @import("Uri.zig");
 pub const Downstream = @import("Downstream.zig");
 
 pub const Phase = union(enum) {
+    /// Processing the incoming request
     request: Phase.Request,
+    /// Incoming request is completed; verse-internal checks and features
+    prerouting: PreRouting,
+    /// PreRouting complete, and control has moved from verse into client code
     routing: Routing,
+    /// Request has found and endpoint, and the endpoint is generating the page
     responding: Responding,
     err: Err,
 
@@ -77,6 +83,11 @@ pub const Phase = union(enum) {
         waiting,
         body,
         complete,
+    };
+
+    pub const PreRouting = enum {
+        /// Prerouting phase, various internal routes and security steps
+        prerouting,
     };
 
     pub const Routing = enum {
