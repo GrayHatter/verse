@@ -658,19 +658,17 @@ test json {
 }
 
 const std = @import("std");
+const ContentType = @import("../ContentType.zig");
 const Allocator = std.mem.Allocator;
 const Reader = std.Io.Reader;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
-const Type = @import("builtin").Type;
-const parseInt = std.fmt.parseInt;
-const parseFloat = std.fmt.parseFloat;
-const stringToEnum = std.meta.stringToEnum;
-const ContentType = @import("../content-type.zig");
+const countScalar = std.mem.countScalar;
 const eql = std.mem.eql;
-const splitScalar = std.mem.splitScalar;
-const splitSequence = std.mem.splitSequence;
 const find = std.mem.find;
 const findPos = std.mem.findPos;
-const countScalar = std.mem.countScalar;
 const json = std.json;
 const log = std.log.scoped(.verse_request_data);
+const parseFloat = std.fmt.parseFloat;
+const parseInt = std.fmt.parseInt;
+const splitScalar = std.mem.splitScalar;
+const splitSequence = std.mem.splitSequence;
+const stringToEnum = std.meta.stringToEnum;

@@ -1,10 +1,11 @@
 //! The default object for the life time of the request and response.
 //!
-//! The `*Frame` object is created after the original client request for a single page,
-//! that wraps all the Request and response helpers, and exposes the direct `Downstream`
-//! connection to the client response nerated from a given build function, and also
-//! exposes a number of other functions. e.g. Page/Template generation,
-//! Authentication and session management, a websocket connection API, etc.
+//! The `*Frame` object is created after the original client request for a
+//! single page, that wraps all the Request and response helpers, and exposes
+//! the direct `Downstream` connection to the client response nerated from a
+//! given build function, and also exposes a number of other functions. e.g.
+//! Page/Template generation, Authentication and session management, a websocket
+//! connection API, etc.
 
 /// `Frame.alloc` is a per request Allocator, the exact implementation backing
 /// this Allocator isn't part of the public API (currently backed by
@@ -22,7 +23,6 @@ request: *const Request,
 downstream: Downstream,
 /// Request URI
 uri: Uri,
-
 /// user is set to exactly what is provided directly by the active
 /// Auth.Provider. It's possible for an Auth.Provider to return a User that is
 /// invalid. Depending on the need for any given use, users should always verify
@@ -30,14 +30,12 @@ uri: Uri,
 /// e.g. it's possible to identify a banned, or other user that should have less
 /// than public access.
 user: ?Auth.User = null,
-
 /// The StackedData API is currently unstable, and may change in the future.
 /// template_data saving any type to be fetched at any time later in the
 /// request. An example use case is when it makes more sense to generate some
 /// page data at a different phase, e.g. when constructing the route, and then
 /// reading it later.
 template_data: template.StackedData,
-
 /// Response Headers: `frame.response_headers.addCustom("Name", "Value");`
 response_headers: Headers,
 /// Response Cookies
@@ -48,12 +46,12 @@ content_type: ?ContentType = ContentType.default,
 /// sent instead.
 status: ?Status = null,
 
-/// Unstable API; may be altered or removed in the future
-server: *const Server,
-
 /// Experimental API (may be removed or changed, open an issue/feature request
 /// if you find it useful)
 session: Session = undefined,
+
+/// Unstable API; may be altered or removed in the future
+server: *const Server,
 
 const Frame = @This();
 
@@ -375,17 +373,17 @@ test {
 }
 
 const Auth = @import("Auth.zig");
-const ContentType = @import("content-type.zig");
-const cookies = @import("cookies.zig");
+const ContentType = @import("ContentType.zig");
+const Error = errors.Error;
 const Headers = @import("Headers.zig");
+const NetworkError = errors.NetworkError;
 const Request = @import("Request.zig");
-const template = @import("template.zig");
 const Router = @import("Router.zig");
 const Server = @import("Server.zig");
 const Websocket = @import("websocket.zig");
+const cookies = @import("cookies.zig");
 const errors = @import("errors.zig");
-const Error = errors.Error;
-const NetworkError = errors.NetworkError;
+const template = @import("template.zig");
 const zWSGI = @import("zwsgi.zig");
 const builtin = @import("builtin");
 const verse_buildopts = @import("verse_buildopts");
