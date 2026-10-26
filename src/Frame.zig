@@ -56,6 +56,7 @@ server: *const Server,
 const Frame = @This();
 
 pub const Uri = @import("Uri.zig");
+pub const Downstream = @import("Downstream.zig");
 
 pub const Phase = union(enum) {
     request: Phase.Request,
@@ -110,46 +111,6 @@ pub const Phase = union(enum) {
         routing,
         server,
     };
-};
-
-pub const Downstream = struct {
-    gateway: Gateway,
-    reader: Io.net.Stream.Reader,
-    writer: Io.net.Stream.Writer,
-
-    phase: Phase,
-
-    pub const Gateway = union(enum) {
-        zwsgi: zWSGI.Request,
-        http: std.http.Server,
-        none: void,
-    };
-
-    pub const Error = error{WriteFailed};
-    // Largest single IP packet size
-    pub const ONESHOT_SIZE = 14720;
-
-    pub fn init(s: Io.net.Stream, a: Allocator, io: Io) error{OutOfMemory}!Downstream {
-        const r_b: []u8 = try a.alloc(u8, 0x10000);
-        errdefer a.free(r_b);
-        const w_b: []u8 = try a.alloc(u8, 0x40000);
-
-        errdefer comptime unreachable;
-        return .{
-            .phase = .new,
-            .gateway = .none,
-            .reader = s.reader(io, r_b),
-            .writer = s.writer(io, w_b),
-        };
-    }
-
-    pub fn http(ds: *Downstream) !void {
-        ds.gateway = .{ .http = .init(&ds.reader.interface, &ds.writer.interface) };
-    }
-
-    pub fn zwsgi(ds: *Downstream, a: Allocator) !void {
-        ds.gateway = .{ .zwsgi = try .init(&ds.reader.interface, a) };
-    }
 };
 
 /// sendPage is the default way to respond in verse using the Template system.
@@ -223,13 +184,17 @@ pub fn init(srv: *Server, ds: Downstream, request: *const Request, a: Allocator,
     };
 }
 
-pub const HeadersPhase = enum { more, done };
+pub const HeadersPhase = enum {
+    more,
+    done,
+};
+
 pub fn sendHeaders(f: *Frame, comptime end: HeadersPhase) NetworkError!void {
     std.debug.assert(f.downstream.phase == .responding and
         (f.downstream.phase.responding == .new or f.downstream.phase.responding == .started));
     const ds: *Writer = &f.downstream.writer.interface;
     // Verse headers
-    try ds.writeAll(f.HttpHeader("HTTP/1.1"));
+    try ds.writeAll(f.httpHeader("HTTP/1.1"));
     const s_name = "Server: verse/" ++ build_version ++ "\r\n";
     try ds.writeAll(s_name);
 
@@ -263,7 +228,7 @@ pub fn sendDefaultErrorPage(f: *Frame, comptime code: std.http.Status) void {
     };
 }
 
-fn HttpHeader(f: *Frame, comptime ver: []const u8) [:0]const u8 {
+fn httpHeader(f: *Frame, comptime ver: []const u8) [:0]const u8 {
     if (f.status == null) f.status = .ok;
     return switch (f.status.?) {
         .switching_protocols => ver ++ " 101 Switching Protocols\r\n",
@@ -330,16 +295,6 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     }
 }
 
-test dumpDebugData {
-    var req: Request = undefined;
-    req.data.post = null;
-    var frame: Frame = undefined;
-    frame.downstream.gateway = .none;
-    frame.request = &req;
-
-    dumpDebugData(&frame, .{});
-}
-
 pub fn requireValidUser(frame: *Frame) !void {
     if (frame.user) |user| {
         if (user.valid()) {
@@ -358,23 +313,32 @@ pub fn raze(f: *Frame) void {
     f.template_data.raze(f.alloc);
 }
 
-test {
+test Frame {
     _ = std.testing.refAllDecls(@This());
-    _ = &dumpDebugData;
     _ = &Auth;
     _ = &ContentType;
     _ = &Headers;
     _ = &Request;
-    _ = &template;
-    _ = &template.StackedData;
     _ = &Router;
     _ = &Server;
     _ = &Websocket;
+    _ = &dumpDebugData;
+    _ = &template.StackedData;
+    _ = &template;
+}
+
+test dumpDebugData {
+    var req: Request = undefined;
+    req.data.post = null;
+    var frame: Frame = undefined;
+    frame.downstream.gateway = .none;
+    frame.request = &req;
+
+    dumpDebugData(&frame, .{});
 }
 
 const Auth = @import("Auth.zig");
 const ContentType = @import("ContentType.zig");
-const Error = errors.Error;
 const Headers = @import("Headers.zig");
 const NetworkError = errors.NetworkError;
 const Request = @import("Request.zig");
@@ -384,7 +348,6 @@ const Websocket = @import("websocket.zig");
 const cookies = @import("cookies.zig");
 const errors = @import("errors.zig");
 const template = @import("template.zig");
-const zWSGI = @import("zwsgi.zig");
 const builtin = @import("builtin");
 const verse_buildopts = @import("verse_buildopts");
 const build_version = verse_buildopts.version;
@@ -393,9 +356,8 @@ const build_version = verse_buildopts.version;
 const Session = if (verse_buildopts.sessions_enabled or builtin.is_test) @import("Session.zig") else void;
 
 const std = @import("std");
-const log = std.log.scoped(.Verse);
+const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Status = std.http.Status;
 const Writer = Io.Writer;
-const Reader = Io.Reader;
-const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.Verse);
