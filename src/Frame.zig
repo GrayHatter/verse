@@ -310,7 +310,7 @@ pub const DumpDebugOptions = struct {
 pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     const dlog = std.log.scoped(.DumpDebug);
     if (comptime opt.redact_sensitive_frames) if (frame.sensitive) {
-        dlog.err("Skipping frame marked sensitive", .{});
+        return dlog.err("Skipping frame marked sensitive", .{});
     };
 
     switch (frame.downstream.gateway) {
