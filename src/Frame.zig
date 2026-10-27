@@ -382,6 +382,7 @@ test dumpDebugData {
     frame.request = &req;
 
     dumpDebugData(&frame, .verbose);
+    dumpDebugData(&frame, .safe);
 }
 
 const Auth = @import("Auth.zig");
