@@ -1,8 +1,8 @@
 pub const Attributes = struct {
     domain: ?[]const u8 = null,
     path: ?[]const u8 = null,
-    httponly: bool = false,
-    secure: bool = false,
+    httponly: bool = true,
+    secure: bool = true,
     partitioned: bool = false,
     expires: ?i64 = null,
     same_site: ?SameSite = null,
@@ -64,17 +64,21 @@ test Cookie {
     var buffer: [4096]u8 = undefined;
 
     const cookies = [_]Cookie{
+        .{ .name = "name", .value = "value", .attr = .{ .secure = false, .httponly = false } },
         .{ .name = "name", .value = "value" },
-        .{ .name = "name", .value = "value", .attr = .{ .secure = true } },
+        .{ .name = "name", .value = "value", .attr = .{ .secure = true, .httponly = false } },
+        .{ .name = "name", .value = "value", .attr = .{ .secure = true, .httponly = true } },
         .{ .name = "name", .value = "value", .attr = .{ .max_age_str = "10000" } },
         .{ .name = "name", .value = "value", .attr = .{ .max_age_str = "10000", .secure = true } },
     };
 
     const expected = [_][]const u8{
         "Set-Cookie: name=value",
+        "Set-Cookie: name=value; Secure; HttpOnly",
         "Set-Cookie: name=value; Secure",
-        "Set-Cookie: name=value; Max-Age=10000",
-        "Set-Cookie: name=value; Max-Age=10000; Secure",
+        "Set-Cookie: name=value; Secure; HttpOnly",
+        "Set-Cookie: name=value; Max-Age=10000; Secure; HttpOnly",
+        "Set-Cookie: name=value; Max-Age=10000; Secure; HttpOnly",
     };
 
     for (expected, cookies) |expect, cookie| {
