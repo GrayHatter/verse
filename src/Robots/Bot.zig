@@ -40,6 +40,8 @@ pub const Name = enum {
     googlebot,
     /// AI bot
     gptbot,
+    /// AI crawler, ignores robots.txt
+    keenable,
     /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     lounge_irc_client,
     /// repeatedly breaks in ways harmful to sites.
@@ -68,10 +70,11 @@ pub const Name = enum {
             .elevenlabscrawler => true, // buys data, or fails to ident
             .googlebot => false,
             .gptbot => false,
+            .keenable => true,
             .metaexternalagent => true, // buggy crawler that can't behave
-            .techspybot => true, // non-responsive to contact
             .reflectionbot => true, // sends broken data
             .scrybot => true, // non-responsive to contact
+            .techspybot => true, // non-responsive to contact
             .youbot => true, // non-responsive to contact
 
             // robots.txt doesn't apply so returns a friendly name
@@ -94,6 +97,7 @@ pub const Name = enum {
             .elevenlabscrawler => "ElevenlabsCrawler",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
+            .keenable => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
             .reflectionbot => "Reflectionbot",
@@ -121,6 +125,7 @@ pub const Name = enum {
             .elevenlabscrawler => "ElevenlabsCrawler",
             .googlebot => "GoogleBot",
             .gptbot => "GPTBot",
+            .keenable => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
             .techspybot => "TechSpyBot",
             .reflectionbot => "Reflectionbot",
@@ -156,6 +161,8 @@ pub const Name = enum {
             // Unverified
             .gptbot => false,
             // Unverified
+            .keenable => false, // ignores robots.txtw
+            // Unverified
             .metaexternalagent => false,
             // Unverified
             .techspybot => false,
@@ -182,6 +189,7 @@ pub const Name = enum {
             .elevenlabscrawler => find(u8, str, "ElevenlabsCrawler") != null,
             .googlebot => endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)"),
             .gptbot => endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)"),
+            .keenable => find(u8, str, "KeenableBot/") != null,
             .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
             .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
@@ -218,6 +226,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .elevenlabscrawler, .version = parseVersion(str, "ElevenlabsCrawler/") catch 0 };
     } else if (Name.gptbot.ident(str)) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
+    } else if (Name.keenable.ident(str)) {
+        return .{ .name = .keenable, .version = parseVersion(str, "KeenableBot/") catch 0 };
     } else if (Name.scrybot.ident(str)) {
         return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0 };
     } else if (Name.metaexternalagent.ident(str)) {
@@ -356,6 +366,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .elevenlabscrawler, .network = null },
         .{ .bot = .googlebot, .network = .{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .gptbot, .network = .{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
+        .{ .bot = .keenable, .network = null }, // published on their site, but they're malicious
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
         .{ .bot = .reflectionbot, .network = null },
