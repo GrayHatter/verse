@@ -226,15 +226,7 @@ pub fn CookieAuth(HMAC: type) type {
 
         pub fn getCookie(_: *const Auth, user: User) Error!?ReqCookie {
             if (user.session_next) |next| {
-                return .{
-                    .name = "verse_session_secret",
-                    .value = next,
-                    .attr = .{
-                        // TODO only set when HTTPS is enabled
-                        .secure = true,
-                        .same_site = .strict,
-                    },
-                };
+                return .new("verse_session_secret", next, .strict);
             }
             return null;
         }

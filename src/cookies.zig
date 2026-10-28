@@ -1,43 +1,100 @@
 pub const Attributes = struct {
-    domain: ?[]const u8 = null,
-    path: ?[]const u8 = null,
-    httponly: bool = true,
-    secure: bool = true,
-    partitioned: bool = false,
-    expires: ?i64 = null,
-    same_site: ?SameSite = null,
+    domain: ?[]const u8,
+    http_only: bool,
+    max_age: ?i64,
+    partitioned: bool,
+    path: ?[]const u8,
+    same_site: SameSite,
+    secure: bool,
 
-    // TODO come up with a better hack than this one
-    max_age_str: ?[]const u8 = null,
-    //max_age: ?i64 = null,
+    pub const default: Attributes = .{
+        .domain = null,
+        .http_only = true,
+        .max_age = null,
+        .partitioned = false,
+        .path = null,
+        .same_site = .unset,
+        .secure = true,
+    };
+
+    pub const strict: Attributes = .{
+        .domain = null,
+        .http_only = true,
+        .max_age = null,
+        .partitioned = false,
+        .path = null,
+        .same_site = .strict,
+        .secure = true,
+    };
+
+    pub const lax: Attributes = .{
+        .domain = null,
+        .http_only = true,
+        .max_age = null,
+        .partitioned = false,
+        .path = null,
+        .same_site = .lax,
+        .secure = true,
+    };
+
+    pub const session: Attributes = .{
+        .domain = null,
+        .http_only = true,
+        .max_age = null,
+        .partitioned = false,
+        .path = null,
+        .same_site = .strict,
+        .secure = true,
+    };
+
+    //pub const default: Attributes = .{};
+    //pub const default: Attributes = .{};
+    //pub const default: Attributes = .{};
 
     pub const SameSite = enum {
+        unset,
         strict,
         lax,
         none,
     };
 
+    pub fn age(seconds: i64) Attributes {
+        var attr: Attributes = .default;
+        attr.max_age = seconds;
+        return attr;
+    }
+
     pub fn format(a: Attributes, w: *Writer) !void {
-        if (a.domain) |d| try w.print("; Domain={s}", .{d});
-        if (a.path) |p| try w.print("; Path={s}", .{p});
-        if (a.max_age_str) |m| try w.print("; Max-Age={s}", .{m});
-        if (a.same_site) |s| try switch (s) {
+        try switch (a.same_site) {
             .strict => w.writeAll("; SameSite=Strict"),
+            .unset => {}, // equiv to lax
             .lax => w.writeAll("; SameSite=Lax"),
             .none => w.writeAll("; SameSite=None"),
         };
+        if (a.max_age) |m| try w.print("; Max-Age={d}", .{m});
+        if (a.secure or a.partitioned) try w.writeAll("; Secure");
+        if (a.domain) |d| try w.print("; Domain={s}", .{d});
+        if (a.path) |p| try w.print("; Path={s}", .{p});
+        if (a.http_only) try w.writeAll("; HttpOnly");
         if (a.partitioned) try w.writeAll("; Partitioned");
-        if (a.secure) try w.writeAll("; Secure");
-        if (a.httponly) try w.writeAll("; HttpOnly");
     }
 };
 
 pub const Cookie = struct {
     name: []const u8,
     value: []const u8,
-    attr: Attributes = .{},
+    attr: Attributes = .default,
     // Cookie state metadata.
     source: enum { server, client, nos } = .nos,
+
+    pub fn new(name: []const u8, value: []const u8, attr: Attributes) Cookie {
+        return .{
+            .name = name,
+            .value = value,
+            .attr = attr,
+            .source = .server,
+        };
+    }
 
     pub fn fromHeader(cookie: []const u8) Cookie {
         const split = indexOfScalar(u8, cookie, '=') orelse cookie.len - 1;
@@ -45,7 +102,6 @@ pub const Cookie = struct {
             .name = cookie[0..split],
             .value = cookie[split + 1 ..],
             .source = .client,
-            .attr = .{},
         };
     }
 
@@ -64,21 +120,37 @@ test Cookie {
     var buffer: [4096]u8 = undefined;
 
     const cookies = [_]Cookie{
-        .{ .name = "name", .value = "value", .attr = .{ .secure = false, .httponly = false } },
+        .{ .name = "name", .value = "value", .attr = .default },
         .{ .name = "name", .value = "value" },
-        .{ .name = "name", .value = "value", .attr = .{ .secure = true, .httponly = false } },
-        .{ .name = "name", .value = "value", .attr = .{ .secure = true, .httponly = true } },
-        .{ .name = "name", .value = "value", .attr = .{ .max_age_str = "10000" } },
-        .{ .name = "name", .value = "value", .attr = .{ .max_age_str = "10000", .secure = true } },
+        .{ .name = "name", .value = "value", .attr = .{
+            .secure = true,
+            .max_age = null,
+            .http_only = false,
+            .domain = null,
+            .path = null,
+            .same_site = .unset,
+            .partitioned = false,
+        } },
+        .{ .name = "name", .value = "value", .attr = .strict },
+        .{ .name = "name", .value = "value", .attr = .age(10000) },
+        .{ .name = "name", .value = "value", .attr = .age(0) },
+        .new("other", "cookie", .session),
+        .new("other", "cookie", .default),
+        .new("other", "cookie", .lax),
+        .new("other", "cookie", .age(10)),
     };
 
     const expected = [_][]const u8{
-        "Set-Cookie: name=value",
+        "Set-Cookie: name=value; Secure; HttpOnly",
         "Set-Cookie: name=value; Secure; HttpOnly",
         "Set-Cookie: name=value; Secure",
-        "Set-Cookie: name=value; Secure; HttpOnly",
+        "Set-Cookie: name=value; SameSite=Strict; Secure; HttpOnly",
         "Set-Cookie: name=value; Max-Age=10000; Secure; HttpOnly",
-        "Set-Cookie: name=value; Max-Age=10000; Secure; HttpOnly",
+        "Set-Cookie: name=value; Max-Age=0; Secure; HttpOnly",
+        "Set-Cookie: other=cookie; SameSite=Strict; Secure; HttpOnly",
+        "Set-Cookie: other=cookie; Secure; HttpOnly",
+        "Set-Cookie: other=cookie; SameSite=Lax; Secure; HttpOnly",
+        "Set-Cookie: other=cookie; Max-Age=10; Secure; HttpOnly",
     };
 
     for (expected, cookies) |expect, cookie| {
@@ -167,7 +239,7 @@ test Jar {
 
     const cookies = [_]Cookie{
         .{ .name = "cookie1", .value = "value" },
-        .{ .name = "cookie2", .value = "value", .attr = .{ .secure = true } },
+        .{ .name = "cookie2", .value = "value", .attr = .default },
     };
 
     for (cookies) |cookie| {
