@@ -196,7 +196,7 @@ pub const Endpoint = struct {
     pub const verse_name = .stats;
 
     const StatsPage = PageData("builtin-html/verse-stats.html");
-    const StatsList = S.VerseStatsHtml.VerseStatsList;
+    const StatsList = S.BuiltinHtml_VerseStatsHtml.VerseStatsList;
 
     pub const stats = index;
 

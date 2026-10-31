@@ -568,45 +568,13 @@ fn intToWord(in: u8) []const u8 {
     };
 }
 
-pub fn nameStruct(d: Directive, buffer: []u8) ![]u8 {
-    var name = d.noun;
-    if (findLast(u8, d.noun, "/")) |i| {
-        name = name[i..];
-    }
-
-    var i: usize = 0;
-    var next_upper = true;
-    for (name) |chr| {
-        if (i >= buffer.len) return error.OutOfSpace;
-        switch (chr) {
-            'a'...'z', 'A'...'Z' => {
-                if (next_upper) {
-                    buffer[i] = std.ascii.toUpper(chr);
-                } else {
-                    buffer[i] = chr;
-                }
-                next_upper = false;
-                i += 1;
-            },
-            inline '0'...'9' => |x| {
-                for (intToWord(x)) |cchr| {
-                    buffer[i] = cchr;
-                    i += 1;
-                }
-            },
-            '-', '_', '.' => {
-                next_upper = true;
-            },
-            else => {},
-        }
-    }
-
-    return buffer[0..i];
+pub fn nameStruct(d: Directive, buffer: []u8) []u8 {
+    return Template.nameSlice(d.noun, buffer);
 }
 
 pub fn nameStructAlloc(d: Directive, a: Allocator) ![]u8 {
     var sn_b: [0x200]u8 = undefined;
-    const name = try d.nameStruct(&sn_b);
+    const name = d.nameStruct(&sn_b);
     return try a.dupe(u8, name);
 }
 

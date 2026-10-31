@@ -142,7 +142,7 @@ fn comptimeStruct(comptime text: []const u8) type {
 test findPageType {
     // Copied from the example template html to create this test, the example
     // html is the cannon definition.
-    const Type = findPageType("ExampleHtml");
+    const Type = findPageType("Templates/ExampleHtml");
 
     const expected: Type = .{
         .simple_variable = "",

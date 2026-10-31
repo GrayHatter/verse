@@ -5,7 +5,6 @@ parent: ?*const Template = null,
 const Template = @This();
 
 pub fn nameStruct(t: Template, buffer: []u8) []u8 {
-    //return nameSlice(std.mem.cutSuffix(u8, t.name, ".html") orelse t.name, buffer);
     return nameSlice(t.name, buffer);
 }
 
@@ -31,12 +30,7 @@ fn intToWord(in: u8) []const u8 {
     };
 }
 
-pub fn nameSlice(in: []const u8, buffer: []u8) []u8 {
-    var name = in;
-    if (std.mem.find(u8, in, "/")) |i| {
-        name = name[i..];
-    }
-
+pub fn nameSlice(name: []const u8, buffer: []u8) []u8 {
     var i: usize = 0;
     var next_upper = true;
     for (name) |chr| {
@@ -56,9 +50,12 @@ pub fn nameSlice(in: []const u8, buffer: []u8) []u8 {
                     i += 1;
                 }
             },
-            '-', '_', '.' => {
+            '/' => {
+                buffer[i] = '_';
+                i += 1;
                 next_upper = true;
             },
+            '-', '_', '.' => next_upper = true,
             else => {},
         }
     }

@@ -187,7 +187,8 @@ pub fn main(init: std.process.Init) !void {
     );
 
     for (compiled.data) |tplt| {
-        _, const path = std.mem.cutScalarLast(u8, tplt.path, '/') orelse unreachable;
+        // BUG TODO get template prefix from build.zig
+        _, const path = std.mem.cutScalar(u8, tplt.path, '/') orelse unreachable;
         var sn_b: [0xffff]u8 = undefined;
         const name = Template.nameSlice(path, &sn_b);
         const this = try AbstTree.init(a, name);
