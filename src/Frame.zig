@@ -319,25 +319,25 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
             var itr = knowns.iterator();
             while (itr.next()) |entry| {
                 if (entry.value.*) |value| {
-                    dlog.err("    '{s}' => '{s}'\n", .{ @tagName(entry.key), value });
+                    dlog.err("    '{s}' => '{s}'", .{ @tagName(entry.key), value });
                 } else if (comptime opt.print_empty) {
-                    dlog.err("    '{s}' => [empty]\n", .{@tagName(entry.key)});
+                    dlog.err("    '{s}' => [empty]", .{@tagName(entry.key)});
                 }
             }
             for (zw.vars.items) |varr|
-                dlog.err("    '{s}' => '{s}'\n", .{ varr.key, varr.val });
+                dlog.err("    '{s}' => '{s}'", .{ varr.key, varr.val });
         },
         .http => {
             var itr_headers = @constCast(frame.request).headers.iterator();
             while (itr_headers.next()) |header|
-                dlog.err("    request header => {s} -> {s}\n", .{ header.name, header.value });
+                dlog.err("    request header => {s} -> {s}", .{ header.name, header.value });
         },
         .none => {},
     }
 
     if (comptime opt.print_post_data) {
         if (frame.request.data.post) |post_data| {
-            dlog.err("    post data => '''{s}'''\n", .{post_data.source});
+            dlog.err("    post data => '''{s}'''", .{post_data.source});
         }
     }
 }
