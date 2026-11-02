@@ -106,11 +106,10 @@ pub fn serve(z: *zWSGI, gpa: Allocator, io: Io) !void {
 
 const OnceFuture = Io.Future(@typeInfo(@TypeOf(once)).@"fn".return_type.?);
 
-pub fn initRequest(_: *const zWSGI, ds: *Frame.Downstream, now: Io.Timestamp, a: Allocator) !verseRequest {
+pub fn initRequest(_: *const zWSGI, gw: *Frame.Downstream.Gateway.Zwsgi, now: Io.Timestamp, a: Allocator) !verseRequest {
     log.debug("setting up request", .{});
-    try ds.zwsgi(a);
-    const request_data = try requestData(a, &ds.gateway.zwsgi, &ds.reader.interface);
-    return try .initZWSGI(&ds.gateway.zwsgi, request_data, now, a);
+    const request_data = try requestData(a, &gw.zwsgi, &gw.reader.interface);
+    return try .initZWSGI(&gw.zwsgi, request_data, now, a);
 }
 
 pub fn once(z: *const zWSGI, stream: net.Stream, gpa: Allocator, io: Io) !void {

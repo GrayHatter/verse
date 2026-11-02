@@ -134,7 +134,7 @@ pub const Phase = union(enum) {
 pub fn sendPage(frame: *Frame, page: anytype) NetworkError!void {
     frame.status = frame.status orelse .ok;
     try frame.sendHeaders(.done);
-    try frame.downstream.writer.interface.print("{f}", .{page});
+    try frame.downstream.writer.print("{f}", .{page});
     return;
 }
 
@@ -149,7 +149,7 @@ pub fn sendJson(f: *Frame, comptime code: std.http.Status, json_data: anytype) N
     f.content_type = .json;
 
     try f.sendHeaders(.done);
-    try f.downstream.writer.interface.print("{f}", .{json.fmt(
+    try f.downstream.writer.print("{f}", .{json.fmt(
         json_data,
         .{ .emit_null_optional_fields = false },
     )});
@@ -159,7 +159,7 @@ pub fn sendHTML(f: *Frame, comptime code: std.http.Status, html: []const u8) Net
     f.status = code;
     f.content_type = .html;
     try f.sendHeaders(.done);
-    try f.downstream.writer.interface.writeAll(html);
+    try f.downstream.writer.writeAll(html);
 }
 
 pub fn redirect(f: *Frame, loc: []const u8, comptime scode: std.http.Status) NetworkError!void {
@@ -177,7 +177,7 @@ pub fn redirect(f: *Frame, loc: []const u8, comptime scode: std.http.Status) Net
     };
 
     try f.sendHeaders(.more);
-    try f.downstream.writer.interface.print("Location: {s}\r\n\r\n", .{loc});
+    try f.downstream.writer.print("Location: {s}\r\n\r\n", .{loc});
 }
 
 pub fn acceptWebsocket(frame: *Frame) !Websocket {
@@ -217,7 +217,7 @@ pub fn markSensitive(f: *Frame) void {
 pub fn sendHeaders(f: *Frame, comptime end: HeadersPhase) NetworkError!void {
     std.debug.assert(f.downstream.phase == .responding and
         (f.downstream.phase.responding == .new or f.downstream.phase.responding == .started));
-    const ds: *Writer = &f.downstream.writer.interface;
+    const ds: *Writer = f.downstream.writer;
     // Verse headers
     try ds.writeAll(f.httpHeader("HTTP/1.1"));
     const s_name = "Server: verse/" ++ build_version ++ "\r\n";
@@ -314,7 +314,8 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
     };
 
     switch (frame.downstream.gateway) {
-        .zwsgi => |zw| {
+        .zwsgi => |z| {
+            const zw = z.zwsgi;
             var knowns = zw.known;
             var itr = knowns.iterator();
             while (itr.next()) |entry| {
@@ -332,6 +333,7 @@ pub fn dumpDebugData(frame: *const Frame, comptime opt: DumpDebugOptions) void {
             while (itr_headers.next()) |header|
                 dlog.err("    request header => {s} -> {s}", .{ header.name, header.value });
         },
+        .buffer => {},
         .none => {},
     }
 
@@ -378,7 +380,7 @@ test dumpDebugData {
     var req: Request = undefined;
     req.data.post = null;
     var frame: Frame = undefined;
-    frame.downstream.gateway = .none;
+    frame.downstream.gateway = .failing;
     frame.request = &req;
 
     dumpDebugData(&frame, .verbose);

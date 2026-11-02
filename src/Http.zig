@@ -49,9 +49,8 @@ pub fn listen(http: *HTTP, io: Io) !Io.net.Server {
     return try http.srv_address.listen(io, .{});
 }
 
-pub fn initRequest(_: *const HTTP, ds: *Frame.Downstream, now: Io.Timestamp, addr: IpAddress, a: Allocator) !Request {
-    try ds.http();
-    var hreq: std.http.Server.Request = try ds.gateway.http.receiveHead();
+pub fn initRequest(_: *const HTTP, gw: *Frame.Downstream.Gateway.Http, now: Io.Timestamp, addr: IpAddress, a: Allocator) !Request {
+    var hreq: std.http.Server.Request = try gw.http.receiveHead();
     log.debug("http request uri: {s}", .{hreq.head.target});
 
     const reqdata = try requestData(a, &hreq);
@@ -139,8 +138,9 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     const ifc: *Server.Interface = @fieldParentPtr("http", http);
     const srvr: *Server = @alignCast(@fieldParentPtr("interface", ifc));
 
-    var ds: Frame.Downstream = try .init(stream, a, io);
-    var request: Request = try http.initRequest(&ds, now, stream.socket.address, a);
+    var ds: Frame.Downstream = try .init(a);
+    try ds.http(stream, io);
+    var request: Request = try http.initRequest(&ds.gateway.http, now, stream.socket.address, a);
     var frame: Frame = try .init(srvr, ds, &request, a, io);
 
     errdefer comptime unreachable;
@@ -148,13 +148,11 @@ pub fn once(http: *HTTP, stream: Stream, gpa: Allocator, io: Io) !void {
     const callable = http.router.fallback(&frame, http.router.route);
     http.router.builder(&frame, callable);
 
-    if (frame.downstream.writer.err) |err| {
+    frame.downstream.writer.flush() catch unreachable; // TODO
+    const lap = timer.untilNow(io, .awake);
+    if (frame.downstream.gateway.http.writer.err) |err| {
         log.err("stream writer error {}\n", .{err});
     }
-
-    frame.downstream.writer.interface.flush() catch unreachable; // TODO
-
-    const lap = timer.untilNow(io, .awake);
     srvr.stats.log(.fromFrame(&frame, &arena, lap.toNanoseconds()), io);
 }
 

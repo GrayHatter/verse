@@ -46,12 +46,12 @@ fn respond(f: *Frame, key: []const u8) WriteError!void {
 
 pub fn send(ws: Websocket, msg: []const u8) WriteError!void {
     const m = Message.init(msg, .text);
-    try m.write(&ws.frame.downstream.writer.interface);
-    try ws.frame.downstream.writer.interface.flush();
+    try m.write(ws.frame.downstream.writer);
+    try ws.frame.downstream.writer.flush();
 }
 
 pub fn recieve(ws: *Websocket, buffer: []align(8) u8) Error!Message {
-    return Message.read(&ws.frame.downstream.reader.interface, buffer) catch |err| {
+    return Message.read(ws.frame.downstream.reader, buffer) catch |err| {
         log.err("reader failed! {}\n", .{err});
         return error.ReadFailed;
     };

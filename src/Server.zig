@@ -152,10 +152,16 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
 
     var request: Request = undefined;
 
-    var ds: Frame.Downstream = try .init(stream, a, io);
+    var ds: Frame.Downstream = try .init(a);
+    switch (srv.interface) {
+        .zwsgi => try ds.zwsgi(stream, a, io),
+        .http => try ds.http(stream, io),
+        .other => unreachable,
+    }
+
     request = try switch (srv.interface) {
-        .zwsgi => |z| z.initRequest(&ds, now, a),
-        .http => |h| h.initRequest(&ds, now, stream.socket.address, a),
+        .zwsgi => |z| z.initRequest(&ds.gateway.zwsgi, now, a),
+        .http => |h| h.initRequest(&ds.gateway.http, now, stream.socket.address, a),
         .other => unreachable,
     };
     var frame: Frame = try .init(srv, ds, &request, a, io);
@@ -176,7 +182,7 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
 
     const routed_endpoint = srv.router.fallback(&frame, srv.router.route);
     srv.router.builder(&frame, routed_endpoint);
-    frame.downstream.writer.interface.flush() catch {};
+    frame.downstream.writer.flush() catch {};
 }
 
 fn listen(srv: *Server, io: Io) !Io.net.Server {

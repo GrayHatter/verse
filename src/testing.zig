@@ -28,6 +28,7 @@ pub const SmokeTestOptions = struct {
 
 pub fn smokeTest(
     a: Allocator,
+    io: std.Io,
     comptime routes: []const Router.Match,
     comptime opts: SmokeTestOptions,
     comptime root_name: []const u8,
@@ -40,7 +41,8 @@ pub fn smokeTest(
             if (comptime route.methods.supports(@fromBackingInt(@intCast(value)))) {
                 switch (route.target) {
                     .build => |func| {
-                        var fc: FrameCtx = try .init(a);
+                        var fc: FrameResponse = try .init(a, io);
+                        try fc.prepare();
                         defer fc.raze(a);
                         func(&fc.frame) catch |err| {
                             for (opts.soft_errors) |soft| {
@@ -92,11 +94,17 @@ pub fn smokeTest(
 }
 
 test smokeTest {
-    try smokeTest(std.testing.allocator, &.{}, .{
-        .soft_errors = &.{},
-        .recurse = true,
-        .retry_with_fake_user = true,
-    }, "");
+    try smokeTest(
+        std.testing.allocator,
+        std.testing.io,
+        &.{},
+        .{
+            .soft_errors = &.{},
+            .recurse = true,
+            .retry_with_fake_user = true,
+        },
+        "",
+    );
 }
 
 pub fn fuzzTest(trgt: Router.Target) !void {
@@ -107,7 +115,7 @@ pub fn fuzzTest(trgt: Router.Target) !void {
             var buffer: [8164]u8 = undefined;
             const len = smth.slice(&buffer);
             const input = buffer[0..len];
-            var fc = try FrameCtx.initRequest(std.testing.allocator, .{ .query_data = input });
+            var fc = try FrameResponse.initRequest(.{ .query_data = input }, std.testing.allocator, std.testing.io);
             defer fc.raze(std.testing.allocator);
 
             try context.target.build(&fc.frame);
@@ -116,8 +124,8 @@ pub fn fuzzTest(trgt: Router.Target) !void {
     try std.testing.fuzz(Context{ .target = &trgt }, Context.testOne, .{});
 }
 
-pub fn headers() Headers {
-    return .{ .known = .{}, .extra = undefined };
+pub fn mkHeaders() Headers {
+    return .{ .known = .{}, .extra = .{} };
 }
 
 pub const RequestOptions = struct {
@@ -125,8 +133,7 @@ pub const RequestOptions = struct {
     query_data: []const u8 = "",
 };
 
-pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
-    _ = buf;
+pub fn request(a: Allocator, opt: RequestOptions) *Request {
     const self = a.create(Request) catch @panic("OOM");
     self.* = .{
         .accept = .any,
@@ -136,7 +143,7 @@ pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
             .post = null,
             .query = Request.Data.Query.init(opt.query_data, a) catch @panic("OOM, probably"),
         },
-        .headers = headers(),
+        .headers = mkHeaders(),
         .host = .init("localhost"),
         .method = .GET,
         .protocol = .default,
@@ -145,21 +152,19 @@ pub fn request(a: Allocator, buf: []u8, opt: RequestOptions) *Request {
         .secure = true,
         .target = opt.uri,
         .user_agent = .init("Verse Internal Testing/0.0"),
-        .now = undefined,
+        .now = std.Io.Clock.real.now(std.testing.io),
         .client_hints = .empty,
     };
     return self;
 }
 
-pub const FrameCtx = struct {
+pub const FrameResponse = struct {
     arena: *std.heap.ArenaAllocator,
     frame: Frame,
-    buffer: []u8,
-    r_b: [0x8000]u8 = undefined,
-    w_b: [0x8000]u8 = undefined,
+    call_error: ?Router.Error = null,
+    call_count: usize = 0,
 
-    pub fn initRequest(alloc: Allocator, ropt: RequestOptions) !FrameCtx {
-        if (true) return error.SkipZigTest;
+    pub fn initRequest(ropt: RequestOptions, alloc: Allocator, io: std.Io) !FrameResponse {
         var arena = try alloc.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(alloc);
 
@@ -167,37 +172,100 @@ pub const FrameCtx = struct {
         return .{
             .arena = arena,
             .frame = .{
+                .alloc = a,
+                .io = io,
+                // todo lifetime
                 .cookie_jar = .init(a),
                 // todo lifetime
-                .alloc = a,
-                // todo lifetime
-                .request = request(a, undefined, ropt),
-                .uri = .init("/") catch unreachable,
-                .auth_provider = .invalid,
-                .response_data = .init(a),
-                .headers = headers(),
-                .server = &.{ .interface = undefined, .stats = null },
+                .request = request(a, ropt),
+                .uri = try .init("/"),
+                .template_data = .empty,
+                .response_headers = mkHeaders(),
+                .server = &.{
+                    .interface = undefined,
+                    .stats = .disabled,
+                    .auth = .disabled,
+                    .options = .default,
+                    .router = undefined,
+                },
+                .downstream = undefined,
             },
-            .buffer = undefined,
         };
     }
 
-    pub fn init(alloc: Allocator) !FrameCtx {
-        if (true) return error.SkipZigTest;
-        return initRequest(alloc, .{});
+    pub fn init(alloc: Allocator, io: std.Io) !FrameResponse {
+        return initRequest(.{}, alloc, io);
     }
 
-    pub fn raze(fc: FrameCtx, a: std.mem.Allocator) void {
-        fc.arena.deinit();
-        a.destroy(fc.arena);
+    pub fn raze(fr: *const FrameResponse, a: std.mem.Allocator) void {
+        fr.arena.deinit();
+        a.destroy(fr.arena);
+    }
+
+    pub fn prepare(fr: *FrameResponse) !void {
+        const a = fr.arena.allocator();
+        fr.frame.downstream = try .init(a);
+        fr.frame.downstream.buffer();
+        fr.frame.downstream.phase = .{ .responding = .new };
+    }
+
+    /// WARN: Incomplete implementation
+    pub fn routeTo(fr: *FrameResponse, match: Router.Match) error{ ExistingError, Unrouteable }!void {
+        if (fr.call_error) |_| return error.ExistingError;
+        fr.prepare() catch unreachable;
+
+        // we don't call the router functions, so we assume the path has a prefix
+        if (!std.mem.eql(u8, fr.frame.uri.path[1..], match.name)) return error.Unrouteable;
+        return switch (match.target) {
+            .build => |endpoint| {
+                endpoint(&fr.frame) catch |err| {
+                    fr.call_error = err;
+                };
+                fr.call_count += 1;
+            },
+            .route => unreachable,
+            .simple => unreachable,
+        };
+    }
+
+    pub fn call(fr: *FrameResponse, endpoint: Router.BuildFn) error{ExistingError}!void {
+        if (fr.call_error) |_| return error.ExistingError;
+        fr.prepare() catch unreachable;
+        endpoint(&fr.frame) catch |err| {
+            fr.call_error = err;
+        };
+        fr.call_count += 1;
+    }
+
+    pub fn splitContent(fr: *const FrameResponse) error{Incomplete}!struct { []const u8, []const u8 } {
+        if (std.mem.find(u8, fr.frame.downstream.writer.buffer, "\r\n\r\n")) |bh| {
+            return .{
+                fr.frame.downstream.writer.buffer[0 .. bh + 2],
+                fr.frame.downstream.writer.buffer[bh + 4 .. fr.frame.downstream.writer.end],
+            };
+        } else return error.Incomplete;
+    }
+
+    pub fn bodyContent(fr: *const FrameResponse) error{ NeverCalled, BufferEmpty, Incomplete }![]const u8 {
+        if (fr.call_count == 0) return error.NeverCalled;
+        _, const body = try fr.splitContent();
+        return body;
+    }
+
+    pub const ResultError = error{NeverCalled} | Router.Error;
+
+    pub fn result(fr: *const FrameResponse) ResultError!std.http.Status {
+        if (fr.call_error) |err| return err;
+        if (fr.call_count == 0) return error.NeverCalled;
+        return fr.frame.status;
     }
 };
 
 test {
     _ = &std.testing.refAllDecls(@This());
 
-    var fc = try FrameCtx.init(std.testing.allocator);
-    defer fc.raze(std.testing.allocator);
+    var fr_resp = try FrameResponse.init(std.testing.allocator, std.testing.io);
+    defer fr_resp.raze(std.testing.allocator);
 
     const fof = Router.defaultResponse(.not_found);
 
@@ -223,20 +291,21 @@ test {
         \\
         \\
     ;
-    try fof(&fc.frame);
+    try fr_resp.call(fof);
 
-    const hidx = std.mem.lastIndexOf(u8, fc.buffer, "\r\n") orelse return error.InvalidHtml;
+    const headers, const body = try fr_resp.splitContent();
+    _ = body;
 
     try std.testing.expect(std.mem.startsWith(
         u8,
-        fc.buffer,
+        headers,
         "HTTP/1.1 404 Not Found\r\nServer: verse/",
     ));
 
     try std.testing.expect(std.mem.endsWith(
         u8,
-        fc.buffer[0 .. hidx + 2],
-        "\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
+        headers,
+        "\r\nContent-Type: text/html; charset=utf-8\r\n",
     ));
     _ = not_found_body;
     return error.SkipZigTest;

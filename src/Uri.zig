@@ -1,11 +1,11 @@
 //! Uri
 //! TODO write docs
-
-index: usize,
+bytes: []const u8,
+/// Path Component without any trailing query string
 path: []const u8,
 /// Non null when `?` is present in the URI. Does not include the first `?`
 query: ?[]const u8,
-bytes: []const u8,
+index: usize,
 
 const Uri = @This();
 

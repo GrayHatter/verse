@@ -25,7 +25,7 @@ pub fn fileOnDisk(f: *Frame) Route.Error!void {
     f.status = .ok;
     f.content_type = content_type;
     try f.sendHeaders(.done);
-    while (reader.interface.stream(&f.downstream.writer.interface, .limited(0xFFFFFF))) |num| {
+    while (reader.interface.stream(f.downstream.writer, .limited(0xFFFFFF))) |num| {
         log.debug("streaming ({s}) {}", .{ fname, num });
     } else |err| switch (err) {
         error.EndOfStream => return,
