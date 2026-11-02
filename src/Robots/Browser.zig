@@ -49,7 +49,6 @@ pub fn age(b: Browser, now: std.Io.Timestamp) !Duration {
 }
 
 test age {
-    if (!ua_extended_enabled) return error.SkipZigTest;
     const browser = Browser{ .name = .chrome, .version = 134 };
     const now: std.Io.Timestamp = .{ .nanoseconds = 1762107590 * std.time.ns_per_s };
     // breaks in 10 years, good luck future me!

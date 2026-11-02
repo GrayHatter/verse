@@ -284,29 +284,6 @@ test "directive nothing" {
     try std.testing.expectEqualStrings("<!-- nothing -->", p);
 }
 
-test "directive nothing new" {
-    // TODO fix test
-    if (true) return error.SkipZigTest;
-
-    const a = std.testing.allocator;
-    const t = Template{
-        //.path = "/dev/null",
-        .name = "test",
-        .blob = "<Nothing>",
-    };
-
-    const ctx = .{};
-
-    // TODO is this still the expected behavior
-    //const p = Page(t, @TypeOf(ctx)).init(.{});
-    //try std.testing.expectError(error.VariableMissing, p);
-
-    const pg = Page(t, @TypeOf(ctx)).init(.{});
-    const p = try allocPrint(a, "{f}", .{pg});
-    defer a.free(p);
-    try std.testing.expectEqualStrings("<Nothing>", p);
-}
-
 test "directive ORELSE" {
     var a = std.testing.allocator;
     const t = Template{
@@ -784,58 +761,6 @@ test "directive Split" {
             "Bob\n",
             "Charlie\n",
             "Eve\n",
-        },
-    };
-    const pg = page.init(slice);
-    const p = try allocPrint(a, "{f}", .{pg});
-    defer a.free(p);
-    try std.testing.expectEqualStrings(expected, p);
-}
-
-test "directive Build" {
-    var a = std.testing.allocator;
-
-    const blob =
-        \\<Build Name _test_template.html />
-    ;
-
-    const expected: []const u8 =
-        \\<div>
-        \\AliceBobCharlieEve
-        \\</div>
-    ;
-
-    const FE = struct {
-        const This = struct {
-            this: []const u8,
-        };
-        name: struct {
-            slice: []const This,
-        },
-    };
-
-    const t = Template{
-        .name = "test",
-        .blob = blob,
-    };
-
-    //dynamic = &[1]Template{
-    //    .{
-    //        .name = "_template.html",
-    //        .blob = "<div>\n<For Slice><This></For>\n</div>",
-    //    },
-    //};
-    if (true) return error.SkipZigTest;
-    const page = Page(t, FE);
-
-    const slice = FE{
-        .name = .{
-            .slice = &[4]FE.This{
-                .{ .this = "Alice" },
-                .{ .this = "Bob" },
-                .{ .this = "Charlie" },
-                .{ .this = "Eve" },
-            },
         },
     };
     const pg = page.init(slice);

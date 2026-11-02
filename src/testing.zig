@@ -308,7 +308,6 @@ test {
         "\r\nContent-Type: text/html; charset=utf-8\r\n",
     ));
     _ = not_found_body;
-    return error.SkipZigTest;
     //const frame_response_size = fc.frame.request.downstream.buffer.pos;
     //try std.testing.expect(720 <= frame_response_size); // Tagged release header
     //try std.testing.expect(765 >= frame_response_size); // Devel release header (plus extra)
