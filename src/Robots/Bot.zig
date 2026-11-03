@@ -326,13 +326,6 @@ pub const rules = struct {
     }
 };
 
-pub const TxtRules = struct {
-    name: []const u8,
-    allow: bool,
-    delay: bool = false,
-    extra: ?[]const u8 = null,
-};
-
 /// This isn't the final implementation, I'm just demoing some ideas
 pub const Network = struct {
     nets: []const []const u8,
