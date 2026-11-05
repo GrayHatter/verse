@@ -46,8 +46,14 @@ pub const Name = enum {
     /// buys/sells data, or crawls unidentified.
     elevenlabscrawler,
 
+    /// Malformed UA
+    epochal,
+
     /// The only actively maintained popular crawler
     googlebot,
+
+    /// Google's LLM crawler
+    googleother,
 
     /// AI bot
     gptbot,
@@ -85,14 +91,16 @@ pub const Name = enum {
             .claude_searchbot => true,
             .claudebot => true,
             .elevenlabscrawler => true, // buys data, or fails to ident
+            .epochal => true, // malformed UA
             .googlebot => false,
+            .googleother => false,
             .gptbot => false,
             .keenable => true,
             .metaexternalagent => true, // buggy crawler that can't behave
             .reflectionbot => true, // sends broken data
             .scrybot => true, // non-responsive to contact
             .techspybot => true, // non-responsive to contact
-            .youbot => true, // non-responsive to contact
+            .youbot => true, // non-responsive to contact, ignores robots.txt
 
             // robots.txt doesn't apply so returns a friendly name
             .discordbot => false,
@@ -112,13 +120,15 @@ pub const Name = enum {
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
             .elevenlabscrawler => "ElevenlabsCrawler",
+            .epochal => "Epochal-Search",
             .googlebot => "GoogleBot",
+            .googleother => "GoogleOther",
             .gptbot => "GPTBot",
             .keenable => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
-            .techspybot => "TechSpyBot",
             .reflectionbot => "Reflectionbot",
             .scrybot => "ScryBot",
+            .techspybot => "TechSpyBot",
             .youbot => "YouBot",
 
             // robots.txt doesn't apply so returns a friendly name
@@ -140,7 +150,9 @@ pub const Name = enum {
             .claudebot => "ClaudeBot",
             .discordbot => "DiscordBot",
             .elevenlabscrawler => "ElevenlabsCrawler",
+            .epochal => "Epochal-Search",
             .googlebot => "GoogleBot",
+            .googleother => "GoogleBot",
             .gptbot => "GPTBot",
             .keenable => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
@@ -176,6 +188,8 @@ pub const Name = enum {
             // Unverified
             .googlebot => false,
             // Unverified
+            .googleother => false,
+            // Unverified
             .gptbot => false,
             // Unverified
             .keenable => false, // ignores robots.txtw
@@ -204,7 +218,9 @@ pub const Name = enum {
             .claudebot => endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)"),
             .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
             .elevenlabscrawler => find(u8, str, "ElevenlabsCrawler") != null,
+            .epochal => find(u8, str, "Epochal") != null,
             .googlebot => endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)"),
+            .googleother => endsWith(u8, str, "GoogleOther"),
             .gptbot => endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)"),
             .keenable => find(u8, str, "KeenableBot/") != null,
             .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
@@ -221,6 +237,7 @@ pub const Name = enum {
 
     test {
         _ = &std.testing.refAllDecls(@This());
+        _ = obeysCrawlDelay;
     }
 };
 
@@ -241,6 +258,8 @@ pub fn resolve(str: []const u8) ?Bot {
         return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
     } else if (Name.elevenlabscrawler.ident(str)) {
         return .{ .name = .elevenlabscrawler, .version = parseVersion(str, "ElevenlabsCrawler/") catch 0 };
+    } else if (Name.epochal.ident(str)) {
+        return .{ .name = .epochal, .version = parseVersion(str, "Epochal-Search/") catch 0 };
     } else if (Name.gptbot.ident(str)) {
         return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
     } else if (Name.keenable.ident(str)) {
@@ -374,7 +393,9 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .claudebot, .network = null },
         .{ .bot = .discordbot, .network = .cloud_gcp },
         .{ .bot = .elevenlabscrawler, .network = null },
+        .{ .bot = .epochal, .network = null },
         .{ .bot = .googlebot, .network = .{ .nets = &[_][]const u8{"66.249"} } },
+        .{ .bot = .googleother, .network = .{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .gptbot, .network = .{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
         .{ .bot = .keenable, .network = null }, // published on their site, but they're malicious
         .{ .bot = .lounge_irc_client, .network = null },
