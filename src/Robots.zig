@@ -107,11 +107,15 @@ pub const RobotsTxt = struct {
     const global_allow: []const u8 =
         \\User-agent: *
         \\Allow: /
+        \\
+        \\
     ;
 
     const global_disallow: []const u8 =
         \\User-agent: *
         \\Disallow: /
+        \\
+        \\
     ;
 
     pub const Rule = struct {
@@ -183,7 +187,7 @@ pub const RobotsTxt = struct {
         pub fn robotsTxt(comptime default_stance: Allowed, comptime rule: []const Rule) Magic {
             const MagicEndpoint = struct {
                 const magic_error_string = "Write {s} failed for robots.txt. (client disconnect?)";
-                const ruleset = if (default_stance == .allow) global_allow else global_allow;
+                const ruleset = if (default_stance == .allow) global_allow else global_disallow;
 
                 /// Not a browser, but not a known bot
                 fn respondUnknown(f: *Frame) !void {
@@ -283,6 +287,7 @@ pub const RobotsTxt = struct {
     }
 
     pub fn robotsTxt(
+        comptime default_dispo: Allowed,
         comptime robots: []const Rule,
         comptime _: Options,
     ) Router.Match {
@@ -309,6 +314,12 @@ pub const RobotsTxt = struct {
                 f.status = .ok;
                 f.content_type = .@"text/plain";
                 try f.sendHeaders(.done);
+                try f.downstream.writer.writeAll(
+                    if (comptime default_dispo == .allow)
+                        global_allow
+                    else
+                        global_disallow,
+                );
                 try f.downstream.writer.writeAll(text);
             }
 
@@ -325,9 +336,13 @@ pub const RobotsTxt = struct {
         var fr_resp: testing.FrameResponse = try .init(std.testing.allocator, std.testing.io);
         defer fr_resp.raze(std.testing.allocator);
 
-        const match = robotsTxt(&.{
-            .name(.googlebot, .allow),
-        }, .default);
+        const match = robotsTxt(
+            .allow,
+            &.{
+                .name(.googlebot, .allow),
+            },
+            .default,
+        );
         fr_resp.frame.uri = try .init("/robots.txt");
 
         try fr_resp.routeTo(match);
@@ -337,6 +352,9 @@ pub const RobotsTxt = struct {
         try std.testing.expect(endsWith(u8, headers, "Content-Type: text/plain\r\n"));
 
         try std.testing.expectEqualStrings(
+            \\User-agent: *
+            \\Allow: /
+            \\
             \\User-agent: GoogleBot
             \\Allow: /
             \\
@@ -349,12 +367,16 @@ pub const RobotsTxt = struct {
         var fr_resp: testing.FrameResponse = try .init(std.testing.allocator, std.testing.io);
         defer fr_resp.raze(std.testing.allocator);
 
-        const match = robotsTxt(&.{
-            .name(.googlebot, .allow),
-            .name(.bingbot, .deny),
-            .name(.applebot, .deny),
-            .name(.metaexternalagent, .deny),
-        }, .default);
+        const match = robotsTxt(
+            .allow,
+            &.{
+                .name(.googlebot, .allow),
+                .name(.bingbot, .deny),
+                .name(.applebot, .deny),
+                .name(.metaexternalagent, .deny),
+            },
+            .default,
+        );
         fr_resp.frame.uri = try .init("/robots.txt");
 
         try fr_resp.routeTo(match);
@@ -364,6 +386,9 @@ pub const RobotsTxt = struct {
         try std.testing.expect(endsWith(u8, headers, "Content-Type: text/plain\r\n"));
 
         try std.testing.expectEqualStrings(
+            \\User-agent: *
+            \\Allow: /
+            \\
             \\User-agent: GoogleBot
             \\Allow: /
             \\
@@ -385,17 +410,21 @@ pub const RobotsTxt = struct {
         var fr_resp: testing.FrameResponse = try .init(std.testing.allocator, std.testing.io);
         defer fr_resp.raze(std.testing.allocator);
 
-        const match = robotsTxt(&.{
-            .name(.bingbot, .deny),
-            .name(.googlebot, .allow),
-            .name(.applebot, .deny),
-            .name(.metaexternalagent, .deny),
-            .custom("ExaSearchBot", .deny),
-            .custom("PerplexityBot", .deny),
-            .custom("Reflectionbot", .deny),
-            .custom("Lounge (IRC helper)", .allow),
-            .custom("Keenable-User", .deny),
-        }, .default);
+        const match = robotsTxt(
+            .deny,
+            &.{
+                .name(.bingbot, .deny),
+                .name(.googlebot, .allow),
+                .name(.applebot, .deny),
+                .name(.metaexternalagent, .deny),
+                .custom("ExaSearchBot", .deny),
+                .custom("PerplexityBot", .deny),
+                .custom("Reflectionbot", .deny),
+                .custom("Lounge (IRC helper)", .allow),
+                .custom("Keenable-User", .deny),
+            },
+            .default,
+        );
         fr_resp.frame.uri = try .init("/robots.txt");
 
         try fr_resp.routeTo(match);
@@ -405,6 +434,9 @@ pub const RobotsTxt = struct {
         try std.testing.expect(endsWith(u8, headers, "Content-Type: text/plain\r\n"));
 
         try std.testing.expectEqualStrings(
+            \\User-agent: *
+            \\Disallow: /
+            \\
             \\User-agent: Bingbot
             \\Disallow: /
             \\
