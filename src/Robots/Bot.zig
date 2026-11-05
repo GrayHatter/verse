@@ -18,39 +18,56 @@ const Bot = @This();
 pub const Name = enum {
     /// Ignores robots.txt
     abliterantbot,
+
     /// Ignores robots.txt
     amzn_searchbot,
+
     /// Very agressive
     applebot,
+
     /// Ignores robots.txt, but isn't considered malicious here because
     /// Archive.org has a reputation for going out of their way to be extremely
     /// ethical, and a good web citizen.
     archiveorgbot,
+
     /// Currently obviously unmaintained
     bingbot,
+
     /// AI bot
     claude_searchbot,
+
     /// AI bot
     claudebot,
+
     /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     discordbot,
+
     /// https://elevenlabs.io/docs/bots
     /// buys/sells data, or crawls unidentified.
     elevenlabscrawler,
+
+    /// The only actively maintained popular crawler
     googlebot,
+
     /// AI bot
     gptbot,
+
     /// AI crawler, ignores robots.txt
     keenable,
+
     /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     lounge_irc_client,
+
     /// repeatedly breaks in ways harmful to sites.
     metaexternalagent,
+
     /// AI bot (link/contact doesn't resolve)
     reflectionbot,
+
     /// AI bot, malicious; (ignores robots.txt, repeated retries on 502)
     scrybot,
     techspybot,
+
     /// Ignores robots.txt
     youbot,
 
