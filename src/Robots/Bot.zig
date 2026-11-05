@@ -208,6 +208,34 @@ pub const Name = enum {
         };
     }
 
+    pub fn verIdent(comptime name: Name) ?[]const u8 {
+        return switch (name) {
+            .abliterantbot => "AbliterantBot/",
+            .amzn_searchbot => "Amzn-SearchBot/",
+            .applebot => "Applebot/",
+            .bingbot => "bingbot/",
+            .claude_searchbot => "Claude-SearchBot/",
+            .claudebot => "ClaudeBot/",
+            .discordbot => "Discordbot/",
+            .elevenlabscrawler => "ElevenlabsCrawler/",
+            .epochal => "Epochal-Search/",
+            .googlebot => "Googlebot/",
+            .gptbot => "GPTBot/",
+            .keenable => "KeenableBot/",
+            .reflectionbot => "Reflectionbot/",
+            .scrybot => "ScryBot/",
+            .techspybot => "TechSpyBot/",
+            .youbot => "YouBot/",
+
+            .archiveorgbot => null,
+            .googleother => null,
+            .lounge_irc_client => null,
+            .metaexternalagent => null,
+            .other_malicious => null,
+            .unknown => null,
+        };
+    }
+
     pub fn ident(comptime name: Name, str: []const u8) bool {
         return switch (name) {
             .abliterantbot => find(u8, str, "AbliterantBot/0.1 (+https://abliterant.ai)") != null,
@@ -227,8 +255,9 @@ pub const Name = enum {
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
             .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
+            .techspybot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
-            .techspybot => false,
+
             .archiveorgbot => false,
             .other_malicious => false,
             .unknown => false,
@@ -242,41 +271,17 @@ pub const Name = enum {
 };
 
 pub fn resolve(str: []const u8) ?Bot {
-    if (Name.abliterantbot.ident(str)) {
-        return .{ .name = .abliterantbot, .version = parseVersion(str, "AbliterantBot/") catch 0 };
-    } else if (Name.amzn_searchbot.ident(str)) {
-        return .{ .name = .amzn_searchbot, .version = parseVersion(str, "Amzn-SearchBot/") catch 0 };
-    } else if (Name.applebot.ident(str)) {
-        return .{ .name = .applebot, .version = parseVersion(str, "Applebot/") catch 0 };
-    } else if (Name.googlebot.ident(str)) {
-        return .{ .name = .googlebot, .version = parseVersion(str, "Googlebot/") catch 0 };
-    } else if (Name.claudebot.ident(str)) {
-        return .{ .name = .claudebot, .version = parseVersion(str, "ClaudeBot/") catch 0 };
-    } else if (Name.claude_searchbot.ident(str)) {
-        return .{ .name = .claude_searchbot, .version = parseVersion(str, "Claude-SearchBot/") catch 0 };
-    } else if (Name.bingbot.ident(str)) {
-        return .{ .name = .bingbot, .version = parseVersion(str, "bingbot/") catch 0 };
-    } else if (Name.elevenlabscrawler.ident(str)) {
-        return .{ .name = .elevenlabscrawler, .version = parseVersion(str, "ElevenlabsCrawler/") catch 0 };
-    } else if (Name.epochal.ident(str)) {
-        return .{ .name = .epochal, .version = parseVersion(str, "Epochal-Search/") catch 0 };
-    } else if (Name.gptbot.ident(str)) {
-        return .{ .name = .gptbot, .version = parseVersion(str, "GPTBot/") catch 0 };
-    } else if (Name.keenable.ident(str)) {
-        return .{ .name = .keenable, .version = parseVersion(str, "KeenableBot/") catch 0 };
-    } else if (Name.scrybot.ident(str)) {
-        return .{ .name = .scrybot, .version = parseVersion(str, "ScryBot/") catch 0 };
-    } else if (Name.metaexternalagent.ident(str)) {
-        return .{ .name = .metaexternalagent, .version = 1 };
-    } else if (Name.reflectionbot.ident(str)) {
-        return .{ .name = .reflectionbot, .version = 1 };
-    } else if (Name.discordbot.ident(str)) {
-        return .{ .name = .discordbot, .version = 2 };
-    } else if (Name.lounge_irc_client.ident(str)) {
-        return .{ .name = .lounge_irc_client, .version = 0 };
-    } else if (Name.youbot.ident(str)) {
-        return .{ .name = .youbot, .version = parseVersion(str, "YouBot/") catch 0 };
+    const E = @typeInfo(Name).@"enum";
+    inline for (E.field_values) |bot_int| {
+        const name: Name = @fromBackingInt(bot_int);
+        if (Name.ident(name, str)) {
+            const version_id = comptime name.verIdent();
+            if (version_id) |vid| {
+                return .{ .name = name, .version = parseVersion(str, vid) catch 0 };
+            } else return .{ .name = name, .version = 0 };
+        }
     }
+
     return null;
 }
 
