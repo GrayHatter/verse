@@ -286,7 +286,7 @@ pub const RobotsTxt = struct {
         );
     }
 
-    pub fn robotsTxt(
+    pub fn routerMatch(
         comptime default_dispo: Allowed,
         comptime robots: []const Rule,
         comptime _: Options,
@@ -331,12 +331,12 @@ pub const RobotsTxt = struct {
         return Router.ANY("robots.txt", EP.endpoint);
     }
 
-    test robotsTxt {
+    test routerMatch {
         // TODO mock a full request frame
         var fr_resp: testing.FrameResponse = try .init(std.testing.allocator, std.testing.io);
         defer fr_resp.raze(std.testing.allocator);
 
-        const match = robotsTxt(
+        const match = routerMatch(
             .allow,
             &.{
                 .name(.googlebot, .allow),
@@ -362,12 +362,12 @@ pub const RobotsTxt = struct {
         , body);
     }
 
-    test "robotsTxt 2" {
+    test "routerMatch 2" {
         // TODO mock a full request frame
         var fr_resp: testing.FrameResponse = try .init(std.testing.allocator, std.testing.io);
         defer fr_resp.raze(std.testing.allocator);
 
-        const match = robotsTxt(
+        const match = routerMatch(
             .allow,
             &.{
                 .name(.googlebot, .allow),
@@ -405,12 +405,12 @@ pub const RobotsTxt = struct {
         , body);
     }
 
-    test "robotsTxt 3" {
+    test "routerMatch 3" {
         // TODO mock a full request frame
         var fr_resp: testing.FrameResponse = try .init(std.testing.allocator, std.testing.io);
         defer fr_resp.raze(std.testing.allocator);
 
-        const match = robotsTxt(
+        const match = routerMatch(
             .deny,
             &.{
                 .name(.bingbot, .deny),
