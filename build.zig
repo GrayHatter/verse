@@ -133,18 +133,29 @@ pub fn build(b: *std.Build) !void {
         "websocket",
     };
     inline for (examples) |example| {
+        const example_mod = b.createModule(.{
+            .root_source_file = b.path("examples/" ++ example ++ ".zig"),
+            .target = target,
+            .optimize = optimize,
+        });
         const example_exe = b.addExecutable(.{
             .name = example,
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("examples/" ++ example ++ ".zig"),
-                .target = target,
-                .optimize = optimize,
-            }),
+            .root_module = example_mod,
             .use_llvm = use_llvm,
             .use_lld = use_llvm,
         });
         // All Examples should compile for tests to pass
         test_step.dependOn(&example_exe.step);
+
+        // There's probably a better way to test the endpoint smokeTest api but...
+        if (std.mem.eql(u8, example, "endpoint")) {
+            const endpoint_example_tests = b.addTest(.{
+                .root_module = example_mod,
+                .use_llvm = use_llvm,
+                .use_lld = use_llvm,
+            });
+            test_step.dependOn(&endpoint_example_tests.step);
+        }
 
         example_exe.root_module.addImport("verse", verse_lib);
 

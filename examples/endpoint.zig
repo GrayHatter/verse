@@ -30,5 +30,10 @@ pub fn main() !void {
     };
 }
 
+// The endpoints option can try to reach all routes.
+test Endpoints {
+    try Endpoints.smokeTest(std.testing.allocator, std.testing.io, .default);
+}
+
 const std = @import("std");
 const verse = @import("verse");

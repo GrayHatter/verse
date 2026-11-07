@@ -84,7 +84,7 @@ pub fn smokeTest(
                     },
                     .simple => |smp| {
                         if (!opts.recurse) continue;
-                        try smokeTest(a, smp, opts, name);
+                        try smokeTest(a, io, smp, opts, name);
                     },
                     else => {},
                 }
