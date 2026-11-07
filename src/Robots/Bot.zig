@@ -72,6 +72,11 @@ pub const Name = enum {
 
     /// AI bot, malicious; (ignores robots.txt, repeated retries on 502)
     scrybot,
+
+    /// web search crawler https://www.sogou.com/docs/help/webmasters.htm#07
+    sogou_web_spider,
+
+    /// non-responsive
     techspybot,
 
     /// Ignores robots.txt
@@ -99,6 +104,7 @@ pub const Name = enum {
             .metaexternalagent => true, // buggy crawler that can't behave
             .reflectionbot => true, // sends broken data
             .scrybot => true, // non-responsive to contact
+            .sogou_web_spider => false,
             .techspybot => true, // non-responsive to contact
             .youbot => true, // non-responsive to contact, ignores robots.txt
 
@@ -128,6 +134,8 @@ pub const Name = enum {
             .metaexternalagent => "meta-externalagent",
             .reflectionbot => "Reflectionbot",
             .scrybot => "ScryBot",
+            // sourced from https://www.sogou.com/robots.txt
+            .sogou_web_spider => "Sogou web spider",
             .techspybot => "TechSpyBot",
             .youbot => "YouBot",
 
@@ -156,9 +164,10 @@ pub const Name = enum {
             .gptbot => "GPTBot",
             .keenable => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
-            .techspybot => "TechSpyBot",
             .reflectionbot => "Reflectionbot",
             .scrybot => "ScryBot",
+            .sogou_web_spider => "Sogou web spider",
+            .techspybot => "TechSpyBot",
             .youbot => "YouBot",
 
             .lounge_irc_client => "",
@@ -200,6 +209,8 @@ pub const Name = enum {
             // Unverified
             .scrybot => false,
             // Unverified
+            .sogou_web_spider => true,
+            // Unverified
             .youbot => false,
 
             .lounge_irc_client => false,
@@ -224,6 +235,7 @@ pub const Name = enum {
             .keenable => "KeenableBot/",
             .reflectionbot => "Reflectionbot/",
             .scrybot => "ScryBot/",
+            .sogou_web_spider => "Sogou web spider/",
             .techspybot => "TechSpyBot/",
             .youbot => "YouBot/",
 
@@ -255,6 +267,7 @@ pub const Name = enum {
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
             .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
+            .sogou_web_spider => find(u8, str, "Sogou web spider/") != null,
             .techspybot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
 
@@ -407,6 +420,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .metaexternalagent, .network = null },
         .{ .bot = .reflectionbot, .network = null },
         .{ .bot = .scrybot, .network = null },
+        .{ .bot = .sogou_web_spider, .network = null },
         .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = .{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
         // Split ordering
