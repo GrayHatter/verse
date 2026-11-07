@@ -104,20 +104,6 @@ const rules = struct {
 pub const RobotsTxt = struct {
     pub const Allowed = enum(u1) { deny, allow };
 
-    const global_allow: []const u8 =
-        \\User-agent: *
-        \\Allow: /
-        \\
-        \\
-    ;
-
-    const global_disallow: []const u8 =
-        \\User-agent: *
-        \\Disallow: /
-        \\
-        \\
-    ;
-
     pub const Rule = struct {
         bot: union(enum) {
             name: Bot.Name,
@@ -171,12 +157,8 @@ pub const RobotsTxt = struct {
 
     pub const Options = struct {
         default_answer: Allowed,
-        extra_rules: ?[]const u8,
 
-        pub const default: Options = .{
-            .default_answer = .allow,
-            .extra_rules = null,
-        };
+        pub const default: Options = .{ .default_answer = .allow };
     };
 
     pub const Magic = struct {
@@ -186,6 +168,17 @@ pub const RobotsTxt = struct {
 
         pub fn robotsTxt(comptime default_stance: Allowed, comptime rule: []const Rule) Magic {
             const MagicEndpoint = struct {
+                const global_allow: []const u8 =
+                    \\User-agent: *
+                    \\Allow: /
+                    \\
+                ;
+
+                const global_disallow: []const u8 =
+                    \\User-agent: *
+                    \\Disallow: /
+                    \\
+                ;
                 const magic_error_string = "Write {s} failed for robots.txt. (client disconnect?)";
                 const ruleset = if (default_stance == .allow) global_allow else global_disallow;
 
@@ -258,9 +251,13 @@ pub const RobotsTxt = struct {
         , .{ custom, allows, disallows });
     }
 
-    pub fn botTxt(comptime name: Bot.Name, comptime ruleset: Rule.Set) []const u8 {
+    pub fn botTxt(
+        comptime name: Bot.Name,
+        comptime ruleset: Rule.Set,
+    ) []const u8 {
         return customTxt(name.robotsTxtName(), ruleset);
     }
+
     test botTxt {
         const text: []const u8 = comptime botTxt(.googlebot, .{ .allows = &.{"/"}, .disallows = &.{"/src"} });
         try std.testing.expectEqualStrings(
@@ -287,13 +284,14 @@ pub const RobotsTxt = struct {
     }
 
     pub fn routerMatch(
-        comptime default_dispo: Allowed,
+        comptime default_dispo: Rule.Set,
         comptime robots: []const Rule,
-        comptime _: Options,
+        comptime opts: Options,
     ) Router.Match {
+        _ = opts;
         const EP = struct {
             const robot_rules: []const u8 = brk: {
-                var compiled: []const u8 = &.{};
+                var compiled: []const u8 = customTxt("*", default_dispo);
                 for (robots) |each| {
                     compiled = compiled ++ switch (each.bot) {
                         .name => |bot| botTxt(
@@ -314,12 +312,6 @@ pub const RobotsTxt = struct {
                 f.status = .ok;
                 f.content_type = .@"text/plain";
                 try f.sendHeaders(.done);
-                try f.downstream.writer.writeAll(
-                    if (comptime default_dispo == .allow)
-                        global_allow
-                    else
-                        global_disallow,
-                );
                 try f.downstream.writer.writeAll(text);
             }
 
@@ -337,7 +329,7 @@ pub const RobotsTxt = struct {
         defer fr_resp.raze(std.testing.allocator);
 
         const match = routerMatch(
-            .allow,
+            .allow_all,
             &.{
                 .name(.googlebot, .allow),
             },
@@ -368,7 +360,7 @@ pub const RobotsTxt = struct {
         defer fr_resp.raze(std.testing.allocator);
 
         const match = routerMatch(
-            .allow,
+            .allow_all,
             &.{
                 .name(.googlebot, .allow),
                 .name(.bingbot, .deny),
@@ -411,7 +403,7 @@ pub const RobotsTxt = struct {
         defer fr_resp.raze(std.testing.allocator);
 
         const match = routerMatch(
-            .deny,
+            .disallow_all,
             &.{
                 .name(.bingbot, .deny),
                 .name(.googlebot, .allow),
