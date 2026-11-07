@@ -279,7 +279,7 @@ fn requestData(a: Allocator, zreq: *Request, r: *Reader) !verseRequest.Data {
             );
 
             for (post_data.?.items) |itm| {
-                log.debug("{}", .{itm});
+                log.debug("{any}", .{itm});
             }
         }
     }
