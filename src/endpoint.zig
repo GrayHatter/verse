@@ -37,8 +37,15 @@ pub fn Endpoints(endpoints: anytype) type {
             try server.serve(a);
         }
 
-        pub fn smokeTest(a: Allocator, comptime opts: testing.SmokeTestOptions) !void {
-            try testing.smokeTest(a, &Self.routes, opts, "");
+        pub fn smokeTest(a: Allocator, io: std.Io, comptime opts: testing.SmokeTestOptions) !void {
+            try testing.smokeTest(a, io, &Self.routes, opts, "");
+        }
+
+        test Self {
+            // This test can fail, but none of these caught the missing `io` api change
+            _ = std.testing.refAllDecls(Self);
+            _ = &smokeTest;
+            _ = testing.smokeTest;
         }
     };
 }
@@ -182,7 +189,7 @@ test routeCount {
         try std.testing.expectEqual(1, routeCount(.{
             struct {
                 const verse_name = .testing;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
         try std.testing.expectEqual(1, routeCount(.{
@@ -191,7 +198,7 @@ test routeCount {
                 pub const verse_endpoints = Endpoints(.{
                     struct {
                         pub const verse_name = .sub_testing;
-                        pub fn index() void {}
+                        pub fn index(_: *Frame) Router.Error!void {}
                     },
                 });
             },
@@ -258,7 +265,7 @@ test routeCount {
                 pub const verse_name = .testing;
                 pub const verse_router = &router;
                 pub fn router(_: *Frame) Router.RoutingError!Router.BuildFn {}
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
         // TODO test verse_router doesn't include verse_endpoints
@@ -271,7 +278,7 @@ test routeCount {
                     // have dedicated infra reserved for prod
                     .prod,
                 };
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
         // disabled
@@ -279,43 +286,43 @@ test routeCount {
             // TODO expand this test in include a root struct
             struct {
                 pub const verse_name = .first;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
             struct {
                 pub const verse_name = .second;
                 pub const verse_aliases = .{.prod};
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
         try std.testing.expectEqual(1, routeCount(.{
             // TODO expand this test in include a root struct
             struct {
                 pub const verse_name = .first;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
             struct {
                 pub const verse_name = .second;
                 pub const verse_aliases = .{.prod};
                 pub const verse_endpoint_disabled: bool = true;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
         try std.testing.expectEqual(3, routeCount(.{
             struct {
                 pub const verse_name = .first;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
             struct {
                 pub const verse_name = .second;
                 pub const verse_aliases = .{.prod};
                 pub const verse_endpoint_disabled: bool = false;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
         try std.testing.expectEqual(10, routeCount(.{
             struct {
                 pub const verse_name = .first;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
             struct {
                 pub const verse_name = .second;
@@ -324,7 +331,7 @@ test routeCount {
                     .not_prod, .testing, .admin,  .secret,
                 };
                 pub const verse_endpoint_disabled: bool = false;
-                pub fn index() void {}
+                pub fn index(_: *Frame) Router.Error!void {}
             },
         }));
     }
@@ -447,6 +454,9 @@ test Endpoints {
     });
     try std.testing.expectEqual(@as(usize, 4), first.routes.len);
 
+    _ = std.testing.refAllDecls(first);
+    _ = &first.smokeTest;
+
     const second = Endpoints(.{
         struct {
             pub const verse_name = .root;
@@ -535,6 +545,10 @@ test Endpoints {
     //try std.testing.expectEqualStrings("flat1", aliased.routes[4].target.simple[1].name);
     //try std.testing.expectEqualStrings("sub_tree", aliased.routes[4].target.simple[2].name);
     //try std.testing.expectEqual(@as(usize, 3), aliased.routes[4].target.simple[2].target.simple.len);
+}
+
+test {
+    _ = &std.testing.refAllDecls(@This());
 }
 
 const std = @import("std");
