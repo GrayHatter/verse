@@ -298,6 +298,12 @@ pub const DumpDebugOptions = struct {
         .redact_sensitive_frames = true,
     };
 
+    pub const skip_empty: DumpDebugOptions = .{
+        .print_empty = false,
+        .print_post_data = true,
+        .redact_sensitive_frames = true,
+    };
+
     pub const safe: DumpDebugOptions = .{
         .print_empty = false,
         .print_post_data = false,
@@ -385,6 +391,7 @@ test dumpDebugData {
 
     dumpDebugData(&frame, .verbose);
     dumpDebugData(&frame, .safe);
+    dumpDebugData(&frame, .skip_empty);
 }
 
 const Auth = @import("Auth.zig");
