@@ -1,7 +1,7 @@
 //! Example of a basic comptime template.
 
 ///This page template is compiled/prepared at comptime.
-const ExamplePage = PageData("templates/example.html");
+const ExamplePage = Page("templates/example.html");
 
 var global_number: usize = 1; // Wanted to write 2, but off by one errors are common
 
@@ -90,5 +90,5 @@ const routes = Router.Routes(&[_]Router.Match{
 
 const std = @import("std");
 const verse = @import("verse");
-const PageData = verse.template.PageData;
+const Page = verse.template.Page;
 const Router = verse.Router;

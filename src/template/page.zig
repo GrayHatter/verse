@@ -1,4 +1,40 @@
-pub fn Page(comptime template: Template, comptime PageDataType: type) type {
+const Structs = @import("comptime_structs");
+
+pub fn DefaultType(comptime name: []const u8) type {
+    var local: [0xFF]u8 = undefined;
+    const llen = comptime Template.nameSlice(name, &local).len;
+    return @field(Structs, local[0..llen]);
+}
+
+test DefaultType {
+    // Copied from the example template html to create this test, the example
+    // html is the cannon definition.
+    const Type = DefaultType("Templates/ExampleHtml");
+
+    const expected: Type = .{
+        .simple_variable = "",
+        .required_and_provided = "",
+        .null_variable = null,
+        .default_provided = "",
+        .default_missing = "",
+        .positive_number = 0,
+        .optional_with = null,
+        .namespaced_with = .{ .simple_variable = "" },
+        .basic_loop = undefined, // TODO FIXME
+        .slices = &[_][]const u8{ "", "" },
+        .include_vars = .{
+            .template_name = "",
+            .simple_variable = "",
+            .nullable = null,
+        },
+        .empty_vars = true,
+    };
+    // Ensure it builds, then trust the compiler
+    try std.testing.expect(@sizeOf(@TypeOf(expected)) > 0);
+}
+pub const PageTyped = Typed;
+
+pub fn Typed(comptime template: Template, comptime PageDataType: type) type {
     const offsets = validateBlock(template.blob, PageDataType, 0);
     const offset_len = offsets.len;
 
@@ -10,7 +46,7 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
         pub const PageTemplate = template;
         pub const DataOffsets: [offset_len]Offset = offsets[0..offset_len].*;
 
-        pub fn init(d: PageDataType) Page(template, PageDataType) {
+        pub fn init(d: PageDataType) Typed(template, PageDataType) {
             return .{ .data = d };
         }
 
@@ -337,12 +373,12 @@ pub fn Page(comptime template: Template, comptime PageDataType: type) type {
     };
 }
 
-test Page {
+test Typed {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
 
-    const PUT = Templates.PageData("templates/example.html");
+    const PUT = templates.Page("templates/example.html");
 
     var vecbuf: [128]IOVec = @splat(undefined);
     var varr: IOVArray = .initBuffer(&vecbuf);
@@ -371,7 +407,7 @@ test Page {
     try std.testing.expectEqual(49, varr.items.len);
     try std.testing.expectEqual(52, PUT.IoVec.countAll(page));
 
-    const PageType = Page(.{ .blob = "" }, Templates.findPageType("templates/example.html"));
+    const PageType = Typed(.{ .blob = "" }, DefaultType("templates/example.html"));
     _ = &PageType;
 }
 
@@ -380,9 +416,9 @@ test {
     _ = &constructor;
 }
 
-const Templates = @import("../template.zig");
-const Template = Templates.Template;
-const Directive = Templates.Directive;
+const templates = @import("../template.zig");
+const Template = templates.Template;
+const Directive = templates.Directive;
 const constructor = @import("constructor.zig");
 
 const validateBlock = constructor.validateBlock;

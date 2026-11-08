@@ -191,11 +191,12 @@ pub fn log(stats: *Stats, data: Data, io: Io) void {
 
 pub const Endpoint = struct {
     const Router = @import("Router.zig");
-    const PageData = @import("template.zig").PageData;
-    const S = @import("template.zig").Structs;
+    const templates = @import("template.zig");
+    const Page = templates.Page;
+    const S = templates.Structs;
     pub const verse_name = .stats;
 
-    const StatsPage = PageData("builtin-html/verse-stats.html");
+    const StatsPage = Page("builtin-html/verse-stats.html");
     const StatsList = S.BuiltinHtml_VerseStatsHtml.VerseStatsList;
 
     pub const stats = index;

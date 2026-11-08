@@ -1,5 +1,5 @@
 //! Example of a comptime template using the extended (non-stable) syntax
-const ExampleEnumPage = PageData("templates/example-enum.html");
+const ExampleEnumPage = Page("templates/example-enum.html");
 var global_number: u8 = 1; // Wanted to write 2, but off by one errors are common
 
 fn index(frame: *verse.Frame) Router.Error!void {
@@ -38,5 +38,5 @@ const routes = Router.Routes(&[_]Router.Match{
 
 const std = @import("std");
 const verse = @import("verse");
-const PageData = verse.template.PageData;
+const Page = verse.template.Page;
 const Router = verse.Router;

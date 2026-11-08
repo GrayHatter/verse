@@ -1,6 +1,6 @@
 //! Example of a comptime template using the extended (non-stable) syntax
 
-const ExampleExtraPage = PageData("templates/example-extra.html");
+const ExampleExtraPage = Page("templates/example-extra.html");
 
 var global_number: usize = 1; // Wanted to write 2, but off by one errors are common
 
@@ -70,5 +70,5 @@ const routes = Router.Routes(&[_]Router.Match{
 
 const std = @import("std");
 const verse = @import("verse");
-const PageData = verse.template.PageData;
+const Page = verse.template.Page;
 const Router = verse.Router;
