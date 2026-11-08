@@ -4,22 +4,22 @@ const zig_builtin = @import("builtin");
 
 pub const builtin: []const Template = constructTemplates();
 
-pub fn findTemplate(comptime name: []const u8) Template {
-    inline for (builtin) |bi| {
-        if (comptime eql(u8, bi.name, name)) {
+pub fn findTemplate(name: []const u8) *const Template {
+    inline for (builtin) |*bi| {
+        if (eql(u8, bi.name, name)) {
             return bi;
         }
     } else {
         if (comptime zig_builtin.is_test) {
             const test_builtins = @import("builtins_tests.zig");
             inline for (test_builtins.extras) |bi| {
-                if (comptime eql(u8, bi.name, name)) {
-                    return bi;
+                if (eql(u8, bi.name, name)) {
+                    return &bi;
                 }
-            }
+            } else unreachable;
         }
 
-        comptime {
+        if (@inComptime()) {
             var errstr: [:0]const u8 = "Template " ++ name ++ " not found!";
             for (builtin) |bi| {
                 if (endsWith(u8, bi.name, name)) {
@@ -31,6 +31,7 @@ pub fn findTemplate(comptime name: []const u8) Template {
             // But it's important for you to know... I hope you have a good day :)
             @compileError(errstr);
         }
+        unreachable;
     }
 }
 
@@ -51,10 +52,6 @@ fn tailPath(path: []const u8) []const u8 {
     }
     return path[0..0];
 }
-
-pub var dynamic: []const Template = undefined;
-
-const MAX_BYTES = 2 <<| 15;
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

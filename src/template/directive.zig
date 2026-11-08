@@ -13,7 +13,7 @@ pub const Otherwise = union(enum) {
     required: void,
     delete: void,
     default: []const u8,
-    template: Template,
+    template: *const Template,
     exact: usize,
     literal: []const u8,
     //page: type,
@@ -170,23 +170,12 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             const b_noun = noun[1..(findScalarPos(u8, noun, 1, ' ') orelse return null)];
             const tail = noun[b_noun.len + 1 ..];
             const b_html = tail[1..(findScalarPos(u8, tail, 2, ' ') orelse return null)];
-            if (@inComptime()) {
-                if (getBuiltin(b_html)) |bi| return Directive{
-                    .verb = .build,
-                    .noun = b_noun,
-                    .otherwise = .{ .template = bi },
-                    .tag_block = blob[0 .. verb.len + 2 + noun.len],
-                };
-            } else {
-                if (getBuiltin(b_html)) |bi| {
-                    return Directive{
-                        .verb = .build,
-                        .noun = b_noun,
-                        .otherwise = .{ .template = bi },
-                        .tag_block = blob[0 .. verb.len + 2 + noun.len],
-                    };
-                } else return null;
-            }
+            return .{
+                .verb = .build,
+                .noun = b_noun,
+                .otherwise = .{ .template = template_data.findTemplate(b_html) },
+                .tag_block = blob[0 .. verb.len + 2 + noun.len],
+            };
         },
         .directive => {
             const end = calcBody("Directive", noun, blob) orelse return null;
@@ -239,7 +228,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 else if (exact) |e|
                     .{ .exact = e }
                 else if (use) |u|
-                    .{ .template = getBuiltin(u) orelse @panic("built in missing") }
+                    .{ .template = template_data.findTemplate(u) }
                 else
                     .required,
                 .tag_block = blob[0..end],
@@ -417,17 +406,6 @@ fn isStringish(t: type) bool {
         []const u8, ?[]const u8 => true,
         else => false,
     };
-}
-
-fn getBuiltin(name: []const u8) ?Template {
-    if (@inComptime()) return template_data.findTemplate(name);
-
-    for (0..builtin.len) |i| {
-        if (eql(u8, builtin[i].name, name)) {
-            return builtin[i];
-        }
-    }
-    return null;
 }
 
 fn typeField(T: type, name: []const u8, data: T) ?[]const u8 {
@@ -691,19 +669,17 @@ pub const FormatDefault = struct {
     }
 };
 
-const Pages = @import("page.zig");
 const Template = @import("Template.zig");
 const Abx = @import("Antibiotic");
 const Allocator = std.mem.Allocator;
-const Writer = std.Io.Writer;
 
 const std = @import("std");
+const Writer = std.Io.Writer;
 const eql = std.mem.eql;
 const startsWith = std.mem.startsWith;
 const findPos = std.mem.findPos;
 const findPosLinear = std.mem.findPosLinear;
 const findAnyPos = std.mem.findAnyPos;
-const findLast = std.mem.findLast;
 const findScalarPos = std.mem.findScalarPos;
 const count = std.mem.count;
 const trim = std.mem.trim;
@@ -712,6 +688,5 @@ const whitespace = std.ascii.whitespace[0..];
 const isWhitespace = std.ascii.isWhitespace;
 
 const template_data = @import("builtins.zig");
-const builtin = template_data.builtin;
 const verse_buildopts = @import("verse_buildopts");
 const log = std.log.scoped(.verse_directive);

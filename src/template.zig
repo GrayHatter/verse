@@ -137,7 +137,7 @@ test "directive something" {
     const ctx = Basic{
         .something = @as([]const u8, "Some Text Here"),
     };
-    const pg = page.Typed(t, @TypeOf(ctx)).init(ctx);
+    const pg = page.Typed(&t, @TypeOf(ctx)).init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("Some Text Here", p);
@@ -151,7 +151,7 @@ test "directive something" {
     const ctx2 = Basic{
         .something = @as([]const u8, "Some Text Here"),
     };
-    const pg2 = page.Typed(t2, @TypeOf(ctx2)).init(ctx2);
+    const pg2 = page.Typed(&t2, @TypeOf(ctx2)).init(ctx2);
     const p2 = try allocPrint(a, "{f}", .{pg2});
     defer a.free(p2);
     try std.testing.expectEqualStrings("Some Text Here", p2);
@@ -170,7 +170,7 @@ test "directive typed something" {
         .blob = "<Something>",
     };
 
-    const page_ = page.Typed(t, Something);
+    const page_ = page.Typed(&t, Something);
 
     const pg = page_.init(.{
         .something = "Some Text Here",
@@ -194,7 +194,7 @@ test "directive typed something /" {
         .blob = "<Something />",
     };
 
-    const page_ = page.Typed(t, Something);
+    const page_ = page.Typed(&t, Something);
 
     const p = page_.init(.{
         .something = "Some Text Here",
@@ -214,7 +214,7 @@ test "directive nothing" {
     };
 
     const ctx = .{};
-    const page_ = page.Typed(t, @TypeOf(ctx));
+    const page_ = page.Typed(&t, @TypeOf(ctx));
 
     const pg = page_.init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
@@ -238,7 +238,7 @@ test "directive ORELSE" {
         .this = null,
     };
 
-    const pg = page.Typed(t, @TypeOf(ctx)).init(ctx);
+    const pg = page.Typed(&t, @TypeOf(ctx)).init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("string until end", p);
@@ -261,7 +261,7 @@ test "directive ORNULL" {
         .this = null,
     };
 
-    const pg = page.Typed(t, @TypeOf(ctx)).init(ctx);
+    const pg = page.Typed(&t, @TypeOf(ctx)).init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings("", p);
@@ -272,7 +272,7 @@ test "directive ORNULL" {
         .blob = "<This ornull>",
     };
 
-    const nullpage = page.Typed(t2, @TypeOf(ctx)).init(ctx);
+    const nullpage = page.Typed(&t2, @TypeOf(ctx)).init(ctx);
     const p2 = try allocPrint(a, "{f}", .{nullpage});
     defer a.free(p2);
     try std.testing.expectEqualStrings("", p2);
@@ -311,7 +311,7 @@ test "directive For" {
         },
     };
 
-    const pg = page.Typed(t, @TypeOf(ctx)).init(ctx);
+    const pg = page.Typed(&t, @TypeOf(ctx)).init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
@@ -323,7 +323,7 @@ test "directive For" {
         },
     };
 
-    const dbl_page = page.Typed(t, @TypeOf(ctx)).init(ctx);
+    const dbl_page = page.Typed(&t, @TypeOf(ctx)).init(ctx);
     const pg2 = try allocPrint(a, "{f}", .{dbl_page});
     defer a.free(pg2);
     try std.testing.expectEqualStrings(dbl_expected, pg2);
@@ -392,7 +392,7 @@ test "directive For & For" {
         },
     };
 
-    const pg = page.Typed(t, @TypeOf(ctx)).init(ctx);
+    const pg = page.Typed(&t, @TypeOf(ctx)).init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
     try std.testing.expectEqualStrings(expected, p);
@@ -441,7 +441,7 @@ test "directive for then for" {
         .name = "test",
         .blob = blob,
     };
-    const page_ = page.Typed(t, FTF);
+    const page_ = page.Typed(&t, FTF);
 
     const loop = [2]FTF.Loop{
         .{ .name = "Alice" },
@@ -515,7 +515,7 @@ test "directive for with for for" {
         .name = "test",
         .blob = blob,
     };
-    const page_ = page.Typed(t, FTF);
+    const page_ = page.Typed(&t, FTF);
 
     var page_data: FTF = .{
         .loop = &[2]FTF.Loop{
@@ -637,7 +637,7 @@ test "directive With" {
         .thing = null,
     };
 
-    const page_ = page.Typed(t, @TypeOf(ctx));
+    const page_ = page.Typed(&t, @TypeOf(ctx));
     const pg = page_.init(ctx);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
@@ -691,7 +691,7 @@ test "directive Split" {
         .name = "test",
         .blob = blob,
     };
-    const page_ = page.Typed(t, SplitS);
+    const page_ = page.Typed(&t, SplitS);
 
     const slice = SplitS{
         .slice = &[_][]const u8{
@@ -715,7 +715,7 @@ test "directive typed usize" {
     const FE = struct { number: usize };
 
     const t = Template{ .name = "test", .blob = blob };
-    const page_ = page.Typed(t, FE);
+    const page_ = page.Typed(&t, FE);
 
     const slice = FE{ .number = 420 };
     const pg = page_.init(slice);
@@ -732,7 +732,7 @@ test "directive typed ?usize" {
     const MaybeUsize = struct { number: ?usize };
 
     const t = Template{ .name = "test", .blob = blob };
-    const page_ = page.Typed(t, MaybeUsize);
+    const page_ = page.Typed(&t, MaybeUsize);
 
     const slice = MaybeUsize{ .number = 420 };
     const pg = page_.init(slice);
@@ -749,7 +749,7 @@ test "directive typed ?usize null" {
     const FE = struct { number: ?usize };
 
     const Temp = Template{ .name = "test", .blob = blob };
-    const page_ = page.Typed(Temp, FE);
+    const page_ = page.Typed(&Temp, FE);
 
     const slice = FE{ .number = null };
     const pg = page_.init(slice);
@@ -775,7 +775,7 @@ test "directive typed ?usize default" {
     const FE = struct { number: ?usize };
 
     const Temp = Template{ .name = "test", .blob = blob };
-    const page_ = page.Typed(Temp, FE);
+    const page_ = page.Typed(&Temp, FE);
 
     const slice = FE{ .number = null };
     const pg = page_.init(slice);
@@ -793,7 +793,7 @@ test "directive typed isize" {
         number: isize,
     };
     const Temp = Template{ .name = "test", .blob = blob };
-    const PType = page.Typed(Temp, PData);
+    const PType = page.Typed(&Temp, PData);
 
     const data = PData{ .number = -420 };
     const print = try allocPrint(a, "{f}", .{PType.init(data)});
@@ -813,7 +813,7 @@ test "directive typed humanize" {
     const FE = struct { date: i64 };
 
     const t = Template{ .name = "test", .blob = blob };
-    const page_ = page.Typed(t, FE);
+    const page_ = page.Typed(&t, FE);
 
     const slice = FE{ .date = std.time.timestamp() - 3600 };
     const pg = page_.init(slice);
@@ -848,7 +848,7 @@ test "EnumLiteral" {
         },
     };
     const Temp = Template{ .name = "test", .blob = blob };
-    const PType = page.Typed(Temp, PData);
+    const PType = page.Typed(&Temp, PData);
 
     const data = PData{ .enum_literal = .settings };
     const print = try allocPrint(a, "{f}", .{PType.init(data)});
@@ -903,7 +903,7 @@ test "TaggedUnion" {
             third: UnionNameThird,
         };
     };
-    const PageType = page.Typed(PageTemplate, PgData);
+    const PageType = page.Typed(&PageTemplate, PgData);
 
     var pd: PgData = .{ .union_name = .{ .first = .{
         .url = "/url/goes/here",
@@ -942,7 +942,7 @@ test "grouped offsets" {
     ;
     const Temp = Template{ .name = "test", .blob = blob };
     const PData = struct {};
-    const PType = page.Typed(Temp, PData);
+    const PType = page.Typed(&Temp, PData);
     try std.testing.expectEqual(1, PType.DataOffsets.len);
     var a = std.testing.allocator;
     const print = try allocPrint(a, "{f}", .{PType.init(PData{})});
@@ -960,7 +960,7 @@ test "comment tags" {
 
     const PData = struct {};
     const t = Template{ .name = "test", .blob = blob };
-    const PType = page.Typed(t, PData);
+    const PType = page.Typed(&t, PData);
 
     const data = PData{};
     const expected = blob;
@@ -1005,7 +1005,7 @@ test "For exact" {
             .{ .name = "forth" },
         },
     };
-    const pg = page.Typed(t, PgType).init(ctx);
+    const pg = page.Typed(&t, PgType).init(ctx);
 
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);
@@ -1039,7 +1039,7 @@ test "For use=" {
         },
     };
 
-    const page_ = page.Typed(t, FE);
+    const page_ = page.Typed(&t, FE);
     const pg = page_.init(slice);
     const p = try allocPrint(a, "{f}", .{pg});
     defer a.free(p);

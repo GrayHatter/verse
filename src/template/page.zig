@@ -34,7 +34,7 @@ test DefaultType {
 }
 pub const PageTyped = Typed;
 
-pub fn Typed(comptime template: Template, comptime PageDataType: type) type {
+pub fn Typed(comptime template: *const Template, comptime PageDataType: type) type {
     const offsets = validateBlock(template.blob, PageDataType, 0);
     const offset_len = offsets.len;
 
@@ -407,7 +407,7 @@ test Typed {
     try std.testing.expectEqual(49, varr.items.len);
     try std.testing.expectEqual(52, PUT.IoVec.countAll(page));
 
-    const PageType = Typed(.{ .blob = "" }, DefaultType("templates/example.html"));
+    const PageType = Typed(&.{ .blob = "" }, DefaultType("templates/example.html"));
     _ = &PageType;
 }
 
