@@ -16,97 +16,217 @@ pub const malicious_bot: Bot = .{
 const Bot = @This();
 
 pub const Name = enum {
-    /// Ignores robots.txt
+    /// LLM training set scraper
+    /// ignores robots.txt
     abliterantbot,
-
-    /// Ignores robots.txt
+    /// Hostile plagiarism bot
+    academicbotrtu,
+    /// closed SEO bot
+    ahrefsbot,
+    /// LLM model training set scraper
+    /// aggressive
+    /// ignores robots.txt
+    amazonbot,
+    /// very aggressive
+    /// ignores robots.txt
     amzn_searchbot,
-
-    /// Very agressive
+    /// AI answer scraper
+    /// ignores robots.txt
+    amzn_user,
+    /// Very aggressive
+    /// poorly maintained (fix your caching system)
+    /// behaves like an LLM training set scraper
     applebot,
-
     /// Ignores robots.txt, but isn't considered malicious here because
     /// Archive.org has a reputation for going out of their way to be extremely
     /// ethical, and a good web citizen.
     archiveorgbot,
-
-    /// Currently obviously unmaintained
+    /// Closed SEO bot
+    backlinksextendedbot,
+    /// Closed SEO bot
+    barkrowler,
+    /// Microsoft Bing search crawler
+    /// Obviously unmaintained
     bingbot,
-
-    /// AI bot
+    /// Publicly brags about intentionally ignoring robots.txt
+    /// note: witaf is wrong with you?!
+    bravebot,
+    /// Bytedance LLM model training set scraper, aggressive
+    bytespider,
+    /// LLM training set scraper, Common Crawl, (poorly maintained bot)
+    ccbot,
+    /// AI answer scraper
     claude_searchbot,
-
-    /// AI bot
+    /// LLM model scraping bot
+    /// agressive
     claudebot,
-
+    /// Closed SEO bot
+    dataforseobot,
+    /// Closed SEO bot
     /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
     discordbot,
-
+    /// Closed SEO bot
+    dotbot,
+    /// Seems to be a search crawler
+    duckduckbot,
+    /// Extremely hostile crawler
+    /// non-responsive to contact
+    dxxsearch,
+    /// LLM training set scraper
     /// https://elevenlabs.io/docs/bots
     /// buys/sells data, or crawls unidentified.
     elevenlabscrawler,
-
+    /// LLM training set scraper
     /// Malformed UA
     epochal,
-
-    /// The only actively maintained popular crawler
+    /// LLM model training set scraper
+    /// aggressive
+    /// ignores robots.txt
+    exasearchbot,
+    /// The only actively maintained popular search crawler
     googlebot,
-
-    /// Google's LLM crawler
+    /// LLM training set scraper
     googleother,
-
-    /// AI bot
+    /// LLM training set scraper
     gptbot,
-
-    /// AI crawler, ignores robots.txt
-    keenable,
-
-    /// Link/OpenGraph scanner. Allowed, and expected to ignore robots.tit
+    /// LLM search crawler
+    /// ignores robots.txt
+    keenable_user,
+    /// LLM training set scraper
+    /// ignores robots.txt
+    /// Malformed UA
+    keenablebot,
+    /// Link/OpenGraph scanner for IRC clients
+    /// Expected to ignore robots.txt
     lounge_irc_client,
-
-    /// repeatedly breaks in ways harmful to sites.
+    /// LLM training set scraper
+    /// Repeatedly breaks in ways harmful to sites.
     metaexternalagent,
-
-    /// AI bot (link/contact doesn't resolve)
-    reflectionbot,
-
-    /// AI bot, malicious; (ignores robots.txt, repeated retries on 502)
-    scrybot,
-
-    /// web search crawler https://www.sogou.com/docs/help/webmasters.htm#07
-    sogou_web_spider,
-
-    /// non-responsive
-    techspybot,
-
-    /// Ignores robots.txt
-    youbot,
-
+    // uh...?
+    mj12bot,
+    /// AI answer scraper
+    /// persistent
+    oai_searchbot,
     /// Implementation when unable to ID a bot with suspicious traffic.
     other_malicious,
+    /// LLM training set scraper
+    perplexitybot,
+    /// LLM training/search scraper
+    /// malformed UA
+    /// non-responsive to contact
+    reflectionbot,
+    /// AI scraper
+    /// malicious; (ignores robots.txt, repeated retries on 502)
+    scrybot,
+    /// Closed SEO bot (semrush) tries to evade robots.txt
+    siteauditbot,
+    /// Hobby bot?
+    /// non-responsive to contact
+    sleepbot,
+    /// web search crawler https://www.sogou.com/docs/help/webmasters.htm#07
+    /// Polite :)
+    sogou_web_spider,
+    /// non-responsive to contact
+    techspybot,
+    /// Closed SEO bot
+    /// ignores robots.txt
+    youbot,
+    /// Closed SEO bot
+    zoominfobot,
+
     unknown,
 
     pub fn isMalicious(n: Name) bool {
         return switch (n) {
             .abliterantbot => true, // ignores robots.txt
+            .academicbotrtu => false,
+            .ahrefsbot => false,
+            .amazonbot => true,
             .amzn_searchbot => true, // ignores robots.txt
+            .amzn_user => false,
             .applebot => false,
             .archiveorgbot => false,
+            .backlinksextendedbot => false,
+            .barkrowler => false,
             .bingbot => false,
+            .bravebot => true,
+            .bytespider => false,
+            .ccbot => false,
             .claude_searchbot => true,
             .claudebot => true,
+            .dataforseobot => false,
+            .discordbot => false,
+            .dotbot => false,
+            .duckduckbot => false,
+            .dxxsearch => true, // hyper aggressive
             .elevenlabscrawler => true, // buys data, or fails to ident
             .epochal => true, // malformed UA
+            .exasearchbot => true,
             .googlebot => false,
             .googleother => false,
             .gptbot => false,
-            .keenable => true,
+            .keenable_user => true,
+            .keenablebot => true, //
+            .lounge_irc_client => false,
             .metaexternalagent => true, // buggy crawler that can't behave
+            .mj12bot => true,
+            .oai_searchbot => false,
+            .other_malicious => true,
+            .perplexitybot => false,
             .reflectionbot => true, // sends broken data
             .scrybot => true, // non-responsive to contact
+            .siteauditbot => false,
+            .sleepbot => false,
+            .sogou_web_spider => false,
+            .techspybot => true, // non-responsive to contact
+            .unknown => false, // assume good faith :/
+            .youbot => true, // non-responsive to contact, ignores robots.txt
+            .zoominfobot => false,
+        };
+    }
+
+    pub fn seoBot(n: Name) bool {
+        return switch (n) {
+            .abliterantbot => false, // ignores robots.txt
+            .academicbotrtu => true,
+            .ahrefsbot => true,
+            .amazonbot => false,
+            .amzn_searchbot => true, // ignores robots.txt
+            .amzn_user => false,
+            .applebot => false,
+            .archiveorgbot => false,
+            .backlinksextendedbot => true,
+            .barkrowler => true,
+            .bingbot => false,
+            .bravebot => true,
+            .bytespider => true,
+            .ccbot => false,
+            .claude_searchbot => true,
+            .claudebot => false,
+            .dataforseobot => true,
+            .dotbot => true,
+            .duckduckbot => true,
+            .dxxsearch => true,
+            .elevenlabscrawler => true, // buys data, or fails to ident
+            .epochal => true, // malformed UA
+            .exasearchbot => true,
+            .googlebot => false,
+            .googleother => false,
+            .gptbot => false,
+            .keenable_user => false,
+            .keenablebot => false,
+            .metaexternalagent => false, // buggy crawler that can't behave
+            .mj12bot => true,
+            .oai_searchbot => false,
+            .perplexitybot => false,
+            .reflectionbot => false, // sends broken data
+            .scrybot => true, // non-responsive to contact
+            .siteauditbot => true,
+            .sleepbot => true,
             .sogou_web_spider => false,
             .techspybot => true, // non-responsive to contact
             .youbot => true, // non-responsive to contact, ignores robots.txt
+            .zoominfobot => true,
 
             // robots.txt doesn't apply so returns a friendly name
             .discordbot => false,
@@ -116,28 +236,98 @@ pub const Name = enum {
         };
     }
 
+    pub fn llmScraper(n: Name) bool {
+        return switch (n) {
+            .abliterantbot => true, // ignores robots.txt
+            .academicbotrtu => false,
+            .ahrefsbot => false,
+            .amazonbot => true,
+            .amzn_searchbot => true, // ignores robots.txt
+            .amzn_user => true,
+            .applebot => false,
+            .archiveorgbot => false,
+            .backlinksextendedbot => false,
+            .barkrowler => true,
+            .bingbot => false,
+            .bravebot => true,
+            .bytespider => true,
+            .ccbot => true,
+            .claude_searchbot => true,
+            .claudebot => true,
+            .dataforseobot => false,
+            .discordbot => false,
+            .dotbot => true,
+            .duckduckbot => false,
+            .dxxsearch => true,
+            .elevenlabscrawler => true, // buys data, or fails to ident
+            .epochal => true, // malformed UA
+            .exasearchbot => true,
+            .googlebot => false,
+            .googleother => true,
+            .gptbot => true,
+            .keenable_user => true,
+            .keenablebot => true,
+            .lounge_irc_client => false,
+            .metaexternalagent => true, // buggy crawler that can't behave
+            .mj12bot => true,
+            .oai_searchbot => true,
+            .other_malicious => true,
+            .perplexitybot => true,
+            .reflectionbot => true, // sends broken data
+            .scrybot => true, // non-responsive to contact
+            .siteauditbot => false,
+            .sleepbot => true,
+            .sogou_web_spider => true,
+            .techspybot => true, // non-responsive to contact
+            .youbot => true, // non-responsive to contact, ignores robots.txt
+            .zoominfobot => false,
+
+            .unknown => false, // assume good faith :/
+        };
+    }
+
     pub fn robotsTxtName(n: Name) [:0]const u8 {
         return switch (n) {
             .abliterantbot => "AbliterantBot",
+            .academicbotrtu => "AcademicBotRTU",
+            .ahrefsbot => "AhrefsBot",
+            .amazonbot => "Amazonbot",
             .amzn_searchbot => "Amzn-SearchBot",
+            .amzn_user => "Amzn-User",
             .applebot => "Applebot",
             .archiveorgbot => "archive.org_bot",
+            .backlinksextendedbot => "BacklinksExtendedBot",
+            .barkrowler => "Barkrowler",
             .bingbot => "Bingbot",
+            .bravebot => "Bravebot",
+            .bytespider => "Bytespider",
+            .ccbot => "CCBot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
+            .dataforseobot => "DataForSeoBot",
+            .dotbot => "DotBot",
+            .duckduckbot => "DuckDuckBot",
+            .dxxsearch => "DXXSearch",
             .elevenlabscrawler => "ElevenlabsCrawler",
             .epochal => "Epochal-Search",
+            .exasearchbot => "ExaSearchBot",
             .googlebot => "GoogleBot",
             .googleother => "GoogleOther",
             .gptbot => "GPTBot",
-            .keenable => "KeenableBot",
+            .keenable_user => "Keenable-User",
+            .keenablebot => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
+            .mj12bot => "MJ12bot",
+            .oai_searchbot => "OAI-SearchBot",
+            .perplexitybot => "PerplexityBot",
             .reflectionbot => "Reflectionbot",
             .scrybot => "ScryBot",
-            // sourced from https://www.sogou.com/robots.txt
-            .sogou_web_spider => "Sogou web spider",
+            .siteauditbot => "SiteAuditBot",
+            .sleepbot => "SleepBot",
+            .sogou_web_spider => "Sogou web spider", // sourced from https://www.sogou.com/robots.txt
             .techspybot => "TechSpyBot",
             .youbot => "YouBot",
+            .zoominfobot => "ZoominfoBot",
 
             // robots.txt doesn't apply so returns a friendly name
             .discordbot => "DiscordBot",
@@ -147,74 +337,49 @@ pub const Name = enum {
         };
     }
 
-    pub fn rules(comptime name: Name) []const Robots.RuleFn {
-        return switch (name) {
-            .abliterantbot => "AbliterantBot",
-            .amzn_searchbot => "Amzn-SearchBot",
-            .applebot => "Applebot",
-            .archiveorgbot => "archive.org_bot",
-            .bingbot => "Bingbot",
-            .claude_searchbot => "Claude-SearchBot",
-            .claudebot => "ClaudeBot",
-            .discordbot => "DiscordBot",
-            .elevenlabscrawler => "ElevenlabsCrawler",
-            .epochal => "Epochal-Search",
-            .googlebot => "GoogleBot",
-            .googleother => "GoogleBot",
-            .gptbot => "GPTBot",
-            .keenable => "KeenableBot",
-            .metaexternalagent => "meta-externalagent",
-            .reflectionbot => "Reflectionbot",
-            .scrybot => "ScryBot",
-            .sogou_web_spider => "Sogou web spider",
-            .techspybot => "TechSpyBot",
-            .youbot => "YouBot",
-
-            .lounge_irc_client => "",
-            .other_malicious => "",
-            .unknown => "",
-        };
-    }
-
     pub fn obeysCrawlDelay(comptime name: Name) bool {
         return switch (name) {
-            // ignores robots
-            .abliterantbot => false,
-            // Unverified
+            .abliterantbot => false, // ignores robots
+            .academicbotrtu => false, // TODO
+            .ahrefsbot => false, // TODO
+            .amazonbot => false, // TODO
             .amzn_searchbot => false,
-            // Unverified
+            .amzn_user => false, // TODO
             .applebot => false,
-            // Unverified
-            .archiveorgbot => false,
-            // Unverified
+            .backlinksextendedbot => false, // TODO
+            .barkrowler => false, // TODO
             .bingbot => false,
-            // Unverified
+            .bravebot => false, // TODO
+            .bytespider => false, // TODO
+            .ccbot => false, // TODO
             .claude_searchbot => false,
-            // Unverified
             .claudebot => false,
-            // Allowed to ignore robots.txt
-            .discordbot => false,
-            // Unverified
+            .dataforseobot => false, // TODO
+            .dotbot => false, // TODO
+            .duckduckbot => false, // TODO
+            .dxxsearch => false, // TODO
+            .exasearchbot => false, // TODO
             .googlebot => false,
-            // Unverified
             .googleother => false,
-            // Unverified
             .gptbot => false,
-            // Unverified
-            .keenable => false, // ignores robots.txtw
-            // Unverified
+            .keenable_user => false, // TODO
+            .keenablebot => false, // ignores robots.txt
             .metaexternalagent => false,
-            // Unverified
-            .techspybot => false,
-            // Unverified
+            .mj12bot => false, // TODO
+            .oai_searchbot => false, // TODO
+            .other_malicious => false,
+            .other_malicious => false,
+            .perplexitybot => false, // TODO
             .scrybot => false,
-            // Unverified
+            .siteauditbot => false, // TODO
+            .sleepbot => false, // TODO
             .sogou_web_spider => true,
-            // Unverified
+            .techspybot => false,
             .youbot => false,
 
+            .archiveorgbot => true, // allowed to ignore robots
+            .discordbot => false, // Allowed to ignore robots.txt
             .lounge_irc_client => false,
-            .other_malicious => false,
             .unknown => false,
         };
     }
@@ -222,28 +387,49 @@ pub const Name = enum {
     pub fn verIdent(comptime name: Name) ?[]const u8 {
         return switch (name) {
             .abliterantbot => "AbliterantBot/",
+            .academicbotrtu => null, // TODO
+            .ahrefsbot => null, // TODO
+            .amazonbot => null, // TODO
             .amzn_searchbot => "Amzn-SearchBot/",
+            .amzn_user => null, // TODO
             .applebot => "Applebot/",
+            .backlinksextendedbot => null, // TODO
+            .barkrowler => null, // TODO
             .bingbot => "bingbot/",
+            .bravebot => null, // TODO
+            .bytespider => null, // TODO
+            .ccbot => null, // TODO
             .claude_searchbot => "Claude-SearchBot/",
             .claudebot => "ClaudeBot/",
+            .dataforseobot => null, // TODO
             .discordbot => "Discordbot/",
+            .dotbot => null, // TODO
+            .duckduckbot => null, // TODO
+            .dxxsearch => null, // TODO
             .elevenlabscrawler => "ElevenlabsCrawler/",
             .epochal => "Epochal-Search/",
+            .exasearchbot => null, // TODO
             .googlebot => "Googlebot/",
+            .googleother => null,
             .gptbot => "GPTBot/",
-            .keenable => "KeenableBot/",
+            .keenable_user => null, // TODO
+            .keenablebot => "KeenableBot/",
+            .lounge_irc_client => null,
+            .metaexternalagent => null,
+            .mj12bot => null, // TODO
+            .oai_searchbot => null, // TODO
+            .perplexitybot => null, // TODO
             .reflectionbot => "Reflectionbot/",
             .scrybot => "ScryBot/",
+            .siteauditbot => null, // TODO
+            .sleepbot => null, // TODO
             .sogou_web_spider => "Sogou web spider/",
             .techspybot => "TechSpyBot/",
             .youbot => "YouBot/",
+            .zoominfobot => null, // TODO
 
-            .archiveorgbot => null,
-            .googleother => null,
-            .lounge_irc_client => null,
-            .metaexternalagent => null,
             .other_malicious => null,
+            .archiveorgbot => null,
             .unknown => null,
         };
     }
@@ -251,29 +437,50 @@ pub const Name = enum {
     pub fn ident(comptime name: Name, str: []const u8) bool {
         return switch (name) {
             .abliterantbot => find(u8, str, "AbliterantBot/0.1 (+https://abliterant.ai)") != null,
+            .academicbotrtu => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .ahrefsbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .amazonbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .amzn_searchbot => find(u8, str, "Amzn-SearchBot/") != null,
+            .amzn_user => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .applebot => endsWith(u8, str, "Applebot/0.1; +http://www.apple.com/go/applebot)"),
+            .backlinksextendedbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .barkrowler => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .bingbot => find(u8, str, "compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)") != null,
+            .bravebot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .bytespider => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .ccbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .claude_searchbot => endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)"),
             .claudebot => endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)"),
+            .dataforseobot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
+            .dotbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .duckduckbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .dxxsearch => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .elevenlabscrawler => find(u8, str, "ElevenlabsCrawler") != null,
             .epochal => find(u8, str, "Epochal") != null,
+            .exasearchbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .googlebot => endsWith(u8, str, "Googlebot/2.1; +http://www.google.com/bot.html)"),
             .googleother => endsWith(u8, str, "GoogleOther"),
             .gptbot => endsWith(u8, str, "compatible; GPTBot/1.2; +https://openai.com/gptbot)"),
-            .keenable => find(u8, str, "KeenableBot/") != null,
+            .keenable_user => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .keenablebot => find(u8, str, "KeenableBot/") != null,
             .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
+            .mj12bot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .oai_searchbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .perplexitybot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
+            .siteauditbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .sleepbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .sogou_web_spider => find(u8, str, "Sogou web spider/") != null,
             .techspybot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
+            .zoominfobot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
 
-            .archiveorgbot => false,
             .other_malicious => false,
             .unknown => false,
+            .archiveorgbot => false,
         };
     }
 
@@ -403,28 +610,51 @@ pub const Identity = struct {
 pub const bots: std.EnumArray(Name, Identity) = .{
     .values = [@typeInfo(Name).@"enum".field_names.len]Identity{
         .{ .bot = .abliterantbot, .network = null },
+        .{ .bot = .academicbotrtu, .network = null },
+        .{ .bot = .ahrefsbot, .network = null },
+        .{ .bot = .amazonbot, .network = null },
         .{ .bot = .amzn_searchbot, .network = null },
+        .{ .bot = .amzn_user, .network = null },
         .{ .bot = .applebot, .network = null },
         .{ .bot = .archiveorgbot, .network = null },
+        .{ .bot = .backlinksextendedbot, .network = null },
+        .{ .bot = .barkrowler, .network = null },
         .{ .bot = .bingbot, .network = null },
+        .{ .bot = .bravebot, .network = null },
+        .{ .bot = .bytespider, .network = null },
+        .{ .bot = .ccbot, .network = null },
         .{ .bot = .claude_searchbot, .network = null },
         .{ .bot = .claudebot, .network = null },
+        .{ .bot = .dataforseobot, .network = null },
         .{ .bot = .discordbot, .network = .cloud_gcp },
+        .{ .bot = .dotbot, .network = null },
+        .{ .bot = .duckduckbot, .network = null },
+        .{ .bot = .dxxsearch, .network = null },
         .{ .bot = .elevenlabscrawler, .network = null },
         .{ .bot = .epochal, .network = null },
+        .{ .bot = .exasearchbot, .network = null },
         .{ .bot = .googlebot, .network = .{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .googleother, .network = .{ .nets = &[_][]const u8{"66.249"} } },
         .{ .bot = .gptbot, .network = .{ .nets = &[_][]const u8{"74.7.227"} } }, // incomplete ip list
-        .{ .bot = .keenable, .network = null }, // published on their site, but they're malicious
+        .{ .bot = .keenable_user, .network = null },
+        .{ .bot = .keenablebot, .network = null }, // published on their site, but they're malicious
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
+        .{ .bot = .mj12bot, .network = null },
+        .{ .bot = .oai_searchbot, .network = null },
+        .{ .bot = .other_malicious, .network = null },
+        .{ .bot = .perplexitybot, .network = null },
         .{ .bot = .reflectionbot, .network = null },
         .{ .bot = .scrybot, .network = null },
+        .{ .bot = .siteauditbot, .network = null },
+        .{ .bot = .sleepbot, .network = null },
         .{ .bot = .sogou_web_spider, .network = null },
         .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = .{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
+        .{ .bot = .zoominfobot, .network = null },
+
         // Split ordering
-        .{ .bot = .other_malicious, .network = null },
+
         .{ .bot = .unknown, .network = null },
     },
 };
