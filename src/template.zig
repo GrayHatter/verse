@@ -48,7 +48,7 @@ fn countNames(comptime text: []const u8) usize {
         if (std.ascii.isUpper(text[last])) count += 1;
         if (Directive.init(text[last - 1 ..])) |drct| switch (drct.verb) {
             .variable => {},
-            else => last += drct.tag_block.len,
+            else => last += drct.bytes.len,
         };
     }
     return count;
@@ -80,7 +80,7 @@ fn comptimeFields(comptime count: usize, comptime text: []const u8) CTFields(cou
                     lower[fs.len] = 0;
                     const lname: [:0]const u8 = @as([:0]u8, lower[0..fs.len :0]);
 
-                    const body_type = comptimeStruct(drct.tag_block_body.?);
+                    const body_type = comptimeStruct(drct.block_body.?);
 
                     fields.names[loop] = lname;
                     fields.ftypes[loop] = switch (drct.otherwise) {
@@ -768,8 +768,8 @@ test "directive typed ?usize default" {
         .verb = .variable,
         .noun = "Number",
         .otherwise = .{ .default = "0" },
-        .tag_block = blob,
-        .html_type = .@"?usize",
+        .bytes = blob,
+        .base_type = .@"?usize",
     }, d);
 
     const FE = struct { number: ?usize };

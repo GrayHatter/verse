@@ -26,6 +26,11 @@ pub fn build(b: *std.Build) !void {
         \\Use Antibiotic as the default template variable type (replacing []const u8)
     ) orelse false;
 
+    // Default all Template variables to
+    const templates_html_strip_comments: bool = b.option(bool, "html_strip_comments",
+        \\Strip HTML comments from templates when generating pages
+    ) orelse true;
+
     // Enable Extended UA valdation
     const ua_validation = b.option(bool, "ua_validation",
         \\Disable user agent validation [not-implemented]
@@ -47,6 +52,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "ua_validation", ua_validation);
     //options.addOption([]const u8, "accept-lang-heat", accept_lang_heat);
     options.addOption(bool, "sessions_enabled", sessions_enabled);
+    options.addOption(bool, "t_strip_comments", templates_html_strip_comments);
 
     const verse_lib = b.addModule("verse", .{
         .root_source_file = b.path("src/verse.zig"),

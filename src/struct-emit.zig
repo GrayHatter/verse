@@ -368,7 +368,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
         const str = ir.buffered();
         std.debug.assert(str.len == 0 or str[0] == '<');
         if (Directive.init(ir.buffered())) |drct| {
-            ir.toss(drct.tag_block.len);
+            ir.toss(drct.bytes.len);
             // TODO optimize
             const s_name = try drct.nameStructAlloc(a);
             const f_name = try drct.nameFieldAlloc(a);
@@ -391,7 +391,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                 .directive => try createEnumLiteral(a, s_name, drct.otherwise.literal),
                 .@"switch" => {
                     const sw_name = try a.dupe(u8, s_name);
-                    try createSwitch(a, sw_name, drct.tag_block_body.?);
+                    try createSwitch(a, sw_name, drct.block_body.?);
                     try parent.append(.{ .name = f_name, .kind = try a.dupe(u8, sw_name) });
                 },
                 else => |verb| {
@@ -406,9 +406,9 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                         .@"switch" => unreachable, // recursive switch not implemented
                         .foreach => {
                             const body_blob: []const u8, const kind: []u8 = switch (drct.otherwise) {
-                                .exact => |exact| .{ drct.tag_block_body.?, try allocPrint(a, "[{}]{s}", .{ exact, s_name }) },
+                                .exact => |exact| .{ drct.block_body.?, try allocPrint(a, "[{}]{s}", .{ exact, s_name }) },
                                 .template => |template| .{ template.blob, try allocPrint(a, "[]const {s}", .{s_name}) },
-                                else => .{ drct.tag_block_body.?, try allocPrint(a, "[]const {s}", .{s_name}) },
+                                else => .{ drct.block_body.?, try allocPrint(a, "[]const {s}", .{s_name}) },
                             };
                             try parent.append(.{ .name = f_name, .kind = kind });
 
@@ -431,7 +431,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                             if (!gop.found_existing) gop.value_ptr.* = try .init(a, s_name);
                             const this: *AbstTree = gop.value_ptr.*;
 
-                            var body: Reader = .fixed(drct.tag_block_body.?);
+                            var body: Reader = .fixed(drct.block_body.?);
                             try emitSourceVars(a, &body, this, root);
                         },
                         .with => {
@@ -442,7 +442,7 @@ pub fn emitSourceVars(a: Allocator, ir: *Reader, parent: *AbstTree, root: *StrHa
                             if (!gop.found_existing) gop.value_ptr.* = try .init(a, s_name);
                             const this: *AbstTree = gop.value_ptr.*;
 
-                            var body: Reader = .fixed(drct.tag_block_body.?);
+                            var body: Reader = .fixed(drct.block_body.?);
                             try emitSourceVars(a, &body, this, tree);
                         },
                         .build => {

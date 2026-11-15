@@ -1,10 +1,10 @@
 verb: Verb,
 noun: []const u8,
 otherwise: Otherwise,
-tag_block: []const u8,
-tag_block_body: ?[]const u8 = null,
-tag_block_skip: ?usize = null,
-html_type: ?TemplateType = null,
+bytes: []const u8,
+block_body: ?[]const u8 = null,
+block_skip: ?usize = null,
+base_type: ?BasicType = null,
 scope: Scope = .local,
 
 const Directive = @This();
@@ -17,6 +17,26 @@ pub const Otherwise = union(enum) {
     exact: usize,
     literal: []const u8,
     //page: type,
+
+    pub fn fromTag(tag: []const u8, map: *const Attributes.Map) Otherwise {
+        if (map.get(.default)) |str|
+            return .{ .default = str };
+
+        if (findPos(u8, tag, 0, " ornull")) |_|
+            return .delete;
+
+        if (map.get(.@"enum")) |str|
+            return .{ .literal = str };
+
+        if (map.get(.type)) |str| {
+            if (BasicType.fromStr(str)) |basic| {
+                if (basic.isOpt())
+                    return .delete;
+            } else |_| {}
+        }
+
+        return .required;
+    }
 };
 
 pub const Verb = enum {
@@ -28,9 +48,27 @@ pub const Verb = enum {
     with,
     @"switch",
     case,
+
+    pub fn fromStr(str: []const u8) ?Verb {
+        if (eql(u8, str, "For")) {
+            return .foreach;
+        } else if (eql(u8, str, "Directive")) {
+            return .directive;
+        } else if (eql(u8, str, "Split")) {
+            return .split;
+        } else if (eql(u8, str, "With")) {
+            return .with;
+        } else if (eql(u8, str, "Build")) {
+            return .build;
+        } else if (eql(u8, str, "Switch")) {
+            return .@"switch";
+        } else if (eql(u8, str, "Case")) {
+            return .case;
+        } else return null;
+    }
 };
 
-pub const TemplateType = enum {
+pub const BasicType = enum {
     usize,
     isize,
     @"?usize",
@@ -49,25 +87,25 @@ pub const TemplateType = enum {
     /// helper that will turn path segments into the shortest uri
     uri,
 
-    pub fn fromStr(s: []const u8) !TemplateType {
-        const T = @typeInfo(TemplateType).@"enum";
-        inline for (T.field_names, T.field_values) |n, v| {
+    pub fn fromStr(s: []const u8) !BasicType {
+        const E = @typeInfo(BasicType).@"enum";
+        inline for (E.field_names, E.field_values) |n, v| {
             if (eql(u8, n, s)) {
                 return @fromBackingInt(@intCast(v));
             }
         }
-        return error.InvalidHtmlType;
+        return error.InvalidType;
     }
 
-    pub fn nullable(kt: TemplateType) bool {
+    pub fn isOpt(kt: BasicType) bool {
         return @tagName(kt)[0] == '?';
     }
 
-    pub fn format(tt: TemplateType, w: *Writer) !void {
+    pub fn format(tt: BasicType, w: *Writer) !void {
         return tt.format2("[TODO enum]", w);
     }
 
-    pub fn format2(tt: TemplateType, enm: []const u8, w: *Writer) !void {
+    pub fn format2(tt: BasicType, enm: []const u8, w: *Writer) !void {
         return switch (tt) {
             .@"enum" => try w.writeAll(enm),
             .usize,
@@ -107,64 +145,26 @@ pub fn init(str: []const u8) ?Directive {
 
 fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
     if (noun[0] == '_') @panic("Template Directives must not start with _");
-    const tag_map = findAttrs(tag[noun.len + 1 .. tag.len - 1]) catch return null;
-    //const directive: ?[]const u8 = if (tag_map.get(.text)) |ht| try .fromStr(ht) else null;
-    const default_str: ?[]const u8 = tag_map.get(.default);
-    const h_type: ?TemplateType, const tag_name: ?[]const u8 = if (tag_map.get(.@"enum")) |ht|
-        .{ .@"enum", ht }
-    else if (tag_map.get(.type)) |ht|
-        .{ TemplateType.fromStr(ht) catch null, null }
+    const tag_map = Attributes.find(tag[noun.len + 1 .. tag.len - 1]) catch return null;
+    const otherwise: Otherwise = .fromTag(tag, &tag_map);
+    const base: ?BasicType = if (tag_map.get(.type)) |str|
+        BasicType.fromStr(str) catch null
     else
-        .{ null, null };
-
-    const otherwise: Otherwise = if (default_str) |str|
-        .{ .default = str }
-    else if (findPos(u8, tag, 0, " ornull")) |_|
-        .delete
-    else if (h_type) |htype|
-        if (htype.nullable())
-            .delete
-        else if (htype == .@"enum")
-            .{ .literal = tag_name orelse b: {
-                if (!@inComptime()) {
-                    log.err("Tag name not given for enum type\n", .{});
-                    unreachable;
-                }
-                break :b "blah";
-            } }
-        else
-            .required
-    else
-        .required;
+        null;
 
     return .{
         .verb = .variable,
         .noun = noun,
         .otherwise = otherwise,
-        .html_type = h_type,
-        .tag_block = tag,
+        .base_type = base,
+        .bytes = tag,
     };
 }
 
-pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive {
-    const word: Verb = if (eql(u8, verb, "For"))
-        .foreach
-    else if (eql(u8, verb, "Directive"))
-        .directive
-    else if (eql(u8, verb, "Split"))
-        .split
-    else if (eql(u8, verb, "With"))
-        .with
-    else if (eql(u8, verb, "Build"))
-        .build
-    else if (eql(u8, verb, "Switch"))
-        .@"switch"
-    else if (eql(u8, verb, "Case"))
-        .case
-    else
-        return null;
+pub const TemplateDirective = struct {};
 
-    switch (word) {
+pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive {
+    switch (Verb.fromStr(verb) orelse return null) {
         .variable => unreachable,
         .build => {
             const b_noun = noun[1..(findScalarPos(u8, noun, 1, ' ') orelse return null)];
@@ -174,7 +174,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 .verb = .build,
                 .noun = b_noun,
                 .otherwise = .{ .template = template_data.findTemplate(b_html) },
-                .tag_block = blob[0 .. verb.len + 2 + noun.len],
+                .bytes = blob[0 .. verb.len + 2 + noun.len],
             };
         },
         .directive => {
@@ -185,7 +185,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             while (end_idx < blob.len and (blob[end_idx] == ' ' or blob[end_idx] == '\n')) end_idx += 1;
             const tag_block = blob[0..end_idx];
 
-            const tag_map = findAttrs(tag_block_body["<Directive ".len..body_end]) catch return null;
+            const tag_map = Attributes.find(tag_block_body["<Directive ".len..body_end]) catch return null;
 
             const name: ?[]const u8 = tag_map.get(.name);
             const text: ?[]const u8 = tag_map.get(.text);
@@ -194,14 +194,14 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 .verb = .directive,
                 .noun = name orelse @panic("literal text not given for directive"),
                 .otherwise = .{ .literal = text orelse @panic("literal text not given for directive") },
-                .tag_block = tag_block,
+                .bytes = tag_block,
             };
         },
         .foreach,
         .split,
         .with,
-        => {
-            const end = switch (word) {
+        => |verb_tag| {
+            const end = switch (verb_tag) {
                 .foreach => calcBody("For", noun, blob) orelse return null,
                 .split => calcBody("Split", noun, blob) orelse return null,
                 .with => calcBody("With", noun, blob) orelse return null,
@@ -212,16 +212,16 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             if (noun[name_end - 1] == '/') name_end -= 1;
             const name = noun[1..name_end];
 
-            const tag_map = findAttrs(noun[1 + name.len ..]) catch return null;
+            const tag_map = Attributes.find(noun[1 + name.len ..]) catch return null;
             const exact: ?usize = if (tag_map.get(.exact)) |e| std.fmt.parseInt(usize, e, 10) catch null else null;
             const use: ?[]const u8 = tag_map.get(.use);
             const scope: []const u8 = tag_map.get(.scope) orelse "local";
 
             const body_start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
-            const body_end: usize = end - @as(usize, if (word == .foreach) 6 else if (word == .with) 7 else 0);
+            const body_end: usize = end - @as(usize, if (verb_tag == .foreach) 6 else if (verb_tag == .with) 7 else 0);
             const tag_block_body = blob[body_start..body_end];
             return .{
-                .verb = word,
+                .verb = verb_tag,
                 .noun = name,
                 .otherwise = if (exact != null and use != null)
                     @panic("use & exact not implemented")
@@ -231,14 +231,14 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                     .{ .template = template_data.findTemplate(u) }
                 else
                     .required,
-                .tag_block = blob[0..end],
-                .tag_block_body = tag_block_body,
-                .tag_block_skip = body_start,
+                .bytes = blob[0..end],
+                .block_body = tag_block_body,
+                .block_skip = body_start,
                 .scope = if (eql(u8, scope, "global")) .global else .local,
             };
         },
-        .@"switch", .case => {
-            const end = switch (word) {
+        .@"switch", .case => |verb_tag| {
+            const end = switch (verb_tag) {
                 .@"switch" => calcBody("Switch", noun, blob) orelse return null,
                 .case => calcBody("Case", noun, blob) orelse return null,
                 else => unreachable,
@@ -249,110 +249,112 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
             const name = noun[1..name_end];
 
             const body_start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
-            const body_end: usize = end - @as(usize, if (word == .@"switch")
+            const body_end: usize = end - @as(usize, if (verb_tag == .@"switch")
                 9
-            else if (word == .case)
+            else if (verb_tag == .case)
                 7
             else
                 0);
             const tag_block_body = blob[body_start..body_end];
             return .{
-                .verb = word,
+                .verb = verb_tag,
                 .noun = name,
                 .otherwise = .required,
-                .tag_block = blob[0..end],
-                .tag_block_body = tag_block_body,
-                .tag_block_skip = body_start,
+                .bytes = blob[0..end],
+                .block_body = tag_block_body,
+                .block_skip = body_start,
             };
         },
     }
 }
 
 fn findTag(blob: []const u8) ![]const u8 {
-    return blob[0 .. 1 + (findPos(u8, blob, 0, ">") orelse return error.TagInvalid)];
+    return blob[0 .. 1 + (findScalarPos(u8, blob, 0, '>') orelse return error.TagInvalid)];
 }
 
-pub const TagAttribute = enum {
-    /// adds the specified string to the generate enum
-    @"enum",
-    /// Provides default text for <Tags>
-    default,
-    /// Use a comptime known length and array
-    exact,
-    /// Used in <Directives>, specifies the name for the following tags
-    name,
-    /// Used in <Directives>, specifies the text returned for the given/active tag
-    text,
-    /// Use supported zig type
-    type,
-    /// Use a builtin template for the "body" of this tag
-    use,
-    /// Defines the scope for the tag body, either global or local
-    scope,
-};
+pub const Attributes = struct {
+    pub const Map = std.EnumMap(TagType, []const u8);
 
-pub const TagAttrMap = std.EnumMap(TagAttribute, []const u8);
+    pub const TagType = enum {
+        /// adds the specified string to the generate enum
+        @"enum",
+        /// Provides default text for <Tags>
+        default,
+        /// Use a comptime known length and array
+        exact,
+        /// Used in <Directives>, specifies the name for the following tags
+        name,
+        /// Used in <Directives>, specifies the text returned for the given/active tag
+        text,
+        /// Use supported zig type
+        type,
+        /// Use a builtin template for the "body" of this tag
+        use,
+        /// Defines the scope for the tag body, either global or local
+        scope,
+    };
 
-fn findAttrs(src_tag: []const u8) !TagAttrMap {
-    var map: TagAttrMap = .init(.{});
-    var tag = src_tag;
-    while (findScalarPos(u8, tag, 0, '=')) |eq_idx| {
-        const name = trim(u8, tag[0..eq_idx], whitespace);
-        var value = trim(u8, tag[eq_idx + 1 ..], whitespace);
+    pub fn find(src_tag: []const u8) !Map {
+        var map: Map = .init(.{});
+        var tag = src_tag;
+        while (findScalarPos(u8, tag, 0, '=')) |eq_idx| {
+            const name = trim(u8, tag[0..eq_idx], whitespace);
+            var value = trim(u8, tag[eq_idx + 1 ..], whitespace);
 
-        var end: usize = eq_idx + 1;
-        while (end < tag.len and isWhitespace(tag[end])) end += 1;
-        while (end < tag.len) {
-            // TODO rewrite with tagged switch syntax
-            switch (tag[end]) {
-                '\n', '\r', '\t', ' ' => end += 1,
-                '\'', '"' => |qut| {
-                    end += 1;
-                    while (end < tag.len and tag[end] != qut) end += 1;
-                    if (end == tag.len) return error.AttrInvalid;
-                    if (tag[end] != qut) return error.AttrInvalid else end += 1;
-                    value = trim(u8, tag[eq_idx + 1 .. end], whitespace);
-                    value = trim(u8, tag[eq_idx + 1 .. end], &[1]u8{qut});
+            var end: usize = eq_idx + 1;
+            while (end < tag.len and isWhitespace(tag[end])) end += 1;
+            while (end < tag.len) {
+                // TODO rewrite with tagged switch syntax
+                switch (tag[end]) {
+                    '\n', '\r', '\t', ' ' => end += 1,
+                    '\'', '"' => |qut| {
+                        end += 1;
+                        while (end < tag.len and tag[end] != qut) end += 1;
+                        if (end == tag.len) return error.AttrInvalid;
+                        if (tag[end] != qut) return error.AttrInvalid else end += 1;
+                        value = trim(u8, tag[eq_idx + 1 .. end], whitespace);
+                        value = trim(u8, tag[eq_idx + 1 .. end], &[1]u8{qut});
+                        break;
+                    },
+                    else => while (end < tag.len and !isWhitespace(tag[end])) : (end += 1) {},
+                }
+            }
+            tag = tag[end..];
+
+            const tag_attrs = @typeInfo(TagType).@"enum";
+            inline for (tag_attrs.field_names, tag_attrs.field_values) |n, v| {
+                if (eql(u8, n, name)) {
+                    map.put(@fromBackingInt(@intCast(v)), value);
                     break;
-                },
-                else => while (end < tag.len and !isWhitespace(tag[end])) : (end += 1) {},
-            }
+                }
+            } else @panic("unreachable name");
         }
-        tag = tag[end..];
-
-        const tag_attrs = @typeInfo(TagAttribute).@"enum";
-        inline for (tag_attrs.field_names, tag_attrs.field_values) |n, v| {
-            if (eql(u8, n, name)) {
-                map.put(@fromBackingInt(@intCast(v)), value);
-                break;
-            }
-        } else @panic("unreachable name");
+        return map;
     }
-    return map;
-}
 
-test findAttrs {
-    var map = try findAttrs("type=\"usize\"");
-    try std.testing.expectEqualStrings(map.get(.type).?, "usize");
-    map = try findAttrs("type=\"isize\"");
-    try std.testing.expectEqualStrings(map.get(.type).?, "isize");
-    map = try findAttrs("type=\"?usize\"");
-    try std.testing.expectEqualStrings(map.get(.type).?, "?usize");
-    map = try findAttrs("type=\"humanize\"");
-    try std.testing.expectEqualStrings(map.get(.type).?, "humanize");
-    map = try findAttrs("default=\"text\"");
-    try std.testing.expectEqualStrings(map.get(.default).?, "text");
-    map = try findAttrs("default=\"text\" />");
-    try std.testing.expectEqualStrings(map.get(.default).?, "text");
-    map = try findAttrs("default=\"t\" default=\"tx\" default=\"txt\" default=\"text\" />");
-    try std.testing.expectEqualStrings(map.get(.default).?, "text");
-    map = try findAttrs("name=\"txt\" default=\"default\" text=\"name\" enum=\"blerg\" />");
-    try std.testing.expectEqualStrings(map.get(.default).?, "default");
-    try std.testing.expectEqualStrings(map.get(.@"enum").?, "blerg");
-    // Yes, they're reversed intentionally
-    try std.testing.expectEqualStrings(map.get(.name).?, "txt");
-    try std.testing.expectEqualStrings(map.get(.text).?, "name");
-}
+    test find {
+        var map = try find("type=\"usize\"");
+        try std.testing.expectEqualStrings(map.get(.type).?, "usize");
+        map = try find("type=\"isize\"");
+        try std.testing.expectEqualStrings(map.get(.type).?, "isize");
+        map = try find("type=\"?usize\"");
+        try std.testing.expectEqualStrings(map.get(.type).?, "?usize");
+        map = try find("type=\"humanize\"");
+        try std.testing.expectEqualStrings(map.get(.type).?, "humanize");
+        map = try find("default=\"text\"");
+        try std.testing.expectEqualStrings(map.get(.default).?, "text");
+        map = try find("default=\"text\" />");
+        try std.testing.expectEqualStrings(map.get(.default).?, "text");
+        map = try find("default=\"t\" default=\"tx\" default=\"txt\" default=\"text\" />");
+        try std.testing.expectEqualStrings(map.get(.default).?, "text");
+        map = try find("name=\"txt\" default=\"default\" text=\"name\" enum=\"blerg\" />");
+        try std.testing.expectEqualStrings(map.get(.default).?, "default");
+        try std.testing.expectEqualStrings(map.get(.@"enum").?, "blerg");
+        // Yes, they're reversed intentionally
+        try std.testing.expectEqualStrings(map.get(.name).?, "txt");
+        try std.testing.expectEqualStrings(map.get(.text).?, "name");
+    }
+};
 
 fn validChar(c: u8) bool {
     return switch (c) {
@@ -434,7 +436,7 @@ pub fn formatTyped(d: Directive, comptime T: type, ctx: T, w: *std.Io.Writer) !v
         ?Abx => if (ctx) |c| try c.format(w),
         else => switch (d.verb) {
             .variable => {
-                if (d.html_type) |_| {
+                if (d.base_type) |_| {
                     var local: [0xff]u8 = undefined;
                     const realname = d.nameField(&local);
                     switch (@typeInfo(T)) {
@@ -621,21 +623,21 @@ pub const TypeFormatter = struct {
     pub fn format(f: TypeFormatter, w: *Writer) !void {
         const basic_type = f.default_str;
         switch (f.d.otherwise) {
-            .required => if (f.d.html_type) |ht|
+            .required => if (f.d.base_type) |ht|
                 try ht.format2(f.struct_name, w)
             else
                 try w.writeAll(basic_type),
             .exact => unreachable,
             .template => try w.print("?{s}", .{f.struct_name}),
-            .default => |default| if (f.d.html_type) |ht|
+            .default => |default| if (f.d.base_type) |ht|
                 try w.print("{f} = {s}", .{ ht, default })
             else
                 try w.print("{f}", .{f.d.fmtWithDefault(verse_buildopts.abx_required)}),
-            .delete => if (f.d.html_type) |ht|
+            .delete => if (f.d.base_type) |ht|
                 try w.print("{f}", .{ht})
             else
                 try w.print("?{s} = null", .{basic_type}),
-            .literal => if (f.d.html_type) |ht|
+            .literal => if (f.d.base_type) |ht|
                 try ht.format2(f.struct_name, w)
             else
                 try w.writeAll(f.struct_name),
@@ -668,6 +670,10 @@ pub const FormatDefault = struct {
         }
     }
 };
+
+test Directive {
+    _ = &Attributes;
+}
 
 const Template = @import("Template.zig");
 const Abx = @import("Antibiotic");

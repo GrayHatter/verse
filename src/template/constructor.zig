@@ -159,7 +159,7 @@ fn validateBlockSplit(
     if (ws_end > end) {
         return &[_]Offset{
             .{
-                .start = index + drct.tag_block.len,
+                .start = index + drct.bytes.len,
                 .end = index + ws_end,
                 .kind = .{ .component = .{
                     .data_offset = data_offset,
@@ -176,7 +176,7 @@ fn validateBlockSplit(
         };
     } else {
         return &[_]Offset{ .{
-            .start = index + drct.tag_block.len,
+            .start = index + drct.bytes.len,
             .end = index + end,
             .kind = .{ .component = .{
                 .kind = []const []const u8,
@@ -196,7 +196,7 @@ fn validateDirective(
 ) []const Offset {
     @setEvalBranchQuota(20000);
     const data_offset = getOffset(BlockType, drct.noun, base_offset);
-    const end = drct.tag_block.len;
+    const end = drct.bytes.len;
     switch (drct.verb) {
         .directive => return &.{},
         .variable => {
@@ -233,13 +233,13 @@ fn validateDirective(
                         },
                     },
                 }} ++ loop;
-            } else if (drct.tag_block_body) |body| {
+            } else if (drct.block_body) |body| {
                 // The code as written descends into the type. If the call stack flattens
                 // out, it might be better to calculate the offset from root.
                 const BaseT = baseType(BlockType, drct.noun);
                 const loop = validateBlock(body, BaseT, 0);
                 return &[_]Offset{.{
-                    .start = index + drct.tag_block_skip.?,
+                    .start = index + drct.block_skip.?,
                     .end = index + end,
                     .kind = .{
                         .component = .{
@@ -281,12 +281,12 @@ fn validateDirective(
             }} ++ loop;
         },
         .@"switch", .case => {
-            if (drct.tag_block_body) |body| {
+            if (drct.block_body) |body| {
                 const FieldT = fieldType(BlockType, drct.noun);
                 const BaseT = baseType(BlockType, drct.noun);
                 const loop = validateBlock(body, BaseT, 0);
                 return &[_]Offset{.{
-                    .start = index + drct.tag_block_skip.?,
+                    .start = index + drct.block_skip.?,
                     .end = index + end,
                     .kind = .{
                         .component = .{
@@ -321,7 +321,7 @@ pub fn validateBlock(comptime html: []const u8, BlockType: type, base_offset: us
                     .end = index,
                     .kind = .{ .slice = html[open_idx..index] },
                 }} ++ validateDirective(BlockType, index, drct, pblob, base_offset);
-                const end = drct.tag_block.len;
+                const end = drct.bytes.len;
                 pblob = pblob[end..];
                 index += end;
                 open_idx = index;
