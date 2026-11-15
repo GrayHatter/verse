@@ -112,14 +112,18 @@ pub fn core(srv: *Server, gpa: Allocator, io: Io) !void {
     var poller: Poller = .init();
     poller.pollfds[1] = .{ .fd = listener.socket.handle, .revents = 0, .events = std.math.maxInt(i16) };
     while (true) {
-        const ready = try poller.poll();
+        const ready = poller.poll() catch |e| switch (e) {
+            error.ExitSignal => {
+                if (poller.signal(io)) |siginfo|
+                    log.info("watched signal\n{any}", .{siginfo});
+                break;
+            },
+            error.SystemResources => return error.SystemResources,
+            error.Unexpected => return error.Unexpected,
+            error.SignalInterrupt => return error.SignalInterrupt,
+        };
         log.debug("poll {}", .{ready});
         if (ready > 0 and future_list.items.len < 20) {
-            if (poller.signal(io)) |siginfo| {
-                log.err("signal \n::{any}\n\n", .{siginfo});
-                break;
-            }
-
             if (try poller.next()) |_| {
                 log.debug("accept", .{});
                 const stream = try listener.accept(io);
@@ -128,13 +132,13 @@ pub fn core(srv: *Server, gpa: Allocator, io: Io) !void {
             }
         }
 
-        while (future_list.pop()) |future_| {
-            var future = future_;
+        while (future_list.pop()) |f| {
+            var future = f;
             future.await(io) catch |err| log.err("await error {}", .{err});
         }
     }
-    while (future_list.pop()) |future_| {
-        var future = future_;
+    while (future_list.pop()) |f| {
+        var future = f;
         _ = try future.await(io);
     }
     log.debug("closing, and cleaning up", .{});
@@ -206,6 +210,13 @@ const Poller = struct {
     sigset: SigSet = system.defaultSigSet(),
     sigfd: Io.File = undefined,
 
+    pub const PollError = error{
+        SystemResources,
+        Unexpected,
+        SignalInterrupt,
+        ExitSignal,
+    };
+
     pub const pollfd = system.pollfd;
     pub const SigSet = std.posix.sigset_t;
     pub const default_timeout: std.posix.timespec = .{ .sec = 10, .nsec = 100 * ns_per_ms };
@@ -231,16 +242,15 @@ const Poller = struct {
         const ready = system.ppoll(&poller.pollfds, &default_timeout, &poller.sigset) catch |err| {
             switch (err) {
                 error.SignalInterrupt => log.warn("signaled, cleaning up", .{}),
-                else => {},
+                else => return err,
             }
             return err;
         };
-        if (poller.pollfds[0].revents != 0) return error.Signaled;
+        if (poller.pollfds[0].revents != 0) return error.ExitSignal;
         return ready;
     }
 
     pub fn next(poller: *Poller) !?*pollfd {
-        //if (poller.pollfds[0].revents != 0) return error.Signaled;
         for (poller.pollfds[1..]) |*fd| {
             if (fd.revents != 0) {
                 defer fd.revents = 0;
@@ -253,14 +263,12 @@ const Poller = struct {
     pub fn signal(poller: *Poller, io: Io) ?system.signalfd_siginfo {
         if (poller.pollfds[0].revents == 0) return null;
         defer poller.pollfds[0].revents = 0;
-        log.err("signal", .{});
         var r_b: [@sizeOf(system.signalfd_siginfo)]u8 = undefined;
         var r = poller.sigfd.reader(io, &r_b);
         const siginfo: system.signalfd_siginfo = r.interface.takeStruct(
             system.signalfd_siginfo,
             system.endian,
         ) catch unreachable;
-        log.debug("siginfo {}\n\n\n", .{siginfo});
         return siginfo;
     }
 
