@@ -786,6 +786,11 @@ pub const FormatDefault = struct {
 
 test Directive {
     _ = &Attributes;
+    _ = &Otherwise;
+    _ = &BasicType;
+    _ = &Verb;
+    _ = &TypeFormatter;
+    _ = &FormatDefault;
 }
 
 const Template = @import("Template.zig");
