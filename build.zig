@@ -7,6 +7,10 @@ const zon: struct {
     minimum_zig_version: []const u8,
     dependencies: struct {},
     paths: []const []const u8,
+    srctree: struct {
+        ci: ?[]const u8 = null,
+        docs: ?[]const u8 = null,
+    },
 } = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) !void {
