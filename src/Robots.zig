@@ -340,7 +340,7 @@ pub const RobotsTxt = struct {
         try fr_resp.routeTo(match);
         try std.testing.expectEqual(1, fr_resp.call_count);
         const headers, const body = try fr_resp.splitContent();
-        try std.testing.expectEqualStrings("HTTP/1.1 200 OK\r\nServer: verse/0.1", headers[0..34]);
+        try std.testing.expectEqualStrings("HTTP/1.1 200 OK\r\nServer: verse/0.0", headers[0..34]);
         try std.testing.expect(endsWith(u8, headers, "Content-Type: text/plain\r\n"));
 
         try std.testing.expectEqualStrings(
@@ -374,7 +374,7 @@ pub const RobotsTxt = struct {
         try fr_resp.routeTo(match);
         try std.testing.expectEqual(1, fr_resp.call_count);
         const headers, const body = try fr_resp.splitContent();
-        try std.testing.expectEqualStrings("HTTP/1.1 200 OK\r\nServer: verse/0.1", headers[0..34]);
+        try std.testing.expectEqualStrings("HTTP/1.1 200 OK\r\nServer: verse/0.0", headers[0..34]);
         try std.testing.expect(endsWith(u8, headers, "Content-Type: text/plain\r\n"));
 
         try std.testing.expectEqualStrings(
@@ -422,7 +422,7 @@ pub const RobotsTxt = struct {
         try fr_resp.routeTo(match);
         try std.testing.expectEqual(1, fr_resp.call_count);
         const headers, const body = try fr_resp.splitContent();
-        try std.testing.expectEqualStrings("HTTP/1.1 200 OK\r\nServer: verse/0.1", headers[0..34]);
+        try std.testing.expectEqualStrings("HTTP/1.1 200 OK\r\nServer: verse/0.0", headers[0..34]);
         try std.testing.expect(endsWith(u8, headers, "Content-Type: text/plain\r\n"));
 
         try std.testing.expectEqualStrings(

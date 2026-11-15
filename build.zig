@@ -313,17 +313,8 @@ fn version(b: *std.Build) []const u8 {
 
     var git = std.mem.trim(u8, git_wide, " \r\n");
     if (git[0] == 'v') git = git[1..];
-    //std.debug.print("version {s}\n", .{git});
-
-    // semver is really dumb, so we need to increment this internally
-    var ver = std.SemanticVersion.parse(git) catch return zon.version ++ "-giterr";
-    if (ver.pre != null) {
-        ver.minor += 1;
-        ver.pre = std.fmt.allocPrint(b.allocator, "pre-{s}", .{ver.pre.?}) catch @panic("OOM");
-    }
-
+    const ver = std.SemanticVersion.parse(git) catch return zon.version;
     const final = std.fmt.allocPrint(b.allocator, "{f}", .{ver}) catch @panic("OOM");
-    //std.debug.print("version {s}\n", .{final});
     return final;
 }
 
