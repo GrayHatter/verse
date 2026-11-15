@@ -273,9 +273,9 @@ fn findTag(blob: []const u8) ![]const u8 {
 }
 
 pub const Attributes = struct {
-    pub const Map = std.EnumMap(TagType, []const u8);
+    pub const Map = std.EnumMap(Key, []const u8);
 
-    pub const TagType = enum {
+    pub const Key = enum {
         /// adds the specified string to the generate enum
         @"enum",
         /// Provides default text for <Tags>
@@ -292,66 +292,185 @@ pub const Attributes = struct {
         use,
         /// Defines the scope for the tag body, either global or local
         scope,
+
+        pub fn fromStr(str: []const u8) !Key {
+            const E = @typeInfo(Key).@"enum";
+            inline for (E.field_names, E.field_values) |name, val| {
+                if (eql(u8, name, str)) return @fromBackingInt(@intCast(val));
+            }
+            return error.InvalidKey;
+        }
     };
 
-    pub fn find(src_tag: []const u8) !Map {
+    const State = enum { start, skip, key, eql, val_raw, val_sqt, val_dqt, save };
+
+    pub fn find(tag: []const u8) !Map {
         var map: Map = .init(.{});
-        var tag = src_tag;
-        while (findScalarPos(u8, tag, 0, '=')) |eq_idx| {
-            const name = trim(u8, tag[0..eq_idx], whitespace);
-            var value = trim(u8, tag[eq_idx + 1 ..], whitespace);
-
-            var end: usize = eq_idx + 1;
-            while (end < tag.len and isWhitespace(tag[end])) end += 1;
-            while (end < tag.len) {
-                // TODO rewrite with tagged switch syntax
-                switch (tag[end]) {
-                    '\n', '\r', '\t', ' ' => end += 1,
-                    '\'', '"' => |qut| {
-                        end += 1;
-                        while (end < tag.len and tag[end] != qut) end += 1;
-                        if (end == tag.len) return error.AttrInvalid;
-                        if (tag[end] != qut) return error.AttrInvalid else end += 1;
-                        value = trim(u8, tag[eq_idx + 1 .. end], whitespace);
-                        value = trim(u8, tag[eq_idx + 1 .. end], &[1]u8{qut});
-                        break;
+        var idx: usize = 0;
+        //var end: usize = 0;
+        var key: ?Key = null;
+        var val: ?[]const u8 = null;
+        //const lowers = "abcdefghijklmnopqrstuvwxyz";
+        parse: switch (State.skip) {
+            .start => if (findScalarPos(u8, tag, idx, '=')) |_| {
+                while (idx < tag.len) switch (tag[idx]) {
+                    ' ' => idx += 1,
+                    'a'...'z' => continue :parse .key,
+                    else => continue :parse .skip,
+                } else break :parse;
+            } else break :parse,
+            .skip => while (idx < tag.len) switch (tag[idx]) {
+                'a'...'z' => continue :parse .start,
+                else => idx += 1,
+            },
+            .key => {
+                const start = idx;
+                while (idx < tag.len) switch (tag[idx]) {
+                    'a'...'z' => idx += 1,
+                    else => {
+                        key = try .fromStr(tag[start..idx]);
+                        if (tag[idx] != '=') idx += 1;
+                        continue :parse .eql;
                     },
-                    else => while (end < tag.len and !isWhitespace(tag[end])) : (end += 1) {},
+                } else break :parse; // = not found
+            },
+            .eql => while (idx + 1 < tag.len) switch (tag[idx]) {
+                ' ' => idx += 1,
+                '=' => {
+                    idx += 1;
+                    while (idx + 1 < tag.len) switch (tag[idx]) {
+                        ' ' => idx += 1,
+                        '"' => continue :parse .val_dqt,
+                        '\'' => continue :parse .val_sqt,
+                        '0'...'9', 'A'...'Z', 'a'...'z' => continue :parse .val_raw,
+                        else => return error.AttrParseError,
+                    };
+                },
+                else => return error.AttrParseError,
+            } else return error.AttrParseError,
+            .val_raw => {
+                const start = idx;
+                while (idx < tag.len) switch (tag[idx]) {
+                    'a'...'z', '-', '_', '.' => idx += 1,
+                    else => {
+                        val = tag[start..idx];
+                        continue :parse .save;
+                    },
+                } else {
+                    val = tag[start..idx];
+                    continue :parse .save;
                 }
-            }
-            tag = tag[end..];
-
-            const tag_attrs = @typeInfo(TagType).@"enum";
-            inline for (tag_attrs.field_names, tag_attrs.field_values) |n, v| {
-                if (eql(u8, n, name)) {
-                    map.put(@fromBackingInt(@intCast(v)), value);
-                    break;
-                }
-            } else @panic("unreachable name");
+            },
+            .val_sqt => {
+                idx += 1;
+                const start = idx;
+                while (idx < tag.len) switch (tag[idx]) {
+                    else => idx += 1,
+                    '\n' => return error.AttrParseError,
+                    '\'' => {
+                        if (tag[idx - 1] == '\\') return error.AttrParseErrorDetected;
+                        val = tag[start..idx];
+                        idx += 1;
+                        continue :parse .save;
+                    },
+                } else return error.AttrParseError;
+            },
+            .val_dqt => {
+                idx += 1;
+                const start = idx;
+                while (idx < tag.len) switch (tag[idx]) {
+                    else => idx += 1,
+                    '\n' => return error.AttrParseError,
+                    '"' => {
+                        if (tag[idx - 1] == '\\') return error.AttrParseErrorDetected;
+                        val = tag[start..idx];
+                        idx += 1;
+                        continue :parse .save;
+                    },
+                } else return error.AttrParseError;
+            },
+            .save => {
+                if (map.get(key.?)) |_| return error.DuplicateAttr;
+                map.put(key.?, val.?);
+                key = null;
+                val = null;
+                if (idx + 3 < tag.len) continue :parse .start;
+                break :parse;
+            },
         }
         return map;
     }
 
     test find {
-        var map = try find("type=\"usize\"");
+        var map = try find(
+            \\type=usize
+        );
         try std.testing.expectEqualStrings(map.get(.type).?, "usize");
-        map = try find("type=\"isize\"");
+
+        map = try find(
+            \\type="isize"
+        );
         try std.testing.expectEqualStrings(map.get(.type).?, "isize");
-        map = try find("type=\"?usize\"");
+
+        map = try find(
+            \\type="?usize"
+        );
         try std.testing.expectEqualStrings(map.get(.type).?, "?usize");
-        map = try find("type=\"humanize\"");
+
+        map = try find(
+            \\type="humanize" orelse
+        );
         try std.testing.expectEqualStrings(map.get(.type).?, "humanize");
-        map = try find("default=\"text\"");
+
+        map = try find(
+            \\default = custom
+        );
+        try std.testing.expectEqualStrings(map.get(.default).?, "custom");
+
+        map = try find(
+            \\default="text"
+        );
         try std.testing.expectEqualStrings(map.get(.default).?, "text");
-        map = try find("default=\"text\" />");
+
+        map = try find(
+            \\default="text" />
+        );
         try std.testing.expectEqualStrings(map.get(.default).?, "text");
-        map = try find("default=\"t\" default=\"tx\" default=\"txt\" default=\"text\" />");
-        try std.testing.expectEqualStrings(map.get(.default).?, "text");
-        map = try find("name=\"txt\" default=\"default\" text=\"name\" enum=\"blerg\" />");
+
+        const err = find(
+            \\default="t" default="tx" default="txt" default="text" />
+        );
+        try std.testing.expectError(error.DuplicateAttr, err);
+
+        map = try find(
+            \\name="txt" default="default" text="name" enum="blerg" />
+        );
         try std.testing.expectEqualStrings(map.get(.default).?, "default");
         try std.testing.expectEqualStrings(map.get(.@"enum").?, "blerg");
-        // Yes, they're reversed intentionally
         try std.testing.expectEqualStrings(map.get(.name).?, "txt");
+        try std.testing.expectEqualStrings(map.get(.text).?, "name");
+
+        map = try find(
+            \\ enum='bah!!' />
+        );
+        try std.testing.expectEqualStrings(map.get(.@"enum").?, "bah!!");
+        map = try find(
+            \\ text="name" enum='bah!!' />
+        );
+        try std.testing.expectEqualStrings(map.get(.@"enum").?, "bah!!");
+        try std.testing.expectEqualStrings(map.get(.text).?, "name");
+        map = try find(
+            \\ default=default text="name" enum='bah!!' />
+        );
+        try std.testing.expectEqualStrings(map.get(.default).?, "default");
+        try std.testing.expectEqualStrings(map.get(.@"enum").?, "bah!!");
+        try std.testing.expectEqualStrings(map.get(.text).?, "name");
+        map = try find(
+            \\name="'txt'" default=default text="name" enum='bah!!' />
+        );
+        try std.testing.expectEqualStrings(map.get(.default).?, "default");
+        try std.testing.expectEqualStrings(map.get(.@"enum").?, "bah!!");
+        try std.testing.expectEqualStrings(map.get(.name).?, "'txt'");
         try std.testing.expectEqualStrings(map.get(.text).?, "name");
     }
 };
