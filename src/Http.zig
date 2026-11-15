@@ -244,7 +244,7 @@ const Io = std.Io;
 const net = Io.net;
 const Stream = net.Stream;
 const IpAddress = net.IpAddress;
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse_http);
 const ns_per_ms = std.time.ns_per_ms;
 
 const system = @import("system.zig");

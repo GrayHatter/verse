@@ -418,4 +418,4 @@ const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Status = std.http.Status;
 const Writer = Io.Writer;
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse);

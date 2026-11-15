@@ -371,7 +371,7 @@ test {
 }
 
 const std = @import("std");
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse);
 
 const Templates = @import("../template.zig");
 const Template = Templates.Template;

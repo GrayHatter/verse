@@ -426,7 +426,7 @@ const Offset = constructor.Offset;
 
 const std = @import("std");
 const is_test = @import("builtin").is_test;
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse);
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 

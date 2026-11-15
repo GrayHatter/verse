@@ -58,4 +58,4 @@ const Allocator = std.mem.Allocator;
 const endsWith = std.mem.endsWith;
 const eql = std.mem.eql;
 const indexOfScalar = std.mem.indexOfScalar;
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse);

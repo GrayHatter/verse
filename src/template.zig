@@ -1073,6 +1073,6 @@ const endsWith = std.mem.endsWith;
 const indexOfScalar = std.mem.indexOfScalar;
 const findAnyPos = std.mem.findAnyPos;
 const allocPrint = std.fmt.allocPrint;
-const log = std.log.scoped(.Verse);
+const log = std.log.scoped(.verse);
 
 const build_mode = @import("builtin").mode;

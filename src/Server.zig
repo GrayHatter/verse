@@ -141,7 +141,7 @@ pub fn core(srv: *Server, gpa: Allocator, io: Io) !void {
         var future = f;
         _ = try future.await(io);
     }
-    log.debug("closing, and cleaning up", .{});
+    log.info("closing, and cleaning up", .{});
 }
 
 pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
