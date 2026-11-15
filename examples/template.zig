@@ -37,7 +37,7 @@ fn index(frame: *verse.Frame) Router.Error!void {
             .{ .color = "green", .text = "This color is green" },
             // The template system also provides a translation method if you
             // have an existing source struct you'd like to use.
-            .translate(BasicLoopSourceObject{ .color = "purple", .text = "This color is purple" }),
+            .translate(BasicLoopSourceObject, &.{ .color = "purple", .text = "This color is purple" }),
             // You can't provide an incompatible type trying to do so is a
             // compile error.
             //.translate(BasicLoopIncomplete{ .text = "The color field is missing!" }),

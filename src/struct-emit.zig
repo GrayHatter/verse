@@ -87,27 +87,23 @@ pub const AbstTree = struct {
     }
 };
 
-fn AutoTranslate(into: type) type {
+fn AutoTranslate(Into: type) type {
     return struct {
-        pub const Self = @This();
-        pub const To: type = into;
-
-        pub fn translate(from: anytype) To {
-            const From = @TypeOf(from);
-            var result: To = undefined;
-            const S = @typeInfo(Self).@"struct";
+        pub fn translate(From: type, from: *const From) Into {
+            var result: Into = undefined;
+            const S = @typeInfo(Into).@"struct";
             inline for (S.field_names) |name| {
                 if (!@hasField(From, name)) {
                     @compileError("Source struct " ++ @typeName(From) ++
                         " is missing required field '" ++ name ++
-                        "' while translating into " ++ @typeName(To));
+                        "' while translating into " ++ @typeName(Into));
                 }
                 @field(result, name) = @field(from, name);
             }
             return result;
         }
 
-        pub fn translateAlloc(a: std.mem.Allocator, from: anytype) !To {
+        pub fn translateAlloc(a: std.mem.Allocator, from: anytype) !Into {
             _ = a;
             _ = from;
             comptime unreachable; // TODO implement
@@ -155,35 +151,29 @@ pub fn main(init: std.process.Init) !void {
         \\const Humanize = @import("root").Humanize;
         \\const Markdown = unreachable;
         \\
-        \\fn AutoTranslate(into: type) type {
+        \\fn AutoTranslate(Into: type) type {
         \\    return struct {
-        \\        pub const Self = @This();
-        \\        pub const To: type = into;
-        \\
-        \\        pub fn translate(from: anytype) To {
-        \\            const From = @TypeOf(from);
-        \\            var result: To = undefined;
-        \\            const S = @typeInfo(Self).@"struct";
+        \\        pub fn translate(From: type, from: *const From) Into {
+        \\            var result: Into = undefined;
+        \\            const S = @typeInfo(Into).@"struct";
         \\            inline for (S.field_names) |name| {
         \\                if (!@hasField(From, name)) {
         \\                    @compileError("Source struct " ++ @typeName(From) ++
         \\                        " is missing required field '" ++ name ++
-        \\                        "' while translating into " ++ @typeName(To));
+        \\                        "' while translating into " ++ @typeName(Into));
         \\                }
         \\                @field(result, name) = @field(from, name);
         \\            }
         \\            return result;
         \\        }
         \\
-        \\        pub fn translateAlloc(a: std.mem.Allocator, from: anytype) !To {
+        \\        pub fn translateAlloc(a: std.mem.Allocator, from: anytype) !Into {
         \\            _ = a;
         \\            _ = from;
         \\            comptime unreachable; // TODO implement
         \\        }
         \\    };
         \\}
-        \\
-        \\
     );
 
     for (compiled.data) |tplt| {
