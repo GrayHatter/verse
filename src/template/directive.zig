@@ -491,7 +491,7 @@ fn calcBody(comptime keyword: []const u8, noun: []const u8, blob: []const u8) ?u
         else => return null,
     }
 
-    var start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
+    var start = 1 + (findScalarPos(u8, blob, 0, '>') orelse return null);
     var close_pos: usize = findPosLinear(u8, blob, 0, close_tag) orelse return null;
     // count is not comptime compliant while it uses findPos increasing
     // backward branches. I've raised the quota, but complicated templates might
@@ -505,9 +505,6 @@ fn calcBody(comptime keyword: []const u8, noun: []const u8, blob: []const u8) ?u
 
     const end = close_pos + close_tag.len;
     while (start < end and isWhitespace(blob[start])) : (start +|= 1) {}
-
-    //while (endws > start and isWhitespace(blob[endws])) : (endws -|= 1) {}
-    //endws += 1;
 
     var width: usize = 1;
     while (width < noun.len and validChar(noun[width])) {
@@ -806,9 +803,7 @@ const findPosLinear = std.mem.findPosLinear;
 const findAnyPos = std.mem.findAnyPos;
 const findScalarPos = std.mem.findScalarPos;
 const count = std.mem.count;
-const trim = std.mem.trim;
 const isUpper = std.ascii.isUpper;
-const whitespace = std.ascii.whitespace[0..];
 const isWhitespace = std.ascii.isWhitespace;
 
 const template_data = @import("builtins.zig");
