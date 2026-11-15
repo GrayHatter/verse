@@ -307,10 +307,8 @@ pub const Attributes = struct {
     pub fn find(tag: []const u8) !Map {
         var map: Map = .init(.{});
         var idx: usize = 0;
-        //var end: usize = 0;
         var key: ?Key = null;
         var val: ?[]const u8 = null;
-        //const lowers = "abcdefghijklmnopqrstuvwxyz";
         parse: switch (State.skip) {
             .start => if (findScalarPos(u8, tag, idx, '=')) |_| {
                 while (idx < tag.len) switch (tag[idx]) {
@@ -322,7 +320,7 @@ pub const Attributes = struct {
             .skip => while (idx < tag.len) switch (tag[idx]) {
                 'a'...'z' => continue :parse .start,
                 else => idx += 1,
-            },
+            } else break :parse,
             .key => {
                 const start = idx;
                 while (idx < tag.len) switch (tag[idx]) {
@@ -351,15 +349,11 @@ pub const Attributes = struct {
             .val_raw => {
                 const start = idx;
                 while (idx < tag.len) switch (tag[idx]) {
-                    'a'...'z', '-', '_', '.' => idx += 1,
-                    else => {
-                        val = tag[start..idx];
-                        continue :parse .save;
-                    },
-                } else {
-                    val = tag[start..idx];
-                    continue :parse .save;
-                }
+                    '0'...'9', '?'...'Z', 'a'...'z', '#'...'&', '_', '.', '-' => idx += 1,
+                    else => break,
+                };
+                val = tag[start..idx];
+                continue :parse .save;
             },
             .val_sqt => {
                 idx += 1;
