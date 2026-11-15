@@ -1,5 +1,5 @@
 /// Default CookieAuth Helper uses Sha256 as the HMAC primitive.
-pub const Cookie = CookieAuth(Hmac.sha2.HmacSha256);
+pub const Default = CookieAuth(Hmac.sha2.HmacSha256);
 
 pub const cookie_auth = struct {
     // Why are you using sha1?
@@ -24,8 +24,8 @@ pub fn CookieAuth(HMAC: type) type {
         auth: Auth = .{
             .vtable = &.{
                 .authenticate = authenticate,
-                .valid = valid,
-                .lookupUser = lookupUser,
+                .valid = null,
+                .lookupUser = null,
                 .createSession = createSession,
                 .getUserCookie = getCookie,
                 .getUserToken = getToken,
@@ -39,6 +39,7 @@ pub fn CookieAuth(HMAC: type) type {
         /// this session buffer API is unstable and may be replaced
         session_buffer: [ibuf_size]u8 = @splat(0),
         alloc: ?Allocator,
+
         const ibuf_size = b64_enc.calcSize(HMAC.mac_length * 8);
 
         pub const Self = @This();
@@ -65,24 +66,29 @@ pub fn CookieAuth(HMAC: type) type {
             }
         };
 
+        /// Helper to create a complet Auth with cookie defaults allowing override
+        pub fn vtable(comptime vt: *const Auth.VTable) Auth {
+            return .{
+                .vtable = &.{
+                    .authenticate = vt.authenticate orelse authenticate,
+                    .valid = vt.valid,
+                    .lookupUser = vt.lookupUser,
+                    .createSession = vt.createSession orelse createSession,
+                    .getUserCookie = vt.getUserCookie orelse getCookie,
+                    .getUserToken = vt.getUserToken orelse getToken,
+                },
+            };
+        }
+
         pub fn init(opts: struct {
             server_secret_key: []const u8,
+            auth: Auth,
             alloc: ?Allocator = null,
-            auth: Auth = .{
-                .vtable = &.{
-                    .authenticate = authenticate,
-                    .valid = valid,
-                    .lookupUser = lookupUser,
-                    .createSession = createSession,
-                    .getUserCookie = getCookie,
-                    .getUserToken = getToken,
-                },
-            },
             max_age: Duration = .fromSeconds(86400 * 365),
             cookie_name: []const u8 = "verse_session_secret",
         }) Self {
             return .{
-                .auth = opts.auth,
+                .auth = .{ .vtable = opts.auth.vtable },
                 .server_secret_key = opts.server_secret_key,
                 .alloc = opts.alloc,
                 .max_age = opts.max_age,
@@ -159,9 +165,6 @@ pub fn CookieAuth(HMAC: type) type {
             return error.UnknownUser;
         }
 
-        pub const valid = null;
-        pub const lookupUser = null;
-
         pub fn getToken(ptr: *Auth, user: User, now: Timestamp) Error![]const u8 {
             const cook_auth: *align(4) Self = @fieldParentPtr("auth", ptr);
 
@@ -233,11 +236,12 @@ pub fn CookieAuth(HMAC: type) type {
     };
 }
 
-test Cookie {
+test Default {
     const a = std.testing.allocator;
     const now: Timestamp = Clock.real.now(std.testing.io);
-    var ath = Cookie.init(.{
+    var ath = Default.init(.{
         .alloc = a,
+        .auth = Default.vtable(.empty),
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
 
@@ -265,8 +269,9 @@ test "Cookie ExtraData" {
     const a = std.testing.allocator;
     const now: Timestamp = Clock.real.now(std.testing.io);
 
-    var ath = Cookie.init(.{
+    var ath = Default.init(.{
         .alloc = a,
+        .auth = Default.vtable(.empty),
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
 
@@ -296,8 +301,9 @@ test "Cookie ExtraData" {
 test "Cookie token" {
     const a = std.testing.allocator;
     const now: Timestamp = Clock.real.now(std.testing.io);
-    var ath = Cookie.init(.{
+    var ath = Default.init(.{
         .alloc = a,
+        .auth = Default.vtable(.empty),
         .server_secret_key = "This may surprise you; but this secret_key is more secure than most of the secret keys in prod use",
     });
 
@@ -313,11 +319,11 @@ test "Cookie token" {
 
     var uid_buf: [64]u8 = undefined;
     var hm = Hmac.sha2.HmacSha256.init(ath.server_secret_key);
-    const valid = try Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, .fromSeconds(2));
+    const valid = try Default.validateToken(&hm, cookie.?.value, uid_buf[0..], now, .fromSeconds(2));
     try std.testing.expectEqualStrings(user.unique_id.?, valid);
 
     hm = Hmac.sha2.HmacSha256.init(ath.server_secret_key);
-    const expired = Cookie.validateToken(&hm, cookie.?.value, uid_buf[0..], now, .fromSeconds(-100));
+    const expired = Default.validateToken(&hm, cookie.?.value, uid_buf[0..], now, .fromSeconds(-100));
     try std.testing.expectError(error.TokenExpired, expired);
 }
 

@@ -18,6 +18,7 @@ pub fn main(init: std.process.Init) !void {
 
     var server = try verse.Server.init(&routes, .default);
 
+    std.debug.print("Starting server on http://127.0.0.1:8080/\n", .{});
     server.serve(alloc) catch |err| {
         std.debug.print("error: {any}", .{err});
         std.process.exit(1);

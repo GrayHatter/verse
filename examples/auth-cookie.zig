@@ -4,16 +4,14 @@
 /// To use Cookie auth provider in verse, you only need to supply it a Provider
 /// that can do user lookups.
 const UserFinder = struct {
-    auth: verse.Auth = .{
-        .vtable = &.{
-            .lookupUser = lookupUser,
-            .authenticate = null,
-            .valid = null,
-            .createSession = null,
-            .getUserCookie = null,
-            .getUserToken = null,
-        },
-    },
+    auth: verse.Auth = verse.Auth.Cookie.vtable(&.{
+        .lookupUser = lookupUser,
+        .valid = null,
+        .authenticate = null,
+        .createSession = null,
+        .getUserCookie = null,
+        .getUserToken = null,
+    }),
 
     /// The unique user identifier is named `username` here. But if usernames
     /// are mutable, it may be better to use an identifier that doesn't change
@@ -54,6 +52,8 @@ pub fn main() !void {
     });
 
     // Step 2: Start a normal Verse Server with an authentication Provider
+    std.debug.print("Starting server on http://127.0.0.1:8089/\n", .{});
+    std.debug.print("     You can visit http://127.0.0.1:8089/create to \"login\".\n", .{});
     var server = try verse.Server.init(&routes, .{
         .mode = .{ .http = .localPort(8089) },
         .auth = &cookie_auth.auth,
@@ -67,7 +67,7 @@ pub fn main() !void {
 
 /// The index page will provide some details about the cookie & auth state
 fn index(frame: *Frame) Router.Error!void {
-    var buffer: [0xffffff]u8 = undefined;
+    var buffer: [0xffff]u8 = undefined;
     const html =
         \\<!DOCTYPE html>
         \\<head><title>Cookie Auth Example</title>
@@ -124,5 +124,4 @@ const verse = @import("verse");
 const Router = verse.Router;
 const Frame = verse.Frame;
 const BuildFn = Router.BuildFn;
-const Cookie = verse.Cookie;
 const print = std.fmt.bufPrint;

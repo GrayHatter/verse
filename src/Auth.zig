@@ -12,7 +12,8 @@
 
 vtable: *const VTable,
 
-pub const Cookie = cookie.Cookie;
+pub const cookie = @import("Auth/cookie.zig");
+pub const Cookie = cookie.Default;
 pub const Mtls = @import("Auth/mtls.zig");
 pub const User = @import("Auth/User.zig");
 
@@ -233,7 +234,6 @@ const Timestamp = std.Io.Timestamp;
 
 const Headers = @import("Headers.zig");
 const RequestCookie = @import("cookies.zig").Cookie;
-const cookie = @import("Auth/cookie.zig");
 
 // Verse.Auth attempts to provide strong security guarantees where reasonable
 // e.g. std.mem.eql faster, but doesn't work in constant time. In an effort to

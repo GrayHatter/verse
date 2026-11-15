@@ -18,6 +18,7 @@ const Endpoints = verse.Endpoints(.{
 });
 
 pub fn main() !void {
+    std.debug.print("Starting server on http://127.0.0.1:8084/\n", .{});
     Endpoints.serve(
         std.heap.page_allocator,
         .{
