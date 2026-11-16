@@ -64,6 +64,8 @@ pub const Verb = enum {
             return .@"switch";
         } else if (eql(u8, str, "Case")) {
             return .case;
+        } else if (eql(u8, str, "Variable")) {
+            return .variable;
         } else return null;
     }
 };
@@ -126,102 +128,88 @@ pub const Scope = enum {
     global,
 };
 
-pub fn init(str: []const u8) ?Directive {
-    if (str.len < 2) return null;
-    if (!isUpper(str[1]) and str[1] != '_') return null;
-    const tag = findTag(str) catch return null;
-    const verb = tag[1 .. findAnyPos(u8, tag, 1, " /") orelse tag.len - 1];
-
-    if (verb.len == tag.len - 2) {
-        if (initNoun(verb, tag)) |noun| {
-            return noun;
-        } else unreachable;
-    }
-
-    const noun = tag[verb.len + 1 .. tag.len - 1];
-
-    return initVerb(verb, noun, str) orelse initNoun(verb, tag);
-}
-
-fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
-    if (noun[0] == '_') @panic("Template Directives must not start with _");
-    const tag_map = Attributes.find(tag[noun.len + 1 .. tag.len - 1]) catch return null;
-    const otherwise: Otherwise = .fromTag(tag, &tag_map);
-    const base: ?BasicType = if (tag_map.get(.type)) |str|
-        BasicType.fromStr(str) catch null
-    else
-        null;
-
-    return .{
-        .verb = .variable,
-        .noun = noun,
-        .otherwise = otherwise,
-        .base_type = base,
-        .bytes = tag,
-    };
-}
-
 pub const TemplateDirective = struct {};
 
-pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive {
-    switch (Verb.fromStr(verb) orelse return null) {
-        .variable => unreachable,
+pub fn init(str: []const u8) ?Directive {
+    // Single char vars require a trailing `/` e.g. `<I />`
+    if (str.len < 4) return null;
+    if (str[0] != '<') return null;
+    if (!isUpper(str[1]) and str[1] != '_') return null;
+
+    var verb_str: []const u8 = &.{};
+    var idx: usize = 2;
+    while (idx < str.len) switch (str[idx]) {
+        'A'...'Z', 'a'...'z' => idx += 1,
+        '>' => return initNoun(str[1..idx], str[0 .. idx + 1]),
+        '/', ' ' => if (str.len > idx and str[idx + 1] == '>')
+            return initNoun(str[1..idx], str[0 .. idx + 2])
+        else if (str.len > idx + 1 and str[idx + 1] == '/' and str[idx + 2] == '>')
+            return initNoun(str[1..idx], str[0 .. idx + 3])
+        else {
+            verb_str = str[1..idx];
+            break;
+        },
+        else => return null,
+    };
+
+    const tag = findTag(str) catch return null;
+    const noun = tag[idx + 1 .. tag.len - 1];
+    const verb: Verb = Verb.fromStr(verb_str) orelse return initNoun(verb_str, tag);
+
+    // todo doesn't work with weird attrs
+    return initVerb(verb, noun, str);
+}
+
+pub fn initVerb(verb: Verb, noun: []const u8, blob: []const u8) ?Directive {
+    const verb_len = @tagName(verb).len;
+    switch (verb) {
+        .variable => return initNoun(noun, blob),
         .build => {
-            const b_noun = noun[1..(findScalarPos(u8, noun, 1, ' ') orelse return null)];
-            const tail = noun[b_noun.len + 1 ..];
-            const b_html = tail[1..(findScalarPos(u8, tail, 2, ' ') orelse return null)];
+            const name = noun[0..(findScalarPos(u8, noun, 1, ' ') orelse return null)];
+            const tail = noun[name.len + 1 ..];
+            const html = tail[0..(findScalarPos(u8, tail, 2, ' ') orelse return null)];
             return .{
                 .verb = .build,
-                .noun = b_noun,
-                .otherwise = .{ .template = template_data.findTemplate(b_html) },
-                .bytes = blob[0 .. verb.len + 2 + noun.len],
+                .noun = name,
+                .otherwise = .{ .template = template_data.findTemplate(html) },
+                .bytes = blob[0 .. verb_len + 2 + noun.len],
             };
         },
         .directive => {
-            const end = calcBody("Directive", noun, blob) orelse return null;
-            const body_end: usize = end;
-            const tag_block_body = blob[0..body_end];
-            var end_idx: usize = verb.len + 2 + noun.len;
-            while (end_idx < blob.len and (blob[end_idx] == ' ' or blob[end_idx] == '\n')) end_idx += 1;
-            const tag_block = blob[0..end_idx];
-
-            const tag_map = Attributes.find(tag_block_body["<Directive ".len..body_end]) catch return null;
-
+            // BUG doesn't allow for trailing ws before the \n
+            const tag = blob[0 .. 4 + (findPos(u8, blob, 11, " />\n") orelse return null)];
+            const tag_map = Attributes.find(tag["<Directive ".len .. tag.len - 4]) catch return null;
             const name: ?[]const u8 = tag_map.get(.name);
             const text: ?[]const u8 = tag_map.get(.text);
-
             return Directive{
                 .verb = .directive,
                 .noun = name orelse @panic("literal text not given for directive"),
                 .otherwise = .{ .literal = text orelse @panic("literal text not given for directive") },
-                .bytes = tag_block,
+                .bytes = tag,
             };
         },
         .foreach,
         .split,
         .with,
-        => |verb_tag| {
-            const end = switch (verb_tag) {
+        => {
+            const end = switch (verb) {
                 .foreach => calcBody("For", noun, blob) orelse return null,
                 .split => calcBody("Split", noun, blob) orelse return null,
                 .with => calcBody("With", noun, blob) orelse return null,
                 else => unreachable,
             };
 
-            var name_end = (findAnyPos(u8, noun, 1, " >") orelse noun.len);
-            if (noun[name_end - 1] == '/') name_end -= 1;
-            const name = noun[1..name_end];
-
-            const tag_map = Attributes.find(noun[1 + name.len ..]) catch return null;
+            const name = noun[0..(findAnyPos(u8, noun, 1, " >") orelse noun.len)];
+            const tag_map = Attributes.find(noun[name.len..]) catch return null;
             const exact: ?usize = if (tag_map.get(.exact)) |e| std.fmt.parseInt(usize, e, 10) catch null else null;
             const use: ?[]const u8 = tag_map.get(.use);
             const scope: []const u8 = tag_map.get(.scope) orelse "local";
 
-            const body_start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
-            const body_end: usize = end - @as(usize, if (verb_tag == .foreach) 6 else if (verb_tag == .with) 7 else 0);
+            const body_start = 1 + (findScalarPos(u8, blob, 0, '>') orelse return null);
+            const body_end: usize = end - @as(usize, if (verb == .foreach) 6 else if (verb == .with) 7 else 0);
             const tag_block_body = blob[body_start..body_end];
             return .{
-                .verb = verb_tag,
+                .verb = verb,
                 .noun = name,
                 .otherwise = if (exact != null and use != null)
                     @panic("use & exact not implemented")
@@ -244,9 +232,7 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
                 else => unreachable,
             };
 
-            const name_end = (findAnyPos(u8, noun, 1, " >") orelse noun.len);
-            if (noun[name_end - 1] == '/') unreachable;
-            const name = noun[1..name_end];
+            const name = noun[0..(findAnyPos(u8, noun, 1, " >") orelse noun.len)];
 
             const body_start = 1 + (findPosLinear(u8, blob, 0, ">") orelse return null);
             const body_end: usize = end - @as(usize, if (verb_tag == .@"switch")
@@ -268,8 +254,30 @@ pub fn initVerb(verb: []const u8, noun: []const u8, blob: []const u8) ?Directive
     }
 }
 
-fn findTag(blob: []const u8) ![]const u8 {
-    return blob[0 .. 1 + (findScalarPos(u8, blob, 0, '>') orelse return error.TagInvalid)];
+fn initNoun(noun: []const u8, tag: []const u8) ?Directive {
+    if (noun[0] == '_') @panic("Template Directives must not start with _");
+    const tag_map = Attributes.find(tag[noun.len + 1 .. tag.len - 1]) catch return null;
+    const otherwise: Otherwise = .fromTag(tag, &tag_map);
+    const base: ?BasicType = if (tag_map.get(.type)) |str|
+        BasicType.fromStr(str) catch null
+    else
+        null;
+
+    return .{
+        .verb = .variable,
+        .noun = noun,
+        .otherwise = otherwise,
+        .base_type = base,
+        .bytes = tag,
+    };
+}
+
+fn findTag(tag: []const u8) ![]const u8 {
+    std.debug.assert(tag.len > 3);
+    std.debug.assert(tag[0] == '<');
+    if (findScalarPos(u8, tag, 0, '>')) |i| {
+        return tag[0 .. i + 1];
+    } else return error.TagInvalid;
 }
 
 pub const Attributes = struct {
@@ -788,6 +796,55 @@ test Directive {
     _ = &Verb;
     _ = &TypeFormatter;
     _ = &FormatDefault;
+
+    {
+        const tag_str =
+            \\<Name>
+        ;
+        const d = Directive.init(tag_str).?;
+
+        try std.testing.expectEqualDeep(Directive{
+            .verb = .variable,
+            .noun = "Name",
+            .otherwise = .required,
+            .bytes = tag_str,
+            .block_body = null,
+            .block_skip = null,
+            .scope = .local,
+        }, d);
+    }
+    {
+        const tag_str =
+            \\<Name />
+        ;
+        const d = Directive.init(tag_str).?;
+
+        try std.testing.expectEqualDeep(Directive{
+            .verb = .variable,
+            .noun = "Name",
+            .otherwise = .required,
+            .bytes = tag_str,
+            .block_body = null,
+            .block_skip = null,
+            .scope = .local,
+        }, d);
+    }
+    {
+        const tag_str =
+            \\<Variable Name>
+        ;
+        const d = Directive.init(tag_str).?;
+
+        try std.testing.expectEqualDeep(Directive{
+            .verb = .variable,
+            .noun = "Name",
+            .otherwise = .required,
+            .bytes = tag_str,
+            .block_body = null,
+            .block_skip = null,
+            .scope = .local,
+        }, d);
+    }
 }
 
 const Template = @import("Template.zig");
@@ -799,12 +856,14 @@ const Writer = std.Io.Writer;
 const eql = std.mem.eql;
 const startsWith = std.mem.startsWith;
 const findPos = std.mem.findPos;
+const cutScalar = std.mem.cutScalar;
 const findPosLinear = std.mem.findPosLinear;
 const findAnyPos = std.mem.findAnyPos;
 const findScalarPos = std.mem.findScalarPos;
 const count = std.mem.count;
 const isUpper = std.ascii.isUpper;
 const isWhitespace = std.ascii.isWhitespace;
+const trim = std.mem.trim;
 
 const template_data = @import("builtins.zig");
 const verse_buildopts = @import("verse_buildopts");
