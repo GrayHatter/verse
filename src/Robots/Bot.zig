@@ -60,6 +60,8 @@ pub const Name = enum {
     /// LLM model scraping bot
     /// agressive
     claudebot,
+    /// AI search bot
+    crolbot,
     /// Closed SEO bot
     dataforseobot,
     /// Closed SEO bot
@@ -154,6 +156,7 @@ pub const Name = enum {
             .ccbot => false,
             .claude_searchbot => true,
             .claudebot => true,
+            .crolbot => false,
             .dataforseobot => false,
             .discordbot => false,
             .dotbot => false,
@@ -203,6 +206,7 @@ pub const Name = enum {
             .ccbot => false,
             .claude_searchbot => true,
             .claudebot => false,
+            .crolbot => false,
             .dataforseobot => true,
             .dotbot => true,
             .duckduckbot => true,
@@ -254,6 +258,7 @@ pub const Name = enum {
             .ccbot => true,
             .claude_searchbot => true,
             .claudebot => true,
+            .crolbot => true,
             .dataforseobot => false,
             .discordbot => false,
             .dotbot => true,
@@ -304,6 +309,7 @@ pub const Name = enum {
             .ccbot => "CCBot",
             .claude_searchbot => "Claude-SearchBot",
             .claudebot => "ClaudeBot",
+            .crolbot => "CrolBot",
             .dataforseobot => "DataForSeoBot",
             .dotbot => "DotBot",
             .duckduckbot => "DuckDuckBot",
@@ -354,6 +360,7 @@ pub const Name = enum {
             .ccbot => false, // TODO
             .claude_searchbot => false,
             .claudebot => false,
+            .crolbot => true, // TODO
             .dataforseobot => false, // TODO
             .dotbot => false, // TODO
             .duckduckbot => false, // TODO
@@ -401,6 +408,7 @@ pub const Name = enum {
             .ccbot => null, // TODO
             .claude_searchbot => "Claude-SearchBot/",
             .claudebot => "ClaudeBot/",
+            .crolbot => "CrolBot/",
             .dataforseobot => null, // TODO
             .discordbot => "Discordbot/",
             .dotbot => null, // TODO
@@ -451,6 +459,7 @@ pub const Name = enum {
             .ccbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .claude_searchbot => endsWith(u8, str, "compatible; Claude-SearchBot/1.0; +claudebot@anthropic.com)"),
             .claudebot => endsWith(u8, str, "compatible; ClaudeBot/1.0; +claudebot@anthropic.com)"),
+            .crolbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .dataforseobot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .discordbot => eql(u8, str, "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"),
             .dotbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
@@ -625,6 +634,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .ccbot, .network = null },
         .{ .bot = .claude_searchbot, .network = null },
         .{ .bot = .claudebot, .network = null },
+        .{ .bot = .crolbot, .network = null },
         .{ .bot = .dataforseobot, .network = null },
         .{ .bot = .discordbot, .network = .cloud_gcp },
         .{ .bot = .dotbot, .network = null },
