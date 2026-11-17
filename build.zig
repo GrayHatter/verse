@@ -105,15 +105,15 @@ pub fn build(b: *std.Build) !void {
     verse_lib.addImport("comptime_structs", comptime_structs);
     verse_lib.addImport("comptime_templates", comptime_templates);
 
-    const lib_tests = b.addTest(.{
+    const verse_tests = b.addTest(.{
         .root_module = verse_lib,
         .use_llvm = use_llvm,
         .use_lld = use_llvm,
     });
-    lib_tests.root_module.addOptions("verse_buildopts", options);
-    lib_tests.root_module.addImport("comptime_templates", comptime_templates);
-    lib_tests.root_module.addImport("comptime_structs", comptime_structs);
-    const run_lib_tests = b.addRunArtifact(lib_tests);
+    verse_tests.root_module.addOptions("verse_buildopts", options);
+    verse_tests.root_module.addImport("comptime_templates", comptime_templates);
+    verse_tests.root_module.addImport("comptime_structs", comptime_structs);
+    const verse_tests_run = b.addRunArtifact(verse_tests);
 
     const abx_tests = b.addTest(.{
         .root_module = abx,
@@ -122,11 +122,13 @@ pub fn build(b: *std.Build) !void {
     });
     const abx_tests_run = b.addRunArtifact(abx_tests);
 
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_tests.step);
+    const test_step = b.step("test", "Run unit tests [excludes examples]");
+    test_step.dependOn(&verse_tests_run.step);
     test_step.dependOn(&abx_tests_run.step);
-    const quick_test_step = b.step("quicktest", "Run unit tests only [exclude examples]");
-    quick_test_step.dependOn(&run_lib_tests.step);
+
+    const test_all_step = b.step("test-all", "Run all tests [including examples]");
+    test_all_step.dependOn(&verse_tests_run.step);
+    test_all_step.dependOn(&abx_tests_run.step);
 
     const docs = b.addObject(.{ .name = "verse", .root_module = verse_lib });
     const install_docs = b.addInstallDirectory(.{
@@ -155,7 +157,7 @@ pub fn build(b: *std.Build) !void {
             .use_lld = use_llvm,
         });
         // All Examples should compile for tests to pass
-        test_step.dependOn(&example_exe.step);
+        test_all_step.dependOn(&example_exe.step);
 
         // There's probably a better way to test the endpoint smokeTest api but...
         if (std.mem.eql(u8, example, "endpoint")) {
@@ -164,7 +166,7 @@ pub fn build(b: *std.Build) !void {
                 .use_llvm = use_llvm,
                 .use_lld = use_llvm,
             });
-            test_step.dependOn(&endpoint_example_tests.step);
+            test_all_step.dependOn(&endpoint_example_tests.step);
         }
 
         example_exe.root_module.addImport("verse", verse_lib);
