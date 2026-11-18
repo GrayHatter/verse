@@ -106,6 +106,9 @@ pub const Name = enum {
     metaexternalagent,
     // uh...?
     mj12bot,
+    /// Open source engine and crawler https://github.com/mwmbl/mwmbl/
+    /// mostly AI slop
+    mwmbl,
     /// AI answer scraper
     /// persistent
     oai_searchbot,
@@ -173,6 +176,7 @@ pub const Name = enum {
             .lounge_irc_client => false,
             .metaexternalagent => true, // buggy crawler that can't behave
             .mj12bot => true,
+            .mwmbl => false,
             .oai_searchbot => false,
             .other_malicious => true,
             .perplexitybot => false,
@@ -221,6 +225,7 @@ pub const Name = enum {
             .keenablebot => false,
             .metaexternalagent => false, // buggy crawler that can't behave
             .mj12bot => true,
+            .mwmbl => false,
             .oai_searchbot => false,
             .perplexitybot => false,
             .reflectionbot => false, // sends broken data
@@ -275,6 +280,7 @@ pub const Name = enum {
             .lounge_irc_client => false,
             .metaexternalagent => true, // buggy crawler that can't behave
             .mj12bot => true,
+            .mwmbl => false,
             .oai_searchbot => true,
             .other_malicious => true,
             .perplexitybot => true,
@@ -324,6 +330,7 @@ pub const Name = enum {
             .keenablebot => "KeenableBot",
             .metaexternalagent => "meta-externalagent",
             .mj12bot => "MJ12bot",
+            .mwmbl => "mwmbl", // guess
             .oai_searchbot => "OAI-SearchBot",
             .perplexitybot => "PerplexityBot",
             .reflectionbot => "Reflectionbot",
@@ -373,6 +380,7 @@ pub const Name = enum {
             .keenablebot => false, // ignores robots.txt
             .metaexternalagent => false,
             .mj12bot => false, // TODO
+            .mwmbl => false, // TODO
             .oai_searchbot => false, // TODO
             .other_malicious => false,
             .other_malicious => false,
@@ -425,6 +433,7 @@ pub const Name = enum {
             .lounge_irc_client => null,
             .metaexternalagent => null,
             .mj12bot => null, // TODO
+            .mwmbl => "mwmbl/",
             .oai_searchbot => null, // TODO
             .perplexitybot => null, // TODO
             .reflectionbot => "Reflectionbot/",
@@ -476,6 +485,7 @@ pub const Name = enum {
             .lounge_irc_client => eql(u8, str, "Mozilla/5.0 (compatible; The Lounge IRC Client; +https://github.com/thelounge/thelounge) facebookexternalhit/1.1 Twitterbot/1.0"),
             .metaexternalagent => eql(u8, str, "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)"),
             .mj12bot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .mwmbl => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .oai_searchbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .perplexitybot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .reflectionbot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
@@ -651,6 +661,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .lounge_irc_client, .network = null },
         .{ .bot = .metaexternalagent, .network = null },
         .{ .bot = .mj12bot, .network = null },
+        .{ .bot = .mwmbl, .network = null },
         .{ .bot = .oai_searchbot, .network = null },
         .{ .bot = .other_malicious, .network = null },
         .{ .bot = .perplexitybot, .network = null },
