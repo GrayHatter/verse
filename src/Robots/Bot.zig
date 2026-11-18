@@ -128,8 +128,11 @@ pub const Name = enum {
     /// Hobby bot?
     /// non-responsive to contact
     sleepbot,
+    /// For profit search crawler (+https://sofya.co/bot)
+    /// Ignores X-Robots-Tag
+    sofyabot,
     /// web search crawler https://www.sogou.com/docs/help/webmasters.htm#07
-    /// Polite :)
+    /// Ignores X-Robots-Tag
     sogou_web_spider,
     /// non-responsive to contact
     techspybot,
@@ -184,6 +187,7 @@ pub const Name = enum {
             .scrybot => true, // non-responsive to contact
             .siteauditbot => false,
             .sleepbot => false,
+            .sofyabot => false, // ignores x-robots-tag but seems to be trying
             .sogou_web_spider => false,
             .techspybot => true, // non-responsive to contact
             .unknown => false, // assume good faith :/
@@ -232,6 +236,7 @@ pub const Name = enum {
             .scrybot => true, // non-responsive to contact
             .siteauditbot => true,
             .sleepbot => true,
+            .sofyabot => false,
             .sogou_web_spider => false,
             .techspybot => true, // non-responsive to contact
             .youbot => true, // non-responsive to contact, ignores robots.txt
@@ -288,6 +293,7 @@ pub const Name = enum {
             .scrybot => true, // non-responsive to contact
             .siteauditbot => false,
             .sleepbot => true,
+            .sofyabot => false,
             .sogou_web_spider => true,
             .techspybot => true, // non-responsive to contact
             .youbot => true, // non-responsive to contact, ignores robots.txt
@@ -337,6 +343,7 @@ pub const Name = enum {
             .scrybot => "ScryBot",
             .siteauditbot => "SiteAuditBot",
             .sleepbot => "SleepBot",
+            .sofyabot => "SofyaBot",
             .sogou_web_spider => "Sogou web spider", // sourced from https://www.sogou.com/robots.txt
             .techspybot => "TechSpyBot",
             .youbot => "YouBot",
@@ -388,6 +395,7 @@ pub const Name = enum {
             .scrybot => false,
             .siteauditbot => false, // TODO
             .sleepbot => false, // TODO
+            .sofyabot => true, // TODO
             .sogou_web_spider => true,
             .techspybot => false,
             .youbot => false,
@@ -440,6 +448,7 @@ pub const Name = enum {
             .scrybot => "ScryBot/",
             .siteauditbot => null, // TODO
             .sleepbot => null, // TODO
+            .sofyabot => "SofyaBot/",
             .sogou_web_spider => "Sogou web spider/",
             .techspybot => "TechSpyBot/",
             .youbot => "YouBot/",
@@ -492,6 +501,7 @@ pub const Name = enum {
             .scrybot => startsWith(u8, str, "ScryBot/1.0 (+https://scry.io; ethical public-content crawler)"),
             .siteauditbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
             .sleepbot => find(u8, str, comptime name.robotsTxtName()) != null, // TODO improve search
+            .sofyabot => find(u8, str, comptime name.robotsTxtName()) != null,
             .sogou_web_spider => find(u8, str, "Sogou web spider/") != null,
             .techspybot => find(u8, str, "Mozilla/5.0 (compatible; Reflectionbot/1.0; +https://reflection.ai/bot)") != null,
             .youbot => startsWith(u8, str, "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot/1.0"),
@@ -669,6 +679,7 @@ pub const bots: std.EnumArray(Name, Identity) = .{
         .{ .bot = .scrybot, .network = null },
         .{ .bot = .siteauditbot, .network = null },
         .{ .bot = .sleepbot, .network = null },
+        .{ .bot = .sofyabot, .network = null },
         .{ .bot = .sogou_web_spider, .network = null },
         .{ .bot = .techspybot, .network = null },
         .{ .bot = .youbot, .network = .{ .nets = &[_][]const u8{"68.67.112"} } }, // incomplete ip list
