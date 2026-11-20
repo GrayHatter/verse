@@ -172,7 +172,7 @@ pub fn initVerb(verb: Verb, noun: []const u8, blob: []const u8) ?Directive {
                 .verb = .build,
                 .noun = name,
                 .otherwise = .{ .template = template_data.findTemplate(html) },
-                .bytes = blob[0 .. verb_len + 2 + noun.len],
+                .bytes = blob[0 .. verb_len + 3 + noun.len],
             };
         },
         .directive => {
