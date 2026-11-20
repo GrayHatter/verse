@@ -187,6 +187,7 @@ pub const FrameResponse = struct {
                     .auth = .disabled,
                     .options = .default,
                     .router = undefined,
+                    .seen = .empty,
                 },
                 .downstream = undefined,
             },

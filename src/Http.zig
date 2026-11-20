@@ -215,6 +215,7 @@ test HTTP {
         .options = .default,
         .auth = .disabled,
         .router = &Router.TestingRouter,
+        .seen = .empty,
     };
 
     var thread = try std.Thread.spawn(.{}, threadFn, .{ &server.interface.http, a, io });

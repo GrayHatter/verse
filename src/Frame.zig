@@ -59,6 +59,9 @@ session: Session = undefined,
 /// Unstable API; may be altered or removed in the future
 server: *const Server,
 
+/// Experimental, 0 indexed
+seen: Server.Seen = .zero,
+
 const Frame = @This();
 
 pub const Uri = @import("Uri.zig");

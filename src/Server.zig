@@ -8,6 +8,9 @@ usrptr: ?*const anyopaque = null,
 /// General Allocator, can be used by requests, but memory allocated via `gpa` is unmanaged
 gpa: Allocator = undefined,
 
+// Experimental API
+seen: SeenMap,
+
 const Server = @This();
 
 pub const zWSGI = @import("zwsgi.zig");
@@ -66,6 +69,7 @@ pub fn init(router: *const Router, opts: Options) !Server {
         },
         .auth = opts.auth orelse .disabled,
         .stats = .disabled,
+        .seen = .empty,
     };
 }
 
@@ -89,6 +93,8 @@ pub fn serve(srv: *Server, gpa: Allocator) !void {
         lines = try gpa.alloc(Stats.Line, 256);
         srv.stats = .init(lines, now, srv.options.stats);
     }
+
+    defer srv.seen.deinit(gpa);
 
     try srv.core(gpa, io);
 }
@@ -154,8 +160,6 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
     defer arena.deinit();
     const a = arena.allocator();
 
-    var request: Request = undefined;
-
     var ds: Frame.Downstream = try .init(a);
     switch (srv.interface) {
         .zwsgi => try ds.zwsgi(stream, a, io),
@@ -163,12 +167,24 @@ pub fn once(srv: *Server, stream: Io.net.Stream, gpa: Allocator, io: Io) !void {
         .other => unreachable,
     }
 
-    request = try switch (srv.interface) {
+    const request: Request = try switch (srv.interface) {
         .zwsgi => |z| z.initRequest(&ds.gateway.zwsgi, now, a),
         .http => |h| h.initRequest(&ds.gateway.http, now, stream.socket.address, a),
         .other => unreachable,
     };
+
     var frame: Frame = try .init(srv, ds, &request, a, io);
+
+    const seen = try srv.seen.getOrPut(gpa, Seen.ipFromStr(request.remote_addr));
+    if (!seen.found_existing) {
+        seen.value_ptr.* = .{
+            .first = now,
+            .count = 0,
+        };
+    } else {
+        seen.value_ptr.count += 1;
+    }
+    frame.seen = seen.value_ptr.*;
 
     defer {
         const lap: Io.Duration = timer.untilNow(io, .awake);
@@ -280,6 +296,51 @@ const Poller = struct {
     }
 };
 
+pub const Seen = struct {
+    first: Io.Timestamp,
+    count: usize,
+
+    pub const zero: Seen = .{
+        .first = .zero,
+        .count = 0,
+    };
+
+    pub const IpAddr = u64;
+
+    pub fn ipFromStr(str: []const u8) u64 {
+        var ip: u64 = 0;
+        var bytes: *align(8) [8]u8 = std.mem.asBytes(&ip);
+        var idx: usize = 0;
+        if (findScalarPos(u8, str, 0, '.')) |_| {
+            var itr = std.mem.splitScalar(u8, str, '.');
+            while (itr.next()) |addr| {
+                bytes[idx] = std.fmt.parseInt(u8, addr, 10) catch 0;
+                idx += 1;
+                if (idx == 4) break;
+            }
+        } else if (findScalarPos(u8, str, idx, ':')) |_| {
+            var itr = std.mem.splitScalar(u8, str, ':');
+            while (itr.next()) |addr| {
+                bytes[idx] = std.fmt.parseInt(u8, addr, 16) catch 0;
+                idx += 1;
+                if (idx == 8) break;
+            }
+        }
+        return ip;
+    }
+
+    pub fn ipFromAddr(addr: std.Io.net.IpAddress) u64 {
+        var ip: u64 = 0;
+        var bytes: *align(8) [8]u8 = std.mem.asBytes(&ip);
+        switch (addr) {
+            .ip4 => |ip4| bytes[0..4].* = ip4.bytes[0..4].*,
+            .ip6 => |ip6| bytes[0..8].* = ip6.bytes[0..8].*,
+        }
+
+        return ip;
+    }
+};
+
 test Server {
     std.testing.refAllDecls(@This());
 
@@ -290,9 +351,11 @@ test Server {
 const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
+const findScalarPos = std.mem.findScalarPos;
 const ArrayList = std.ArrayList;
 const ns_per_ms = std.time.ns_per_ms;
 const log = std.log.scoped(.verse);
+const SeenMap = std.AutoHashMapUnmanaged(u64, Seen);
 
 const Auth = @import("Auth.zig");
 const Request = @import("Request.zig");
